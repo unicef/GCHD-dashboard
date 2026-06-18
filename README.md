@@ -124,6 +124,48 @@ Access is restricted to `@unicef.org` email addresses via a one-time passcode (O
 
 ---
 
+## Design guidelines for new features
+
+The core principle is to keep the app server as light as possible. It acts only as a thin coordinator — no heavy computation, no data storage, no file IO.
+
+### 1. All raster processing happens in GEE
+
+Any operation on raster data (thresholding, masking, zonal statistics, compositing) must be expressed as a GEE computation and returned as a tile URL or a scalar result. The app server constructs the GEE expression and hands a tile URL to the Leaflet map on the client — it never holds raster data in memory.
+
+```
+Client browser  ──tile URL──▶  GEE tile server
+App server      ──builds GEE expression, returns URL──▶  client
+```
+
+### 2. No data IO on the app server
+
+The app server must not read or write files at request time. If a feature requires pre-calculated data (lookup tables, pre-aggregated statistics, reference grids), that data must live as a GEE asset and be queried via the GEE API at runtime — not loaded from disk into server memory.
+
+**Allowed:** `ee.FeatureCollection("projects/unicef-ccri/assets/...")` at request time  
+**Not allowed:** `pd.read_csv(...)`, `open(...)`, or any file read inside a callback
+
+### 3. Boundary files are handled client-side
+
+When a user uploads a GeoJSON boundary, all parsing, validation, and geometry processing happens in the browser (see the `clientside_callback` in `app.py`). Only the minimal stripped GeoJSON (geometry + one name field) is sent to the app server for the GEE exposure computation. Property tables, large feature collections, and display rendering stay on the client.
+
+```
+Client:  parse → validate → render on Leaflet → strip to geometry + name field
+Server:  receives stripped GeoJSON → sends to GEE → returns scalar results
+```
+
+### Summary table
+
+| Concern | Where it runs |
+|---|---|
+| Raster tile rendering | GEE tile server → client browser |
+| Zonal statistics / exposure computation | GEE (triggered by app server) |
+| Pre-calculated reference data | GEE assets |
+| Boundary file parsing & display | Client browser |
+| Boundary data sent to server | Geometry + one name field only |
+| App server role | Build GEE expressions, return URLs or scalar results |
+
+---
+
 ## Environment notes
 
 - Python 3.12+
