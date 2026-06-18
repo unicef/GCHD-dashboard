@@ -1,0 +1,7 @@
+.streamlit/secrets.toml
+credentials/
+__pycache__/
+*.pyc
+.env
+gunicorn.log
+=0.8.0
