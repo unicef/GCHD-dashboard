@@ -1,4 +1,4 @@
-# UNICEF Global Child Hazard Database (GCHD)
+# UNICEF Global Child Hazard Database (GCHD) Dashboard
 
 A web application for visualising global child exposure to climate and geophysical hazards, built for the UNICEF Children's Climate Risk Report (CCRR). It runs on Google Earth Engine for raster analysis and serves a Plotly Dash frontend via Gunicorn.
 
@@ -72,9 +72,7 @@ Create the `app/credentials/` directory and add the following files:
 |---|---|
 | `service_account.json` | GEE service account key (download from Google Cloud Console) |
 | `gemini_api_key.txt` | Google Gemini API key (one line, no newline) |
-| `smtp_user.txt` | SMTP username for sending OTP emails |
-| `smtp_pass.txt` | SMTP password |
-| `flask_secret.txt` | Flask session secret — auto-generated on first run, or set manually |
+
 
 ```bash
 mkdir -p app/credentials
