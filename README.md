@@ -1,0 +1,134 @@
+# UNICEF Global Child Hazard Database (GCHD)
+
+A web application for visualising global child exposure to climate and geophysical hazards, built for the UNICEF Children's Climate Risk Report (CCRR). It runs on Google Earth Engine for raster analysis and serves a Plotly Dash frontend via Gunicorn.
+
+---
+
+## Features
+
+| Tab | Description |
+|---|---|
+| **Hazard Layers** | Browse and display 20 individual hazard layers on an interactive world map |
+| **Children's Exposure** | View population of children (under 18) exposed to each hazard topic |
+| **Multi Hazard** | Multi Hazard Count (MHC) and Multi Hazard Intensity (MHI) combined indicators |
+| **Exposure Analysis** | Compute child exposure by country, province, or district; supports custom GeoJSON upload and GEE asset paths |
+| **AI Assistant** | Gemini-powered assistant for natural language hazard queries (under development) |
+
+### Hazard topics covered
+River Flood · Coastal Flood · Tropical Storm · Drought · Heatwave · Extreme Heat · Fire · Sand & Dust Storm · Air Pollution · Malaria · Landslide · Earthquake · Volcanoes
+
+---
+
+## Project structure
+
+```
+hazard_database_app/
+├── app/
+│   ├── app.py              # Main Dash application, layout, callbacks, auth routes
+│   ├── config.py           # Hazard definitions, topics, colors, admin levels
+│   ├── gee_core.py         # Google Earth Engine integration (tile URLs, exposure computation)
+│   ├── ai_core.py          # Google Gemini AI integration
+│   ├── auth.py             # Email OTP authentication logic
+│   ├── requirements.txt    # Python dependencies
+│   ├── assets/             # Static files (CSS, images, favicon)
+│   └── credentials/        # Secret files — NOT committed (see setup below)
+│       ├── service_account.json
+│       ├── gemini_api_key.txt
+│       ├── smtp_user.txt
+│       ├── smtp_pass.txt
+│       └── flask_secret.txt  ← auto-generated on first run
+└── nginx-pixel-aid.conf    # Nginx config reference (not used in current Cloudflare Tunnel setup)
+```
+
+---
+
+## Local setup
+
+### 1. Clone the repository
+
+```bash
+git clone git@github.com:unicef/GCHD-dashboard.git
+cd GCHD-dashboard
+```
+
+### 2. Create a virtual environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r app/requirements.txt
+```
+
+### 4. Add credentials
+
+Create the `app/credentials/` directory and add the following files:
+
+| File | Description |
+|---|---|
+| `service_account.json` | GEE service account key (download from Google Cloud Console) |
+| `gemini_api_key.txt` | Google Gemini API key (one line, no newline) |
+| `smtp_user.txt` | SMTP username for sending OTP emails |
+| `smtp_pass.txt` | SMTP password |
+| `flask_secret.txt` | Flask session secret — auto-generated on first run, or set manually |
+
+```bash
+mkdir -p app/credentials
+# Copy your credential files into app/credentials/
+```
+
+The GEE service account must have access to the `projects/unicef-ccri` GEE assets.
+
+### 5. Authenticate Google Earth Engine
+
+The app authenticates using the service account automatically via `service_account.json`. No manual `earthengine authenticate` is required.
+
+---
+
+## Running locally
+
+```bash
+cd app
+python app.py
+```
+
+The app will start on `http://localhost:8050`.
+
+---
+
+## Running in production (Gunicorn)
+
+```bash
+cd app
+gunicorn app:server \
+  --workers 4 \
+  --bind 0.0.0.0:8502 \
+  --timeout 120 \
+  --log-file gunicorn.log
+```
+
+The production deployment uses a **Cloudflare Tunnel** to expose port `8502` at `gchd.pixel-aid.com` (aliased as `gchd.unicef.org`).
+
+---
+
+## Authentication
+
+Access is restricted to `@unicef.org` email addresses via a one-time passcode (OTP) flow:
+
+1. User enters their UNICEF email address
+2. A 6-digit code is sent via SMTP
+3. User enters the code to access the app
+4. Session persists for the duration configured in `auth.py`
+
+---
+
+## Environment notes
+
+- Python 3.12+
+- Google Earth Engine Python API (`earthengine-api`)
+- Population data: WorldPop under-18 global grid, 100 m resolution, 2025
+- Admin boundaries: UNICEF GeoRepo (`projects/unicef-ccri/assets/global_boundary/`)
