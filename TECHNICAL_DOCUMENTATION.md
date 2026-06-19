@@ -22,24 +22,23 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        User Browser                          │
-│   Plotly Dash (React) + Leaflet map                          │
-│   - Renders tile layers from GEE tile server                 │
-│   - Parses and displays uploaded GeoJSON client-side         │
+│                        User Browser                         │
+│   Plotly Dash (React) + Leaflet map                         │
+│   - Renders tile layers from Google Earth Engien tile server│
+│   - Parses and displays uploaded GeoJSON client-side        │
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTPS
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Cloudflare Network                              │
-│   - SSL/TLS termination                                      │
-│   - DDoS protection                                          │
+│              Cloudflare Network                             │
+│   - SSL/TLS termination                                     │
+│   - DDoS protection                                         │
 │   - DNS: gchd.unicef.org → CNAME → gchd.pixel-aid.com       │
 └──────────────────────┬──────────────────────────────────────┘
                        │ Cloudflare Tunnel (encrypted)
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│     GCP VM: instance-20260512-205344                         │
-│     Region: us-west1-b  │  Project: unicef-ccri              │
+│     On-premises server (Ubuntu, /mnt/pixel_aid_disk1)        │
 │                                                              │
 │   ┌──────────────────────────────────────────────────────┐  │
 │   │  cloudflared (Cloudflare Tunnel daemon)              │  │
@@ -101,10 +100,10 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 
 | Component | Details |
 |---|---|
-| Compute | GCP VM `instance-20260512-205344`, zone `us-west1-b`, GCP project `unicef-ccri` |
-| Tunnel / ingress | Cloudflare Tunnel (no open inbound ports on the VM) |
+| Compute | On-premises Ubuntu server (`/mnt/pixel_aid_disk1`) |
+| Tunnel / ingress | Cloudflare Tunnel (no open inbound ports on the server) |
 | DNS | `gchd.unicef.org` CNAME → `gchd.pixel-aid.com` (Cloudflare-managed) |
-| SSL | Managed by Cloudflare (automatic, no certificates on VM) |
+| SSL | Managed by Cloudflare (automatic, no certificates on server) |
 | Process management | systemd (`hazard-app.service`) |
 
 ---
@@ -155,9 +154,8 @@ All hazard raster data and administrative boundary files are stored as GEE asset
 
 | Resource | Current spec / notes |
 |---|---|
-| GCP VM type | To be confirmed — standard GCP Compute Engine instance |
-| VM region | `us-west1-b` (Oregon) |
-| Persistent disk | `/mnt/pixel_aid_disk1` (mounted external disk) |
+| Compute | On-premises Ubuntu server |
+| Storage | `/mnt/pixel_aid_disk1` (mounted disk) |
 | GEE quota | Standard GEE service account under `unicef-ccri` GCP project |
 | Concurrent users | ~46 registered; light concurrent load (GEE handles compute) |
 | Gunicorn workers | 2 |
@@ -170,7 +168,7 @@ The application source code is hosted in a private GitHub repository:
 
 **https://github.com/unicef/GCHD-dashboard**
 
-Credentials and secrets are excluded from the repository and managed as files on the VM under `app/credentials/`.
+Credentials and secrets are excluded from the repository and managed as files on the server under `app/credentials/`.
 
 ---
 
