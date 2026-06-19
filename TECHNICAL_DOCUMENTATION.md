@@ -38,13 +38,13 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
                        │ Cloudflare Tunnel (encrypted)
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│     On-premises server (Ubuntu, /mnt/pixel_aid_disk1)        │
-│                                                              │
+│     On-premises server (Ubuntu, /mnt/pixel_aid_disk1)       │
+│                                                             │
 │   ┌──────────────────────────────────────────────────────┐  │
 │   │  cloudflared (Cloudflare Tunnel daemon)              │  │
 │   │  Forwards traffic → localhost:8502                   │  │
 │   └──────────────────────┬───────────────────────────────┘  │
-│                          │                                   │
+│                          │                                  │
 │   ┌──────────────────────▼───────────────────────────────┐  │
 │   │  Gunicorn WSGI server (port 8502, 2 workers)         │  │
 │   │  Managed by systemd (hazard-app.service)             │  │
@@ -52,19 +52,19 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 │   │  Plotly Dash Application (Python 3.12)               │  │
 │   │  ├── Flask  (session management)                     │  │
 │   │  ├── dash-leaflet  (interactive map component)       │  │
-│   │  └── GEE Python API  (tile URL generation,          │  │
+│   │  └── GEE Python API  (tile URL generation,           │  │
 │   │                        zonal statistics)             │  │
 │   └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                        │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
+          ┌────────────┤
+          ▼            ▼
 ┌──────────────┐ ┌──────────┐ ┌──────────┐
-│ Google Earth │ │  Google  │ │Cloudflare│
-│   Engine     │ │  Gemini  │ │   Zero   │
-│ (raster data │ │   API    │ │  Trust   │
-│  & analysis) │ │  (AI)    │ │  (auth)  │
-└──────────────┘ └──────────┘ └──────────┘
+│ Google Earth │ │Cloudflare│
+│   Engine     │ │   Zero   │
+│ (raster data │ │  Trust   │
+│  & analysis) │ │  (auth)  │
+└──────────────┘ └──────────┘
 ```
 
 ### Key architectural principles
@@ -93,7 +93,6 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 |---|---|---|
 | Raster computation & tile serving | Google Earth Engine | All spatial analysis and map tile generation |
 | Geospatial assets | GEE project `unicef-ccri` | Hazard rasters, admin boundaries, population data |
-| AI assistant | Google Gemini API | Natural language hazard queries (under development) |
 | Access control | Cloudflare Zero Trust | Email-based identity verification (@unicef.org) |
 
 ### Infrastructure
