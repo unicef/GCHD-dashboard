@@ -59,7 +59,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
                        │
           ┌────────────┤
           ▼            ▼
-┌──────────────┐ ┌──────────┐ ┌──────────┐
+┌──────────────┐ ┌──────────┐ 
 │ Google Earth │ │Cloudflare│
 │   Engine     │ │   Zero   │
 │ (raster data │ │  Trust   │
