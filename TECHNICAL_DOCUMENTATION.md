@@ -11,8 +11,8 @@
 The Global Child Hazard Database (GCHD) is a web application that visualises global child exposure to climate and geophysical hazards. It is developed to support the UNICEF Children's Climate Risk Report (CCRR) and is used internally by UNICEF staff to explore hazard layers, compute child population exposure by administrative boundary, and export results.
 
 **Live URL:** https://gchd.unicef.org  
-**Active users:** ~46 UNICEF staff  
-**Access control:** Restricted to @unicef.org email addresses via OTP authentication
+**Active users:** ~46 UNICEF staff on Jun 19 2026 
+**Access control:** Restricted to @unicef.org email addresses via Cloudflare Zero Trust
 
 ---
 
@@ -51,7 +51,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 │   │  Managed by systemd (hazard-app.service)             │  │
 │   │                                                      │  │
 │   │  Plotly Dash Application (Python 3.12)               │  │
-│   │  ├── Flask  (session management, OTP auth routes)    │  │
+│   │  ├── Flask  (session management)                     │  │
 │   │  ├── dash-leaflet  (interactive map component)       │  │
 │   │  └── GEE Python API  (tile URL generation,          │  │
 │   │                        zonal statistics)             │  │
@@ -61,10 +61,10 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
           ┌────────────┼────────────┐
           ▼            ▼            ▼
 ┌──────────────┐ ┌──────────┐ ┌──────────┐
-│ Google Earth │ │  Google  │ │   SMTP   │
-│   Engine     │ │  Gemini  │ │  Server  │
-│ (raster data │ │   API    │ │  (OTP    │
-│  & analysis) │ │  (AI)    │ │  email)  │
+│ Google Earth │ │  Google  │ │Cloudflare│
+│   Engine     │ │  Gemini  │ │   Zero   │
+│ (raster data │ │   API    │ │  Trust   │
+│  & analysis) │ │  (AI)    │ │  (auth)  │
 └──────────────┘ └──────────┘ └──────────┘
 ```
 
@@ -95,7 +95,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 | Raster computation & tile serving | Google Earth Engine | All spatial analysis and map tile generation |
 | Geospatial assets | GEE project `unicef-ccri` | Hazard rasters, admin boundaries, population data |
 | AI assistant | Google Gemini API | Natural language hazard queries (under development) |
-| OTP email delivery | SMTP | User authentication |
+| Access control | Cloudflare Zero Trust | Email-based identity verification (@unicef.org) |
 
 ### Infrastructure
 
@@ -144,11 +144,10 @@ All hazard raster data and administrative boundary files are stored as GEE asset
 
 ## 5. Authentication & access control
 
-- Access is restricted to `@unicef.org` email addresses.
-- Login flow: user submits UNICEF email → 6-digit OTP sent via SMTP → OTP verified → Flask session created.
-- Session expiry is configurable in `auth.py`.
-- OTP codes are stored in a local SQLite database on the VM (not in-memory) to support multi-worker deployments.
-- No external identity provider (Azure AD / SSO) is currently integrated — this would be a natural step during UNICEF cloud migration.
+- Access is controlled by **Cloudflare Zero Trust**, which verifies identity using the user's UNICEF email address (@unicef.org) before allowing any request to reach the application.
+- Cloudflare Zero Trust enforces email domain restrictions and manages sessions with a configurable seat-based policy (currently up to 50 seats on the free tier).
+- No credentials are handled by the application server itself — authentication is fully delegated to Cloudflare.
+- During UNICEF cloud migration, Cloudflare Zero Trust can be replaced with UNICEF Azure AD / SSO.
 
 ---
 
@@ -181,7 +180,7 @@ Credentials and secrets are excluded from the repository and managed as files on
 |---|---|
 | Compute | App server is lightweight; any small Azure VM or App Service instance is sufficient |
 | GEE access | The GEE service account (`projects/unicef-ccri`) must remain accessible from the new host |
-| Authentication | Current OTP system can be replaced with UNICEF Azure AD SSO during migration |
+| Authentication | Cloudflare Zero Trust can be replaced with UNICEF Azure AD SSO during migration |
 | Secrets management | Credential files should be migrated to Azure Key Vault |
 | Networking | Cloudflare Tunnel can be replaced with Azure-native ingress; no open inbound ports are required on the current setup |
 | DNS | `gchd.unicef.org` CNAME will need to be updated to point to the new Azure endpoint |
