@@ -42,6 +42,35 @@ def initialize_gee():
 # Core GEE objects — built once at startup
 # ---------------------------------------------------------------------------
 
+def _exposed_for_hazard(hazard, childpop, threshold=None):
+    """Child-population image masked to where `hazard` exceeds its threshold.
+
+    `threshold=None` uses the hazard's configured default; passing a value lets
+    the Analysis tab recompute a single hazard with a user-chosen threshold
+    without rebuilding the whole core image set.
+    """
+    if hazard.get("isImage"):
+        layer = ee.Image(hazard["id"])
+    elif re.search(r"flood|storm", hazard["name"]):
+        layer = ee.ImageCollection(hazard["id"]).mosaic()
+    else:
+        layer = ee.Image(hazard["id"])
+    if hazard.get("band"):
+        layer = layer.select(hazard["band"])
+
+    th = hazard["threshold"] if threshold is None else threshold
+    if hazard["name"] == "agricultural_drought_fao_1984-2023":
+        layer = layer.updateMask(layer.lte(100))
+        exposed = childpop.updateMask(layer.gt(th))
+    elif "malaria" in hazard["name"]:
+        layer = layer.updateMask(layer.gt(0))
+        exposed = childpop.updateMask(layer.gt(th))
+    else:
+        layer = layer.updateMask(layer.gt(-1000))
+        exposed = childpop.updateMask(layer.lt(th) if th < 0 else layer.gt(th))
+    return exposed.rename(hazard["name"])
+
+
 @lru_cache(maxsize=1)
 def build_core_images():
     org_childpop   = ee.ImageCollection("projects/unicef-ccri/assets/population/worldpop_T_U18_2025_CN_100m")
@@ -61,29 +90,7 @@ def build_core_images():
     country_boundaries_reproj = country_boundaries.map(lambda f: f.transform(target_crs))
     global_geom = ee.Geometry.Polygon([GLOBAL_GEOMETRY], None, False)
 
-    def summarize_population(hazard):
-        if hazard.get("isImage"):
-            layer = ee.Image(hazard["id"])
-        elif re.search(r"flood|storm", hazard["name"]):
-            layer = ee.ImageCollection(hazard["id"]).mosaic()
-        else:
-            layer = ee.Image(hazard["id"])
-        if hazard.get("band"):
-            layer = layer.select(hazard["band"])
-
-        th = hazard["threshold"]
-        if hazard["name"] == "agricultural_drought_fao_1984-2023":
-            layer = layer.updateMask(layer.lte(100))
-            exposed = childpop.updateMask(layer.gt(th))
-        elif "malaria" in hazard["name"]:
-            layer = layer.updateMask(layer.gt(0))
-            exposed = childpop.updateMask(layer.gt(th))
-        else:
-            layer = layer.updateMask(layer.gt(-1000))
-            exposed = childpop.updateMask(layer.lt(th) if th < 0 else layer.gt(th))
-        return exposed.rename(hazard["name"])
-
-    exposure_by_hazard = {h["name"]: summarize_population(h) for h in HAZARDS}
+    exposure_by_hazard = {h["name"]: _exposed_for_hazard(h, childpop) for h in HAZARDS}
 
     def build_topic_mask(topic_name):
         masks = [exposure_by_hazard[n].mask() for n in HAZARD_TOPICS[topic_name]]
@@ -408,17 +415,31 @@ def get_feature_at_point(lon, lat, admin_level, country_ucode):
 # Exposure computation
 # ---------------------------------------------------------------------------
 
-def compute_exposure(feature_ucode, admin_level, mhc_value=None, mhi_percentile=None):
-    if admin_level == "adm0 (Country)":
+def compute_exposure(feature_ucode, admin_level, mhc_value=None, mhi_percentile=None,
+                     topics=None, threshold_overrides=None):
+    """Children exposed per hazard topic for an admin region.
+
+    `topics`: optional list of topic names to restrict the analysis to (None =
+    all climate topics, the historical default). `threshold_overrides`: optional
+    {hazard_name: threshold} — only those hazards are recomputed with the new
+    threshold; every other topic reuses the cached default masks.
+    """
+    threshold_overrides = threshold_overrides or {}
+    is_default = (topics is None) and (not threshold_overrides)
+
+    # The adm0 asset fast path holds precomputed exposure at fixed thresholds and
+    # for all topics — it can only serve the default request.
+    if admin_level == "adm0 (Country)" and is_default:
         return compute_exposure_adm0_from_asset(feature_ucode)
+
     core        = build_core_images()
     childpop    = core["childpop"]
     childpop_m  = core["childpop_m"]
     childpop_f  = core["childpop_f"]
     pop_res     = core["pop_target_res"]
-    topic_masks = core["topic_masks"]
+    topic_masks = dict(core["topic_masks"])
     topic_cov   = core["topic_coverage"]
-    exposure_by = core["exposure_by_hazard"]
+    exposure_by = dict(core["exposure_by_hazard"])
     topic_count = core["topic_count_image"]
     hazard_score= core["hazard_score"]
     global_geom = core["global_geom"]
@@ -426,14 +447,37 @@ def compute_exposure(feature_ucode, admin_level, mhc_value=None, mhi_percentile=
     target_crs  = core["target_crs"]
     target_scale= core["target_scale"]
 
+    # Selected topics: default = all climate topics (as before). A provided list
+    # is honored as-is (may include geophysical EXPOSURE_ONLY_TOPICS).
+    if topics is None:
+        sel_topics = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
+    else:
+        sel_topics = [t for t in topics if t in HAZARD_TOPICS]
+
+    # Recompute only the overridden hazards, then rebuild the topic masks that
+    # contain them (OR-union across the topic's hazards). Untouched topics keep
+    # their cached masks.
+    if threshold_overrides:
+        for h_name, thr in threshold_overrides.items():
+            if h_name in HAZARD_MAP:
+                exposure_by[h_name] = _exposed_for_hazard(HAZARD_MAP[h_name], childpop, thr)
+        affected = {t for t in sel_topics
+                    if any(h in threshold_overrides for h in HAZARD_TOPICS[t])}
+        for t in affected:
+            masks = [exposure_by[n].mask() for n in HAZARD_TOPICS[t]]
+            union = masks[0]
+            for m in masks[1:]:
+                union = union.Or(m)
+            topic_masks[t] = ee.Image.constant(1).updateMask(union)
+
     bands = []
-    for topic_name in HAZARD_TOPICS:
-        if topic_name in EXPOSURE_ONLY_TOPICS:
-            continue
+    for topic_name in sel_topics:
         bands.append(childpop.updateMask(topic_masks[topic_name]).rename(topic_name))
         bands.append(topic_cov[topic_name])
 
     for topic_name in ["Malaria", "Heatwave", "Fire", "Drought"]:
+        if topic_name not in sel_topics:
+            continue
         for h_name in HAZARD_TOPICS[topic_name]:
             bands.append(exposure_by[h_name].rename(h_name))
 
