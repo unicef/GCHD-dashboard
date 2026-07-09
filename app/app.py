@@ -7,7 +7,7 @@ import re
 import json as _json
 
 import dash
-from dash import dcc, html, Input, Output, State, ctx, no_update, ALL
+from dash import dcc, html, Input, Output, State, ctx, no_update, ALL, MATCH
 import dash_leaflet as dl
 import plotly.graph_objects as go
 
@@ -391,8 +391,42 @@ def tab_analysis():
                     ),
                 ]),
             ]),
+            html.Div(id="hazard-select-section", style={"display": "none"}, children=[
+                html.Div(className="ps", children=[
+                    html.Div("3. Hazard topics & thresholds", className="ps-label"),
+                    dcc.Dropdown(
+                        id="analysis-topic-select", className="ps-select",
+                        options=[{"label": t, "value": t} for t in HAZARD_TOPICS],
+                        value=[t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS],
+                        multi=True, placeholder="Select hazard topics…",
+                        clearable=True, searchable=False,
+                    ),
+                    html.Div("Climate hazards are selected by default. Add or remove "
+                             "topics, and adjust any hazard's threshold below.",
+                             className="ps-caption"),
+                    # Collapsible threshold editor (collapsed by default).
+                    html.Div(id="analysis-thr-toggle", className="athr-toggle", n_clicks=0,
+                             children=[
+                        html.I(className="bi bi-chevron-right", id="analysis-thr-chevron"),
+                        html.Span("Adjust thresholds", className="athr-toggle-label"),
+                        html.Span("", id="analysis-thr-badge", className="athr-badge"),
+                    ]),
+                    html.Div(id="analysis-thr-body", style={"display": "none"}, children=[
+                        html.Div(id="analysis-threshold-block",
+                                 className="analysis-threshold-block"),
+                    ]),
+                ]),
+            ]),
             html.Div(id="compute-section", style={"display": "none"}),
             html.Div(id="selected-badge-wrap"),
+            html.Div(id="analysis-compute-wrap", style={"display": "none"}, children=[
+                html.Div(className="ps", children=[
+                    html.Button("▶  Compute exposure", id="analysis-compute-btn",
+                                className="ps-btn", n_clicks=0, disabled=True),
+                    html.Div("Select a region, then Compute.", id="analysis-compute-hint",
+                             className="ps-caption", style={"marginTop": "6px"}),
+                ]),
+            ]),
             dcc.Loading(
                 id="results-loading", type="circle", color="#1CABE2",
                 children=html.Div(id="results-panel"),
@@ -1216,24 +1250,166 @@ def on_country_select(country):
     Output("store-exposure",       "data", allow_duplicate=True),
     Output("compute-section",      "children"),
     Output("compute-section",      "style"),
+    Output("hazard-select-section", "style"),
+    Output("analysis-compute-wrap", "style"),
     Input("level-select",          "value"),
     prevent_initial_call=True,
 )
 def on_level_select(level):
     if not level:
-        return no_update, no_update, no_update, no_update, None, {"display": "none"}
+        return (no_update, no_update, no_update, no_update, None,
+                {"display": "none"}, {"display": "none"}, {"display": "none"})
     if level == "adm0 (Country)":
-        content = html.Div(className="ps", children=[
-            html.Button("▶  Compute country exposure",
-                        id="compute-btn", className="ps-btn", n_clicks=0),
-        ])
+        content = None                      # country is already selected; just Compute
     else:
         short = "province" if "adm1" in level else "district"
         content = html.Div(className="ps", children=[
-            html.Div(f"Click a {short} on the map to compute exposure",
+            html.Div(f"Click a {short} on the map, then Compute.",
                      className="info-box"),
         ])
-    return level, None, None, None, content, {"display": "block"}
+    return (level, None, None, None, content,
+            {"display": "block"}, {"display": "block"}, {"display": "block"})
+
+
+# ── Hazard-threshold editor ───────────────────────────────────────────────────
+
+def _fmt_mark(v):
+    """Compact number for slider marks (13994 -> '14k', 0.01 -> '0.01')."""
+    av = abs(v)
+    if av >= 1000:
+        return f"{v/1000:g}k"
+    if av == 0 or av >= 1:
+        return f"{v:g}"
+    return f"{v:g}"
+
+
+def _thr_step_marks(lo, hi):
+    """Adaptive slider step + sparse min/mid/max marks for a hazard range."""
+    lo = 0 if lo is None else lo
+    hi = 100 if hi is None else hi
+    span = (hi - lo) or 1
+    step = 0.001 if span <= 2 else (0.01 if span <= 50 else 1)
+    mid  = lo + span / 2
+    marks = {
+        lo:  {"label": _fmt_mark(lo),  "style": {"fontSize": "0.55rem"}},
+        mid: {"label": _fmt_mark(mid), "style": {"fontSize": "0.55rem"}},
+        hi:  {"label": _fmt_mark(hi),  "style": {"fontSize": "0.55rem"}},
+    }
+    return step, marks
+
+
+def _threshold_row(h_name):
+    """One editable-threshold row: slider (bounds) + linked number input (precision)."""
+    hz      = HAZARD_MAP.get(h_name, {})
+    units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
+    default = hz.get("threshold", 0)
+    lo, hi  = hz.get("min", 0), hz.get("max", 100)
+    step, marks = _thr_step_marks(lo, hi)
+    return html.Div(className="analysis-threshold-row", children=[
+        html.Div(className="athr-row-head", children=[
+            html.Span(_hazard_label(h_name), className="athr-label"),
+            dcc.Input(
+                id={"type": "analysis-threshold", "index": h_name},
+                type="number", value=default, min=lo, max=hi, step=step,
+                debounce=True, className="athr-input",
+            ),
+            html.Span(units, className="athr-units", title=f"range {lo}–{hi}"),
+        ]),
+        dcc.Slider(
+            id={"type": "analysis-threshold-slider", "index": h_name},
+            min=lo, max=hi, value=default, step=step, marks=marks,
+            updatemode="mouseup", className="athr-slider",
+            tooltip={"placement": "bottom", "always_visible": False},
+        ),
+    ])
+
+
+@app.callback(
+    Output("analysis-threshold-block", "children"),
+    Input("analysis-topic-select",     "value"),
+)
+def build_threshold_editor(topics):
+    if not topics:
+        return html.Div("Select at least one hazard topic to adjust thresholds.",
+                        className="ps-caption", style={"padding": "4px 0"})
+    blocks = []
+    for topic in HAZARD_TOPICS:            # stable, config order
+        if topic not in topics:
+            continue
+        rows = [_threshold_row(h) for h in HAZARD_TOPICS[topic]]
+        blocks.append(html.Div(className="athr-topic", children=[
+            html.Div([
+                html.Span(className="topic-swatch",
+                          style={"background": TOPIC_COLORS.get(topic, "#888")}),
+                html.Span(topic, className="athr-topic-name"),
+            ], className="athr-topic-head"),
+            *rows,
+        ]))
+    return blocks
+
+
+# Clientside slider <-> number-input sync (keeps drags off the server).
+app.clientside_callback(
+    """
+    function(sliderVal, inputVal) {
+        var ctx = dash_clientside.callback_context;
+        if (!ctx || !ctx.triggered || ctx.triggered.length === 0) {
+            return [dash_clientside.no_update, dash_clientside.no_update];
+        }
+        var prop = ctx.triggered[0].prop_id;
+        // Slider moved -> update the number input; input changed -> move slider.
+        if (prop.indexOf("analysis-threshold-slider") !== -1) {
+            if (sliderVal === null || sliderVal === undefined) {
+                return [dash_clientside.no_update, dash_clientside.no_update];
+            }
+            return [sliderVal, dash_clientside.no_update];
+        } else {
+            if (inputVal === null || inputVal === undefined || inputVal === "") {
+                return [dash_clientside.no_update, dash_clientside.no_update];
+            }
+            return [dash_clientside.no_update, inputVal];
+        }
+    }
+    """,
+    Output({"type": "analysis-threshold",        "index": MATCH}, "value", allow_duplicate=True),
+    Output({"type": "analysis-threshold-slider", "index": MATCH}, "value"),
+    Input({"type": "analysis-threshold-slider",  "index": MATCH}, "value"),
+    Input({"type": "analysis-threshold",         "index": MATCH}, "value"),
+    prevent_initial_call=True,
+)
+
+
+@app.callback(
+    Output("analysis-thr-body",    "style"),
+    Output("analysis-thr-chevron", "className"),
+    Input("analysis-thr-toggle",   "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_analysis_thr(n):
+    open_ = bool(n) and (n % 2 == 1)         # starts collapsed
+    body  = {"display": "block"} if open_ else {"display": "none"}
+    chev  = "bi bi-chevron-down" if open_ else "bi bi-chevron-right"
+    return body, chev
+
+
+@app.callback(
+    Output("analysis-thr-badge", "children"),
+    Input({"type": "analysis-threshold", "index": ALL}, "value"),
+    State({"type": "analysis-threshold", "index": ALL}, "id"),
+)
+def analysis_thr_badge(values, ids):
+    n = 0
+    for id_obj, val in zip(ids or [], values or []):
+        h_name = id_obj.get("index")
+        default = HAZARD_MAP.get(h_name, {}).get("threshold")
+        if val in (None, "") or default is None:
+            continue
+        try:
+            if abs(float(val) - float(default)) > 1e-12:
+                n += 1
+        except (TypeError, ValueError):
+            continue
+    return f"{n} changed" if n else ""
 
 
 # ── Map cursor ───────────────────────────────────────────────────────────────
@@ -1345,21 +1521,24 @@ def on_map_click(click_data, level, country_ucode, last_click, tab):
     return ucode, fname, None, click_key
 
 
-# ── adm0 compute button ───────────────────────────────────────────────────────
+# ── Compute-button enable/disable ─────────────────────────────────────────────
+# adm0: enabled once a country is selected (store-ucode). Sub-national: enabled
+# once a feature is clicked (store-clicked-ucode).
 
 @app.callback(
-    Output("store-clicked-ucode", "data", allow_duplicate=True),
-    Output("store-clicked-name",  "data", allow_duplicate=True),
-    Output("store-exposure",      "data", allow_duplicate=True),
-    Input("compute-btn",          "n_clicks"),
-    State("store-ucode",          "data"),
-    State("store-country",        "data"),
-    prevent_initial_call=True,
+    Output("analysis-compute-btn",  "disabled"),
+    Output("analysis-compute-hint", "style"),
+    Input("store-level",            "data"),
+    Input("store-ucode",            "data"),
+    Input("store-clicked-ucode",    "data"),
 )
-def on_compute_click(n, ucode, country):
-    if not n or not ucode:
-        return no_update, no_update, no_update
-    return ucode, country, None
+def analysis_toggle_compute(level, ucode, clicked_ucode):
+    if level == "adm0 (Country)":
+        ready = bool(ucode)
+    else:
+        ready = bool(clicked_ucode)
+    hint_style = {"marginTop": "6px", "display": "none" if ready else "block"}
+    return (not ready), hint_style
 
 
 # ── Selected badge ────────────────────────────────────────────────────────────
@@ -1379,43 +1558,87 @@ def update_badge(name):
 
 # ── Exposure computation ──────────────────────────────────────────────────────
 
+def _threshold_overrides(topic_values, threshold_ids, threshold_values):
+    """Map pattern-matching threshold inputs to {hazard_name: value}, keeping
+    only hazards whose value differs from the config default and whose topic is
+    selected. Returns (overrides_dict, sig_string)."""
+    overrides = {}
+    for id_obj, val in zip(threshold_ids or [], threshold_values or []):
+        h_name = id_obj.get("index")
+        if h_name not in HAZARD_MAP or val is None or val == "":
+            continue
+        default = HAZARD_MAP[h_name].get("threshold")
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        if default is None or abs(v - float(default)) > 1e-12:
+            overrides[h_name] = v
+    sig = "|".join(sorted(topic_values or [])) + "#" + \
+          ",".join(f"{k}={overrides[k]}" for k in sorted(overrides))
+    return overrides, sig
+
+
 @app.callback(
     Output("store-exposure",      "data", allow_duplicate=True),
     Output("results-panel",       "children"),
-    Input("store-clicked-ucode",  "data"),
-    Input("store-clicked-name",   "data"),
+    Input("analysis-compute-btn", "n_clicks"),
     Input("mhc-select",           "value"),
     Input("mhi-select",           "value"),
+    State("store-clicked-ucode",  "data"),
+    State("store-clicked-name",   "data"),
+    State("store-ucode",          "data"),
+    State("store-country",        "data"),
+    State("analysis-topic-select", "value"),
+    State({"type": "analysis-threshold", "index": ALL}, "value"),
+    State({"type": "analysis-threshold", "index": ALL}, "id"),
     State("store-level",          "data"),
     State("store-exposure",       "data"),
     prevent_initial_call=True,
 )
-def run_exposure(ucode, name, mhc, mhi, level, existing):
-    if not ucode or not level:
+def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, country_name,
+                 sel_topics, thr_values, thr_ids, level, existing):
+    if not level:
+        return no_update, None
+    # Resolve region by level: adm0 uses the country; sub-national uses the click.
+    if level == "adm0 (Country)":
+        ucode, name = country_ucode, country_name
+    else:
+        ucode, name = clicked_ucode, clicked_name
+    if not ucode:
         return no_update, None
 
+    sel_topics = sel_topics or []
+    overrides, sig = _threshold_overrides(sel_topics, thr_ids, thr_values)
+    # Non-default request cannot use the precomputed adm0 asset path.
+    topics_arg = None if set(sel_topics) == {t for t in HAZARD_TOPICS
+                                             if t not in EXPOSURE_ONLY_TOPICS} else sel_topics
+
     triggered_ids = {t["prop_id"].split(".")[0] for t in ctx.triggered}
-    filter_changed = "mhc-select" in triggered_ids or "mhi-select" in triggered_ids
+    filter_only = triggered_ids and triggered_ids <= {"mhc-select", "mhi-select"}
 
-    if existing and not filter_changed:
-        return no_update, render_results(_apply_force_null(existing, ucode), name, mhc, mhi)
-
-    if existing and filter_changed:
+    # MHC/MHI change: never recompute here — re-render the last Compute result.
+    # (Topic/threshold edits only take effect when Compute is pressed.)
+    if filter_only:
+        if not existing:
+            return no_update, no_update
         data = _apply_force_null(existing, ucode)
-        # Can only re-render if the needed filter values are already stored
-        mhc_ready = (not mhc) or (f"count_filter_{mhc}" in data)
-        mhi_ready = (not mhi) or (f"intensity_filter_{mhi}" in data)
-        if mhc_ready and mhi_ready:
-            return no_update, render_results(data, name, mhc, mhi)
-        # Values not precomputed (old-format data or sub-national MHI) — recompute
+        return no_update, render_results(data, name, mhc, mhi,
+                                         data.get("_topics"), data.get("_overrides"))
 
+    # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
         feature_ucode=ucode, admin_level=level,
         mhc_value=mhc if mhc else None,
         mhi_percentile=mhi if mhi else None,
+        topics=topics_arg,
+        threshold_overrides=overrides or None,
     )
     result = _apply_force_null(result, ucode)
-    return result, render_results(result, name, mhc, mhi)
+    result["_sig"]       = sig
+    result["_topics"]    = sel_topics
+    result["_overrides"] = overrides
+    return result, render_results(result, name, mhc, mhi, sel_topics, overrides)
 
 
 def _apply_force_null(result, ucode):
@@ -1448,10 +1671,27 @@ def _hazard_label(name):
     return " ".join(words[:2])
 
 
-def render_results(result, region_name, mhc_val, mhi_val):
+def _eff_threshold(h_name, overrides):
+    """Effective threshold + unit label for a hazard, given the user overrides."""
+    default = HAZARD_MAP.get(h_name, {}).get("threshold")
+    thr     = (overrides or {}).get(h_name, default)
+    units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
+    if thr is None:
+        return ""
+    thr_str = f"{thr:g}"
+    return f"thr {thr_str}" + (f" {units}" if units else "")
+
+
+def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overrides=None):
     if not result:
         return html.Div("No data available.", className="ps-caption",
                         style={"padding": "14px 16px"})
+
+    # Which topics to display: the user's selection (default = climate topics).
+    if sel_topics:
+        show_topics = [t for t in HAZARD_TOPICS if t in sel_topics]
+    else:
+        show_topics = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
 
     total = int(round(result.get("total_population",       0) or 0))
     male  = int(round(result.get("total_population_male",  0) or 0))
@@ -1461,9 +1701,7 @@ def render_results(result, region_name, mhc_val, mhi_val):
     # Collect + sort topic data
     no_data_topics = []
     topic_data     = []
-    for topic in HAZARD_TOPICS:
-        if topic in EXPOSURE_ONLY_TOPICS:
-            continue
+    for topic in show_topics:
         cov_key = "cov_" + re.sub(r"[^a-zA-Z0-9]", "_", topic)
         has_cov = (result.get(cov_key) or 0) > 0
         count   = int(round(result.get(topic) or 0))
@@ -1477,14 +1715,19 @@ def render_results(result, region_name, mhc_val, mhi_val):
     topic_data.sort(key=lambda r: r["count"], reverse=True)
 
     def _topic_row(td):
-        color = TOPIC_COLORS.get(td["topic"], "#888")
+        topic = td["topic"]
+        color = TOPIC_COLORS.get(topic, "#888")
         pct   = td["pct"]
         count = td["count"]
+        # Single-hazard topics show their effective threshold inline.
+        hazards = HAZARD_TOPICS.get(topic, [])
+        thr_txt = _eff_threshold(hazards[0], overrides) if len(hazards) == 1 else ""
         return [
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
-                    td["topic"].upper(),
+                    topic.upper(),
+                    html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ]),
                 html.Span([
                     html.Span(f"{count:,}", className="info-val"),
@@ -1501,10 +1744,14 @@ def render_results(result, region_name, mhc_val, mhi_val):
         rows = []
         for h_name in HAZARD_TOPICS[topic]:
             h_count = int(round(result.get(h_name) or 0))
+            thr_txt = _eff_threshold(h_name, overrides)
             rows.append(html.Div(className="info-row", children=[
-                html.Span(f"└ {_hazard_label(h_name)}", className="info-lbl",
-                          style={"paddingLeft": "22px", "color": "var(--lo)",
-                                 "fontWeight": "400", "fontSize": "0.85em"}),
+                html.Span([
+                    f"└ {_hazard_label(h_name)}",
+                    html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
+                ], className="info-lbl",
+                    style={"paddingLeft": "22px", "color": "var(--lo)",
+                           "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span(f"{h_count:,}" if h_count else "—", className="info-val",
                           style={"color": "var(--mid)", "fontWeight": "500"}),
             ]))
@@ -1522,9 +1769,17 @@ def render_results(result, region_name, mhc_val, mhi_val):
         else:
             exposure_items.append(html.Div(header))
 
+    thresholds_used = {}
+    for topic in show_topics:
+        for h_name in HAZARD_TOPICS.get(topic, []):
+            thresholds_used[h_name] = (overrides or {}).get(
+                h_name, HAZARD_MAP.get(h_name, {}).get("threshold"))
+
     export_data = {
         "region": region_name, "total_children": total,
         "male": male, "female": fema,
+        "selected_topics": show_topics,
+        "thresholds_used": thresholds_used,
         "exposure_by_topic": {
             td["topic"]: {"count": td["count"], "pct": round(td["pct"], 2)}
             for td in topic_data

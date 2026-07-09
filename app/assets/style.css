@@ -343,8 +343,37 @@ body {
 .info-lbl { font-size: 0.74rem; color: var(--mid); display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .info-val  { font-size: 0.74rem; font-weight: 600; color: var(--hi); white-space: nowrap; }
 .info-pct  { font-size: 0.62rem; color: var(--lo); margin-left: 4px; }
+.info-thr  { font-size: 0.6rem; color: var(--lo); font-weight: 400; }
 .bar-track { height: 2px; background: var(--border); margin: 1px 16px 5px; border-radius: 1px; }
 .bar-fill  { height: 2px; border-radius: 1px; }
+
+/* Analysis-tab editable hazard thresholds */
+.athr-toggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  margin-top: 8px; padding: 5px 8px; border-radius: 6px;
+  background: var(--panel-h); border: 1px solid var(--border);
+  user-select: none;
+}
+.athr-toggle:hover { border-color: var(--border2); }
+.athr-toggle i { font-size: 0.7rem; color: var(--lo); transition: transform 0.15s; }
+.athr-toggle-label { font-size: 0.72rem; font-weight: 600; color: var(--hi); flex: 1; }
+.athr-badge { font-size: 0.6rem; color: var(--cyan); font-weight: 600; }
+
+.analysis-threshold-block { margin-top: 8px; }
+.athr-topic { margin-bottom: 10px; }
+.athr-topic-head { display: flex; align-items: center; gap: 6px; margin: 4px 0 4px; }
+.athr-topic-name { font-size: 0.72rem; font-weight: 600; color: var(--hi); }
+.analysis-threshold-row { padding: 3px 0 10px 16px; }
+.athr-row-head { display: flex; align-items: center; gap: 6px; }
+.athr-label { flex: 1; font-size: 0.7rem; color: var(--mid); }
+.athr-input {
+  width: 74px; padding: 3px 6px; font-size: 0.7rem;
+  border: 1px solid var(--border2); border-radius: 5px;
+  background: var(--panel-h); color: var(--hi);
+  font-family: "Source Sans Pro", sans-serif;
+}
+.athr-units { font-size: 0.6rem; color: var(--lo); min-width: 40px; }
+.athr-slider { margin: 2px 8px 0 2px; }
 
 /* ── Badges ── */
 .info-box {
