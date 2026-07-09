@@ -22,7 +22,7 @@ from config import (
     HAZARDS, HAZARD_MAP, HAZARD_TOPICS, ALLOW_NEGATIVE,
     HAZARD_VIS_PALETTES, SELF_MASK_HAZARDS, GLOBAL_GEOMETRY,
     ADMIN_DATA, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
-    MHC_OPTIONS, MHI_OPTIONS,
+    MHC_OPTIONS, MHI_OPTIONS, SUB_TOPIC_DETAIL,
 )
 
 
@@ -119,6 +119,27 @@ def build_core_images():
     topic_coverage = {t: build_coverage_image(t) for t in HAZARD_TOPICS}
     hazard_score   = ee.Image("projects/unicef-ccri/assets/hazards/MHI_climate")
 
+    def load_raw(hazard):
+        """Raw hazard intensity image (values kept), for sampling at facilities."""
+        if hazard.get("isImage"):
+            layer = ee.Image(hazard["id"])
+        elif re.search(r"flood|storm", hazard["name"]):
+            layer = ee.ImageCollection(hazard["id"]).mosaic()
+        else:
+            layer = ee.Image(hazard["id"])
+        if hazard.get("band"):
+            layer = layer.select(hazard["band"])
+        # Drop no-data sentinels but keep the real intensity values.
+        if hazard["name"] == "agricultural_drought_fao_1984-2023":
+            layer = layer.updateMask(layer.lte(100))
+        elif "malaria" in hazard["name"]:
+            layer = layer.updateMask(layer.gt(0))
+        else:
+            layer = layer.updateMask(layer.gt(-1000))
+        return layer
+
+    raw_hazard = {h["name"]: load_raw(h) for h in HAZARDS}
+
     return {
         "childpop":                  childpop,
         "childpop_m":                childpop_m,
@@ -133,6 +154,7 @@ def build_core_images():
         "topic_coverage":            topic_coverage,
         "topic_count_image":         topic_count_image,
         "hazard_score":              hazard_score,
+        "raw_hazard":                raw_hazard,
     }
 
 
@@ -569,3 +591,295 @@ def compute_exposure_custom(geojson_dict):
     # Strip geometries before getInfo() to keep payload small for large feature sets
     props_only = results.map(lambda f: ee.Feature(None, f.toDictionary()))
     return props_only.getInfo()["features"]
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure analysis (Infrastructure tab)
+# Point assets (schools / health facilities / water points) correlated with
+# the existing hazard footprints and child-population grid.
+# All reductions run at the population grid's native scale (pop_target_res)
+# so results reconcile with the rest of the dashboard.
+# ---------------------------------------------------------------------------
+
+# Topics not flagged as facility hazards (geophysical / non-climate exposure-only)
+_INFRA_TOPICS = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
+
+
+def _adm2_region(adm2_ucode):
+    """Resolve the geometry of an adm2 unit by ucode (the analysis bound)."""
+    cfg = ADMIN_DATA["adm2 (Districts/Counties)"]
+    fc  = ee.FeatureCollection(cfg["asset"]).filter(ee.Filter.eq("ucode", adm2_ucode))
+    return fc.geometry()
+
+
+_ADM2_POP_ASSET = "projects/unicef-ccri/assets/global_boundary/admin2_pop_geom"
+
+
+@lru_cache(maxsize=512)
+def _adm2_child_pop(adm2_ucode):
+    """Precomputed under-18 population for an adm2 unit (no GEE aggregation).
+    Reads pop_under_18_total from admin2_pop_geom; None if unavailable."""
+    try:
+        feat = (ee.FeatureCollection(_ADM2_POP_ASSET)
+                .filter(ee.Filter.eq("adm2_ucode", adm2_ucode)).first())
+        return ee.Feature(feat).get("pop_under_18_total").getInfo()
+    except Exception:
+        return None
+
+
+@_ttl_cached(cache=_tile_cache(64), lock=_tile_lock)
+def get_infra_tile_url(asset_id, color, adm2_ucode=None):
+    """Return tile URL for a styled infrastructure point FeatureCollection.
+    When adm2_ucode is given, only facilities inside that district are shown."""
+    fc = ee.FeatureCollection(asset_id)
+    if adm2_ucode:
+        fc = fc.filterBounds(_adm2_region(adm2_ucode))
+    # Small points with a thin white edge so they read over the population raster.
+    styled = fc.style(color="ffffff", fillColor=color, pointSize=3, width=1)
+    mid    = styled.getMapId({})
+    return mid["tile_fetcher"].url_format
+
+
+def _topic_union_mask(core, topics):
+    """Constant-1 image masked to the OR-union of the given topic footprints.
+    Falls back to the union of all infra topics when none specified."""
+    names = [t for t in (topics or _INFRA_TOPICS) if t in core["topic_masks"]]
+    if not names:
+        names = _INFRA_TOPICS
+    union = core["topic_masks"][names[0]].mask()
+    for n in names[1:]:
+        union = union.Or(core["topic_masks"][n].mask())
+    return ee.Image.constant(1).updateMask(union)
+
+
+def _name_prop(props):
+    """Pick the best available name property from an asset's property list."""
+    for c in ("name", "facility_id", "id"):
+        if c in props:
+            return c
+    return props[0] if props else "name"
+
+
+def _sel_topics(topic_masks, topics):
+    sel = [t for t in (topics or _INFRA_TOPICS) if t in topic_masks]
+    return sel or list(_INFRA_TOPICS)
+
+
+def _subhazards_for(sel_topics):
+    """Ordered (topic, [hazard_name,...]) for topics that have a detail breakdown."""
+    return [(t, HAZARD_TOPICS[t]) for t in sel_topics if t in SUB_TOPIC_DETAIL]
+
+
+def _voronoi_cells(points, adm2_geojson):
+    """Nearest-facility (Voronoi) partition of the adm2, client-side (shapely).
+
+    points: list of (lon, lat, fname). Returns a GeoJSON FeatureCollection of
+    cells (one per facility, clipped to the adm2), each with {fname, lon, lat}.
+    Cells tile the district with no gaps/overlaps → per-facility pop is summable.
+    """
+    from shapely.geometry import MultiPoint, shape, Point, mapping
+    from shapely.ops import voronoi_diagram
+
+    adm2 = shape(adm2_geojson)
+    seeds = [Point(x, y) for x, y, _ in points]
+    feats = []
+    if len(points) == 1:
+        # Single facility → the whole district is its cell.
+        x, y, nm = points[0]
+        cell = adm2
+        if not cell.is_empty:
+            feats.append({"type": "Feature", "geometry": mapping(cell),
+                          "properties": {"fname": nm, "lon": x, "lat": y}})
+        return {"type": "FeatureCollection", "features": feats}
+
+    mp = MultiPoint([(x, y) for x, y, _ in points])
+    vor = voronoi_diagram(mp, envelope=adm2)
+    for cell in vor.geoms:
+        c = cell.intersection(adm2)
+        if c.is_empty:
+            continue
+        ctr = c.representative_point()
+        j = min(range(len(seeds)), key=lambda i: seeds[i].distance(ctr))
+        x, y, nm = points[j]
+        feats.append({"type": "Feature", "geometry": mapping(c),
+                      "properties": {"fname": nm, "lon": x, "lat": y}})
+    return {"type": "FeatureCollection", "features": feats}
+
+
+def compute_facility_combined(asset_id, adm2_ucode, topics=None):
+    """Single combined analysis for one adm2 district:
+
+      • Exposed population per hazard — aggregated over the WHOLE adm2 (Voronoi
+        partitions the district, so the district total IS the served total).
+      • Facility-site exposure — which facilities sit in each hazard, at what
+        raw intensity (reuses compute_facility_site).
+      • Per-facility Voronoi population — each facility's nearest-neighbour
+        catchment child population + hazard-exposed share (summable, no overlap).
+
+    Returns a merged dict (see keys below). Kept to a small number of sequential
+    getInfo calls (never fan-out) to respect the GEE concurrency limit.
+    """
+    core        = build_core_images()
+    childpop    = core["childpop"]
+    pop_res     = core["pop_target_res"]
+    topic_masks = core["topic_masks"]
+    exposure_by = core["exposure_by_hazard"]
+    region      = _adm2_region(adm2_ucode)
+
+    sel_topics = _sel_topics(topic_masks, topics)
+    sub_names  = [h for _t, hs in _subhazards_for(sel_topics)
+                  for h in hs if h in exposure_by]
+
+    # ── (1) Aggregate exposed population per hazard over the whole adm2 ──
+    def _bn(prefix, i):
+        return f"b{prefix}{i}"
+
+    band_imgs = [childpop.rename("bTotal"),
+                 childpop.updateMask(_topic_union_mask(core, sel_topics)).rename("bExposed")]
+    band_keys = [None, None]
+    for i, t in enumerate(sel_topics):
+        band_imgs.append(childpop.updateMask(topic_masks[t]).rename(_bn("t", i)))
+        band_keys.append(("topic", t))
+    for i, h in enumerate(sub_names):
+        band_imgs.append(childpop.updateMask(exposure_by[h].mask()).rename(_bn("s", i)))
+        band_keys.append(("sub", h))
+    band_names = ["bTotal", "bExposed"] + \
+                 [_bn("t", i) for i in range(len(sel_topics))] + \
+                 [_bn("s", i) for i in range(len(sub_names))]
+
+    stats = ee.Image.cat(band_imgs).reduceRegion(
+        reducer=ee.Reducer.sum(), geometry=region, scale=pop_res,
+        bestEffort=True, maxPixels=int(1e10),
+    ).getInfo()
+
+    per_topic, per_sub = {}, {}
+    for key, bname in zip(band_keys, band_names):
+        if isinstance(key, tuple):
+            (per_topic if key[0] == "topic" else per_sub)[key[1]] = stats.get(bname)
+
+    # ── (2) Facility-site exposure (flags + raw intensity per facility) ──
+    site = compute_facility_site(asset_id, adm2_ucode, topics)
+    facilities = site["facilities"]
+    site_tally = site["tally"]
+
+    # ── (3) Voronoi per-facility population (nearest-neighbour catchments) ──
+    points = [(p["properties"].get("lon"), p["properties"].get("lat"),
+               p["properties"].get("fname"))
+              for p in facilities
+              if p["properties"].get("lon") is not None]
+    adm2_geo = region.getInfo()
+    cells = _voronoi_cells(points, adm2_geo)
+
+    pop_bands = [childpop.rename("vpop"),
+                 childpop.updateMask(_topic_union_mask(core, sel_topics)).rename("vexp")]
+    cell_stats = ee.Image.cat(pop_bands).reduceRegions(
+        collection=ee.FeatureCollection(cells), reducer=ee.Reducer.sum(),
+        scale=pop_res, tileScale=8,
+    ).map(lambda f: ee.Feature(None, ee.Feature(f).toDictionary(
+        ["fname", "lon", "lat", "vpop", "vexp"])))
+    cell_rows = cell_stats.getInfo()["features"]
+
+    return {
+        "n_facilities":             len(facilities),
+        "subregion_children_total": _adm2_child_pop(adm2_ucode),
+        "served_children_total":    stats.get("bTotal"),
+        "served_children_exposed":  stats.get("bExposed"),
+        "per_topic_exposed":        per_topic,
+        "per_subhazard_exposed":    per_sub,
+        "facility_site_tally":      site_tally,
+        "facilities_site":          facilities,     # flags + intensity per facility
+        "facilities_voronoi":       cell_rows,      # vpop / vexp per facility
+        "voronoi_geojson":          cells,
+        "topic_cols":               site["topic_cols"],
+        "intensity_cols":           site["intensity_cols"],
+        "topics":                   sel_topics,
+    }
+
+
+def compute_facility_site(asset_id, adm2_ucode, topics=None):
+    """Concept 2: whether each facility SITE sits in a hazard footprint, and at
+    what raw intensity (native units) — sampled at the facility point.
+
+    Returns {
+      "facilities": [{fname, lon, lat, <topic>:0|1, <subhazard>:intensity, ...}],
+      "topic_cols":     [topics],
+      "intensity_cols": [subhazard hazard_names],
+      "tally":          {topic: n_facilities_flagged, ..., "total": n},
+      "topics":         sel_topics,
+    }
+    Single reduceRegions + one server-side tally (concurrency-safe).
+    """
+    core         = build_core_images()
+    topic_masks  = core["topic_masks"]
+    raw_hazard   = core["raw_hazard"]
+    target_scale = core["target_scale"]
+    region       = _adm2_region(adm2_ucode)
+
+    sel_topics = _sel_topics(topic_masks, topics)
+    # Sub-hazard intensity layers for the selected topics (skip missing).
+    sub_names = [h for t in sel_topics for h in HAZARD_TOPICS[t] if h in raw_hazard]
+
+    try:
+        _, props = get_asset_info(asset_id)
+    except Exception:
+        props = []
+    name_prop = _name_prop(props)
+
+    fc = ee.FeatureCollection(asset_id).filterBounds(region)
+
+    # Safe band names; map back after reduction.
+    flag_names = [f"tf{i}" for i in range(len(sel_topics))]
+    int_names  = [f"hi{i}" for i in range(len(sub_names))]
+    bands = [topic_masks[t].unmask(0).rename(flag_names[i])
+             for i, t in enumerate(sel_topics)]
+    bands += [raw_hazard[h].rename(int_names[i]) for i, h in enumerate(sub_names)]
+    stack = ee.Image.cat(bands)
+
+    sampled = stack.reduceRegions(
+        collection=fc, reducer=ee.Reducer.first(),
+        scale=target_scale, tileScale=8,
+    )
+
+    def _tidy(f):
+        f = ee.Feature(f)
+        coords = f.geometry().centroid(1).coordinates()
+        out = {"fname": f.get(name_prop),
+               "lon": coords.get(0), "lat": coords.get(1)}
+        for i, t in enumerate(sel_topics):
+            out[t] = f.get(flag_names[i])
+        for i, h in enumerate(sub_names):
+            out[h] = f.get(int_names[i])
+        return ee.Feature(None, out)
+
+    tidy = sampled.map(_tidy)
+
+    # Server-side tally: facilities flagged per topic + total (one getInfo).
+    tally = {t: sampled.aggregate_sum(flag_names[i])
+             for i, t in enumerate(sel_topics)}
+    tally["total"] = fc.size()
+
+    return {
+        "facilities":     tidy.getInfo()["features"],
+        "topic_cols":     sel_topics,
+        "intensity_cols": sub_names,
+        "tally":          ee.Dictionary(tally).getInfo(),
+        "topics":         sel_topics,
+    }
+
+
+# Population raster vis (yellow -> red); shared with the map legend.
+INFRA_POP_VIS = {
+    "min": 0, "max": 50,
+    "palette": ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"],
+}
+
+
+@_ttl_cached(cache=_tile_cache(32), lock=_tile_lock)
+def get_clipped_pop_tile_url(asset_id, adm2_ucode):
+    """Child-population raster clipped to the adm2 district.
+    Returns (tile_url, vis_dict) so the legend can reuse the exact stops."""
+    core    = build_core_images()
+    region  = _adm2_region(adm2_ucode)
+    clipped = core["childpop"].clip(region).selfMask()
+    mid = clipped.getMapId(INFRA_POP_VIS)
+    return mid["tile_fetcher"].url_format, INFRA_POP_VIS

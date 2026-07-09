@@ -18,6 +18,7 @@ from config import (
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3,
+    INFRA_LAYERS,
 )
 from ai_core import initialize_ai, ask_gemini
 from auth import request_otp, verify_otp, SESSION_HOURS
@@ -31,6 +32,8 @@ from gee_core import (
     compute_exposure_custom, compute_exposure_asset,
     get_asset_info, get_asset_bounds, get_custom_asset_tile_url,
     get_feature_at_point, compute_exposure, compute_topic_overlap,
+    get_infra_tile_url, compute_facility_combined,
+    get_clipped_pop_tile_url, INFRA_POP_VIS,
 )
 
 # ---------------------------------------------------------------------------
@@ -46,9 +49,11 @@ COUNTRY_NAMES  = get_country_names()
 initialize_ai(COUNTRY_NAMES)
 UN_CLEARMAP    = "https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}"
 CARTO_FALLBACK = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+ESRI_SAT       = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 GEE_ATTR       = "Google Earth Engine / UNICEF"
 UN_ATTR        = "© United Nations Geospatial"
 CARTO_ATTR     = "© OpenStreetMap contributors © CARTO"
+ESRI_ATTR      = "© Esri, Maxar, Earthstar Geographics"
 TOPIC_LIST     = list(HAZARD_TOPICS.keys())
 
 # Ordered layers for the hazard list
@@ -156,6 +161,7 @@ def sidebar():
             nav_btn("bi bi-people",        "Exposure", "btn-exposure"),
             nav_btn("bi bi-stack",         "Multi HZ", "btn-mh"),
             nav_btn("bi bi-bar-chart-line","Analysis", "btn-analysis"),
+            nav_btn("bi bi-buildings",     "Infra",    "btn-infra"),
             nav_btn("bi bi-robot",         "AI",       "btn-ai"),
         ]),
     ])
@@ -502,6 +508,109 @@ def tab_analysis():
     ])
 
 
+def _infra_layer_options():
+    return [{"label": name, "value": name} for name in INFRA_LAYERS]
+
+
+def tab_infrastructure():
+    return html.Div(id="tab-infrastructure", style={"display": "none"}, children=[
+        html.Div(className="ph", children=[
+            html.Div("Infrastructure Analysis", className="ph-title"),
+            html.Div("Correlate facilities with hazards & child population",
+                     className="ph-sub"),
+        ]),
+
+        # 1. Region — own selector that writes to the shared region stores.
+        # Analyses are adm2-only, so selecting a country hard-sets adm2 and
+        # enables map district selection immediately (no level dropdown).
+        html.Div(className="ps", children=[
+            html.Div("1. Select country / territory", className="ps-label"),
+            dcc.Dropdown(
+                id="infra-country-select", className="ps-select",
+                options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
+                value=None, placeholder="Search country / territory…",
+                clearable=False, searchable=True,
+            ),
+        ]),
+        html.Div(id="infra-level-section", style={"display": "none"}, children=[
+            html.Div(id="infra-selected-badge-wrap"),
+            html.Div("Click a district on the map to analyze.",
+                     className="info-box", id="infra-region-hint"),
+        ]),
+
+        # 2. Facility layer (defaults to the first layer; paste-path fallback)
+        html.Div(className="ps", children=[
+            html.Div("2. Facility layer", className="ps-label"),
+            dcc.Dropdown(
+                id="infra-layer-select", className="ps-select",
+                options=_infra_layer_options(),
+                value=next(iter(INFRA_LAYERS)),
+                placeholder="— select a facility layer —",
+                clearable=True, searchable=False,
+            ),
+            html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
+                dcc.Input(
+                    id="infra-asset-input",
+                    placeholder="…or paste a GEE asset path",
+                    debounce=False,
+                    style={"flex": "1", "padding": "7px 9px", "fontSize": "0.75rem",
+                           "border": "1px solid var(--border2)", "borderRadius": "6px",
+                           "fontFamily": "Source Sans Pro, sans-serif",
+                           "background": "var(--panel-h)", "color": "var(--hi)"},
+                ),
+                html.Button("Load", id="infra-asset-load-btn", className="ps-btn",
+                            n_clicks=0,
+                            style={"width": "auto", "padding": "7px 14px", "flexShrink": "0"}),
+            ]),
+            html.Div(id="infra-asset-status",
+                     style={"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}),
+        ]),
+
+        # 3. Hazard topics
+        html.Div(className="ps", children=[
+            html.Div("3. Hazard topics", className="ps-label"),
+            dcc.Dropdown(
+                id="infra-topic-select", className="ps-select",
+                options=[{"label": t, "value": t} for t in HAZARD_TOPICS
+                         if t not in EXPOSURE_ONLY_TOPICS],
+                value=[], multi=True, placeholder="All hazards (default)",
+                clearable=True, searchable=False,
+            ),
+            html.Div("Exposed population is attributed to each facility's "
+                     "nearest-neighbour (Voronoi) catchment across the district.",
+                     className="ps-caption"),
+        ]),
+
+        html.Div(className="ps", children=[
+            html.Button("Compute", id="infra-compute-btn", className="ps-btn",
+                        n_clicks=0, disabled=True),
+        ]),
+        dcc.Loading(
+            id="infra-results-loading", type="circle", color="#1CABE2",
+            children=html.Div(id="infra-results-panel"),
+        ),
+        # Per-facility CSV download (phase 2) — spinner until ready.
+        html.Div(className="ps", children=[
+            dcc.Loading(
+                id="infra-download-loading", type="circle", color="#1CABE2",
+                children=html.Div(id="infra-download-wrap"),
+            ),
+        ]),
+
+        # — Stores — seed the default facility layer so Compute works without
+        # an explicit Load if the layer-select callback doesn't auto-fire.
+        dcc.Store(id="store-infra-asset", data={
+            "asset_id": INFRA_LAYERS[next(iter(INFRA_LAYERS))]["asset"],
+            "name_field": "name",
+        }),
+        # Last computed viz (asset/ucode/buffer/color) — lets update_data_layers
+        # rebuild the infra tiles so they aren't wiped on store/tab changes.
+        dcc.Store(id="store-infra-viz", data=None),
+        # Phase-2 trigger: per-facility download computed after the summary.
+        dcc.Store(id="store-infra-pending", data=None),
+    ])
+
+
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
         html.Div(className="ph", children=[
@@ -565,6 +674,14 @@ def tab_ai():
 
 def map_component():
     return html.Div(id="map-container", children=[
+        html.Div(id="infra-map-legend", className="map-legend",
+                 style={"display": "none"}),
+        # Basemap toggle (map ↔ satellite) — bottom-left floating control.
+        html.Button(
+            [html.I(className="bi bi-globe-americas"), html.Span("Satellite")],
+            id="basemap-toggle", className="basemap-toggle", n_clicks=0,
+            title="Toggle satellite basemap",
+        ),
         dl.Map(
             id="main-map",
             center=[10, 20], zoom=3, zoomControl=False,
@@ -583,6 +700,9 @@ def map_component():
                     attribution=UN_ATTR,
                     maxZoom=6,
                 ),
+                # Satellite basemap (Esri World Imagery) — hidden until toggled.
+                dl.TileLayer(id="sat-basemap", url=ESRI_SAT,
+                             attribution=ESRI_ATTR, maxZoom=19, opacity=0),
                 dl.ZoomControl(position="topright"),
                 dl.LayerGroup(id="data-layers"),
                 dl.LayerGroup(id="boundary-layers"),
@@ -593,6 +713,18 @@ def map_component():
                     options={"style": {"color": "#e67e22", "weight": 2,
                                        "fillOpacity": 0.05, "opacity": 0.9}},
                 ),
+                # ── Infrastructure layers: dedicated, stably-identified top-level
+                # components so the legend's clientside eye toggles can flip each
+                # one's opacity/visibility reliably. ──
+                dl.TileLayer(id="infra-selection-tile", url="", opacity=0.75),
+                dl.TileLayer(id="infra-pop-tile", url="", opacity=0.8),
+                dl.GeoJSON(
+                    id="infra-voronoi-geojson",
+                    data=None,
+                    options={"style": {"color": "#1CABE2", "weight": 1,
+                                       "fillOpacity": 0.0, "opacity": 0.7}},
+                ),
+                dl.TileLayer(id="infra-points-tile", url="", opacity=0.9),
             ],
             style={"height": "100vh", "width": "100%"},
         ),
@@ -795,6 +927,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_exposure(),
             tab_mh(),
             tab_analysis(),
+            tab_infrastructure(),
             tab_ai(),
         ]),
         map_component(),
@@ -838,32 +971,37 @@ def restore_embargo_state(accepted):
     Output("btn-exposure",      "className"),
     Output("btn-mh",            "className"),
     Output("btn-analysis",      "className"),
+    Output("btn-infra",         "className"),
     Output("btn-ai",            "className"),
     Output("tab-hazard",        "style"),
     Output("tab-exposure",      "style"),
     Output("tab-mh",            "style"),
     Output("tab-analysis",      "style"),
+    Output("tab-infrastructure","style"),
     Output("tab-ai",            "style"),
     Output("hazard-info-panel", "style", allow_duplicate=True),
     Input("btn-hazard",    "n_clicks"),
     Input("btn-exposure",  "n_clicks"),
     Input("btn-mh",        "n_clicks"),
     Input("btn-analysis",  "n_clicks"),
+    Input("btn-infra",     "n_clicks"),
     Input("btn-ai",        "n_clicks"),
     State("store-tab",     "data"),
     prevent_initial_call=True,
 )
-def switch_tab(n1, n2, n3, n4, n5, current):
+def switch_tab(n1, n2, n3, n4, n5, n6, current):
     tab = {"btn-hazard":"hazard","btn-exposure":"exposure",
            "btn-mh":"mh","btn-analysis":"analysis",
-           "btn-ai":"ai"}.get(ctx.triggered_id, current)
+           "btn-infra":"infrastructure","btn-ai":"ai"}.get(ctx.triggered_id, current)
     cls = lambda t: "nav-btn active" if tab == t else "nav-btn"
     vis = lambda t: {"display": "block"} if tab == t else {"display": "none"}
     info_panel = no_update if tab == "hazard" else {"display": "none"}
     return (
         tab,
-        cls("hazard"), cls("exposure"), cls("mh"), cls("analysis"), cls("ai"),
-        vis("hazard"), vis("exposure"), vis("mh"), vis("analysis"), vis("ai"),
+        cls("hazard"), cls("exposure"), cls("mh"), cls("analysis"),
+        cls("infrastructure"), cls("ai"),
+        vis("hazard"), vis("exposure"), vis("mh"), vis("analysis"),
+        vis("infrastructure"), vis("ai"),
         info_panel,
     )
 
@@ -1013,6 +1151,11 @@ def update_hazard_legend(sel):
 def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab):
     layers = []
 
+    # Infrastructure layers live in dedicated top-level components
+    # (infra-pop-tile / infra-points-tile / etc.), not in this group.
+    if tab == "infrastructure":
+        return layers
+
     if tab == "hazard" and sel_layer:
         if sel_layer == "Multi Hazard Count":
             url, _ = get_topic_count_tile_url()
@@ -1129,9 +1272,14 @@ def update_map_view(bounds, ucode, level):
 @app.callback(
     Output("selection-layer",     "children"),
     Input("store-clicked-ucode",  "data"),
+    Input("store-tab",            "data"),
     State("store-level",          "data"),
 )
-def update_selection_layer(ucode, level):
+def update_selection_layer(ucode, tab, level):
+    # On the infra tab the yellow highlight is drawn by the dedicated,
+    # toggleable infra-selection-tile instead of this group.
+    if tab == "infrastructure":
+        return []
     if not ucode or not level:
         return []
     try:
@@ -1139,6 +1287,25 @@ def update_selection_layer(ucode, level):
         return [dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75)]
     except Exception:
         return []
+
+
+# Infra tab: draw the yellow district highlight immediately on click (before
+# Compute) into the dedicated, toggleable infra-selection-tile.
+@app.callback(
+    Output("infra-selection-tile", "url", allow_duplicate=True),
+    Input("store-clicked-ucode",   "data"),
+    State("store-level",           "data"),
+    State("store-tab",             "data"),
+    prevent_initial_call=True,
+)
+def infra_highlight_selection(ucode, level, tab):
+    if tab != "infrastructure" or not ucode or not level \
+            or level == "adm0 (Country)":
+        return ""
+    try:
+        return get_selected_feature_tile_url(level, ucode)
+    except Exception:
+        return ""
 
 
 # ── Map click → feature lookup ────────────────────────────────────────────────
@@ -1158,7 +1325,7 @@ def update_selection_layer(ucode, level):
 def on_map_click(click_data, level, country_ucode, last_click, tab):
     if not click_data or not level or not country_ucode:
         return no_update, no_update, no_update, no_update
-    if level == "adm0 (Country)" or tab != "analysis":
+    if level == "adm0 (Country)" or tab not in ("analysis", "infrastructure"):
         return no_update, no_update, no_update, no_update
     latlng = click_data.get("latlng")
     if not latlng:
@@ -2028,6 +2195,520 @@ def ai_execute(pending):
         return summary, no_update, viewport
 
     return _ai_error("Unrecognised action from AI."), no_update, no_update
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure tab
+# ---------------------------------------------------------------------------
+
+# ── Region selection (writes the shared region stores) ────────────────────────
+
+@app.callback(
+    Output("store-country",       "data", allow_duplicate=True),
+    Output("store-ucode",         "data", allow_duplicate=True),
+    Output("store-bounds",        "data", allow_duplicate=True),
+    Output("store-level",         "data", allow_duplicate=True),
+    Output("store-clicked-ucode", "data", allow_duplicate=True),
+    Output("store-clicked-name",  "data", allow_duplicate=True),
+    Output("infra-level-section", "style"),
+    Input("infra-country-select", "value"),
+    prevent_initial_call=True,
+)
+def infra_on_country_select(country):
+    # Analyses are adm2-only: selecting a country hard-sets the adm2 level and
+    # zooms to the country, so the map is immediately clickable for districts.
+    if not country:
+        return None, None, None, None, None, None, {"display": "none"}
+    ucode  = get_country_ucode(country)
+    bounds = get_country_bounds(ucode)
+    return (country, ucode, bounds, "adm2 (Districts/Counties)", None, None,
+            {"display": "block"})
+
+
+@app.callback(
+    Output("infra-selected-badge-wrap", "children"),
+    Output("infra-region-hint",         "style"),
+    Input("store-clicked-name",         "data"),
+    State("store-tab",                  "data"),
+)
+def infra_update_badge(name, tab):
+    if not name or tab != "infrastructure":
+        return None, no_update
+    badge = html.Div(className="selected-badge", children=[
+        html.Div("Selected region", className="selected-badge-tag"),
+        html.Div(name, className="selected-badge-name"),
+    ])
+    return badge, {"display": "none"}  # hide the "click a district" hint
+
+
+# ── Compute button enable/disable ─────────────────────────────────────────────
+
+@app.callback(
+    Output("infra-compute-btn",  "disabled"),
+    Input("store-clicked-ucode", "data"),
+    Input("store-level",         "data"),
+)
+def infra_toggle_compute(clicked_ucode, level):
+    return not (clicked_ucode and level and level != "adm0 (Country)")
+
+
+# ── Facility-layer / asset selection → resolve asset id, draw points ──────────
+
+@app.callback(
+    Output("store-infra-asset",       "data"),
+    Output("infra-asset-status",      "children"),
+    Output("infra-asset-status",      "style"),
+    Output("infra-points-tile",       "url",      allow_duplicate=True),
+    Output("main-map",                "viewport", allow_duplicate=True),
+    Input("infra-layer-select",       "value"),
+    Input("infra-asset-load-btn",     "n_clicks"),
+    Input("store-tab",                "data"),
+    State("infra-asset-input",        "value"),
+    State("store-infra-viz",          "data"),
+    prevent_initial_call=True,
+)
+def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
+    """Picking/loading a facility layer previews ALL points for the country
+    (no AOI) on the dedicated infra-points-tile. infra_compute later overwrites
+    it with the AOI-clipped points. Same path for every layer → uniform.
+    Also fires on entering the Infra tab so the default (Schools) draws."""
+    err_style = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--red)"}
+    ok_style  = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}
+
+    trig = ctx.triggered_id
+    fit  = True  # fit the map to the asset bounds (suppressed on tab-entry)
+
+    if trig == "store-tab":
+        # Entering the Infra tab: draw the currently-selected layer's points
+        # without yanking the viewport. Skip if results are already computed
+        # (store-infra-viz set) so we don't overwrite the AOI-clipped points.
+        if tab != "infrastructure" or not layer_name or infra_viz:
+            return no_update, no_update, no_update, no_update, no_update
+        asset_id = INFRA_LAYERS[layer_name]["asset"]
+        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        label    = layer_name
+        fit      = False
+    elif trig == "infra-layer-select":
+        if not layer_name:
+            return None, "", ok_style, "", no_update
+        asset_id = INFRA_LAYERS[layer_name]["asset"]
+        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        label    = layer_name
+    else:
+        if not asset_input or not asset_input.strip():
+            return no_update, no_update, no_update, no_update, no_update
+        asset_id = asset_input.strip()
+        color    = "e67e22"
+        label    = asset_id.split("/")[-1]
+
+    try:
+        n, props = get_asset_info(asset_id)
+        tile_url = get_infra_tile_url(asset_id, color)   # whole country (no AOI)
+        bounds   = get_asset_bounds(asset_id)
+    except Exception as e:
+        return None, f"Error loading asset: {e}", err_style, no_update, no_update
+
+    status   = f"✓  {n} features — {label}"
+    viewport = {"bounds": bounds, "transition": "fitBounds"} if fit else no_update
+    return ({"asset_id": asset_id, "name_field": "name", "props": props},
+            status, ok_style, tile_url, viewport)
+
+
+# ── Compute (dispatches on mode) ──────────────────────────────────────────────
+
+def _csv_href(fieldnames, rows, comment=None):
+    import io, csv as _csv, urllib.parse
+    buf = io.StringIO()
+    if comment:
+        buf.write("# " + comment + "\n")
+    writer = _csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
+
+
+def _infra_download(fieldnames, rows, filename, comment=None):
+    """Secondary (ghost) download link, demoted below the visual summary."""
+    return html.A(
+        "⬇  Download full data (CSV)",
+        href=_csv_href(fieldnames, rows, comment=comment), download=filename,
+        className="ps-btn-ghost",
+        style={"display": "block", "textAlign": "center", "textDecoration": "none",
+               "padding": "9px 16px", "marginTop": "10px"},
+    )
+
+
+# Disclaimer shown in the panel and embedded in the CSV: per-facility figures
+# come from each facility's own (overlapping) buffer and must not be summed.
+INFRA_PERFAC_DISCLAIMER = (
+    "Per-facility figures count children within each facility's individual "
+    "buffer; buffers overlap, so these values may double-count and must not be "
+    "summed. Use the dissolved-buffer summary above for district totals."
+)
+
+
+def _infra_error(msg):
+    return html.Div(msg, style={"color": "var(--red)", "fontSize": "0.75rem",
+                                "padding": "12px 16px"})
+
+
+def _metric(value, label, color=None):
+    style = {"color": color} if color else {}
+    return html.Div(className="metric", children=[
+        html.Div(value, className="metric-val", style=style),
+        html.Div(label, className="metric-lbl"),
+    ])
+
+
+def _bar_row(label, count, pct, color):
+    """Ranked bar row mirroring the Exposure tab (info-row + bar-track)."""
+    return html.Div([
+        html.Div(className="info-row", children=[
+            html.Span(className="info-lbl", children=[
+                html.Span(className="topic-swatch", style={"background": color}),
+                label,
+            ]),
+            html.Span([
+                html.Span(f"{count:,}", className="info-val"),
+                html.Span(f" ({pct:.1f}%)", className="info-pct"),
+            ]),
+        ]),
+        html.Div(className="bar-track", children=[
+            html.Div(className="bar-fill",
+                     style={"width": f"{min(100, pct)}%", "background": color}),
+        ]),
+    ])
+
+
+def _infra_panel(title, metric_cards, bar_rows, download, caption=None):
+    children = [html.Div(title, className="ps-label")]
+    if caption:
+        children.append(html.Div(caption, className="ps-caption"))
+    if metric_cards:
+        children.append(html.Div(className="metrics", children=metric_cards))
+    children.extend(bar_rows)
+    if download is not None:
+        children.append(download)
+    return html.Div(className="ps", children=children)
+
+
+def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
+    """Merged per-hazard rows: exposed children (bar) + '· N facilities' from
+    the facility-site tally, with subhazard child-population detail rows."""
+    tdata = sorted(
+        ({"topic": t,
+          "pop":  int(round((per_topic or {}).get(t) or 0)),
+          "fac":  int(round((site_tally or {}).get(t) or 0))}
+         for t in sel_topics),
+        key=lambda d: d["pop"], reverse=True,
+    )
+    items = []
+    for td in tdata:
+        topic = td["topic"]
+        pct   = (td["pop"] / total * 100) if total else 0
+        color = TOPIC_COLORS.get(topic, "#888")
+        # Bar row with an extra facility-count suffix.
+        header = html.Div([
+            html.Div(className="info-row", children=[
+                html.Span(className="info-lbl", children=[
+                    html.Span(className="topic-swatch", style={"background": color}),
+                    topic.upper(),
+                ]),
+                html.Span([
+                    html.Span(f"{td['pop']:,}", className="info-val"),
+                    html.Span(f" ({pct:.1f}%)", className="info-pct"),
+                    html.Span(f"  · {td['fac']} fac.", className="info-pct",
+                              style={"color": "var(--lo)"}),
+                ]),
+            ]),
+            html.Div(className="bar-track", children=[
+                html.Div(className="bar-fill",
+                         style={"width": f"{min(100, pct)}%", "background": color}),
+            ]),
+        ])
+        if topic in SUB_TOPIC_DETAIL:
+            sub_rows = []
+            for h in HAZARD_TOPICS[topic]:
+                hc = int(round((per_sub or {}).get(h) or 0))
+                sub_rows.append(html.Div(className="info-row", children=[
+                    html.Span(f"└ {_hazard_label(h)}", className="info-lbl",
+                              style={"paddingLeft": "22px", "color": "var(--lo)",
+                                     "fontWeight": "400", "fontSize": "0.85em"}),
+                    html.Span(f"{hc:,}" if hc else "—", className="info-val",
+                              style={"color": "var(--mid)", "fontWeight": "500"}),
+                ]))
+            items.append(html.Details(open=True, className="topic-detail", children=[
+                html.Summary(header, className="topic-detail-summary"),
+                *sub_rows,
+            ]))
+        else:
+            items.append(html.Div(header))
+    return items
+
+
+@app.callback(
+    Output("infra-results-panel", "children"),
+    Output("infra-pop-tile",      "url"),
+    Output("infra-points-tile",   "url"),
+    Output("infra-voronoi-geojson","data",     allow_duplicate=True),
+    Output("store-infra-viz",     "data"),
+    Output("store-infra-pending", "data"),
+    Output("infra-download-wrap", "children"),
+    Input("infra-compute-btn",    "n_clicks"),
+    State("store-infra-asset",    "data"),
+    State("store-clicked-ucode",  "data"),
+    State("store-clicked-name",   "data"),
+    State("store-level",          "data"),
+    State("infra-topic-select",   "value"),
+    prevent_initial_call=True,
+)
+def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
+    """Single combined analysis: exposed population (Voronoi catchments) +
+    exposed facilities (site hazard). Renders panel + map; per-facility CSV in
+    phase 2."""
+    nu = (no_update,) * 6
+    if not asset:
+        return (_infra_error("Select or load a facility layer first."), *nu)
+    if not adm2_ucode or not level or level == "adm0 (Country)":
+        return (_infra_error("Select an adm2 region and click a district on the map "
+                             "to bound the analysis."), *nu)
+    asset_id = asset["asset_id"]
+    topics_sel = topics or None
+
+    color = "e67e22"
+    for meta in INFRA_LAYERS.values():
+        if meta["asset"] == asset_id:
+            color = meta["color"].lstrip("#")
+            break
+
+    try:
+        r = compute_facility_combined(asset_id, adm2_ucode, topics_sel)
+    except Exception as e:
+        return (_infra_error(f"GEE error: {e}"), *nu)
+
+    sel_topics = r.get("topics") or [t for t in HAZARD_TOPICS
+                                     if t not in EXPOSURE_ONLY_TOPICS]
+    nfac    = int(r.get("n_facilities") or 0)
+    total   = int(round(r.get("served_children_total") or 0))
+    exposed = int(round(r.get("served_children_exposed") or 0))
+    site_tally = r.get("facility_site_tally") or {}
+    n_site_exp = sum(1 for f in r.get("facilities_site", [])
+                     if any(int(f["properties"].get(t) or 0) for t in sel_topics))
+    pct     = f"{exposed/total*100:.1f}%" if total else "—"
+
+    cards = [
+        _metric(f"{nfac:,}", "Facilities"),
+        _metric(_fmt(total), "Children served"),
+        _metric(_fmt(exposed), "Children exposed", color="#e31a1c"),
+        _metric(f"{n_site_exp:,}", "Facilities in hazard", color="#e31a1c"),
+    ]
+
+    items = _infra_combined_items(r.get("per_topic_exposed"),
+                                  r.get("per_subhazard_exposed"),
+                                  site_tally, sel_topics, total)
+
+    where = region_name or "the selected district"
+    caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
+               "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
+               "rows show exposed children · facilities whose site is in that hazard.")
+
+    panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
+
+    # ── Map layers ──
+    try:
+        pop_url, _vis = get_clipped_pop_tile_url(asset_id, adm2_ucode)
+    except Exception:
+        pop_url = no_update
+    try:
+        pt_url = get_infra_tile_url(asset_id, color, adm2_ucode)
+    except Exception:
+        pt_url = no_update
+    cells = r.get("voronoi_geojson") or no_update
+
+    viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color}
+    pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel}
+    placeholder = html.Div("Preparing per-facility download…",
+                           className="ps-caption", style={"padding": "4px 0"})
+
+    return (panel, pop_url, pt_url, cells, viz, pending, placeholder)
+
+
+@app.callback(
+    Output("infra-download-wrap", "children", allow_duplicate=True),
+    Input("store-infra-pending",  "data"),
+    prevent_initial_call=True,
+)
+def infra_compute_perfacility(pending):
+    """Phase 2: per-facility CSV — Voronoi population + exposed pop + site flags
+    + raw intensity. Voronoi cells don't overlap → figures are summable."""
+    if not pending:
+        return no_update
+    try:
+        r = compute_facility_combined(pending["asset_id"], pending["ucode"],
+                                      pending.get("topics"))
+    except Exception as e:
+        return html.Div(f"Per-facility data failed: {e}", className="ps-caption",
+                        style={"color": "var(--red)"})
+
+    topic_cols = r.get("topic_cols") or []
+    int_cols   = r.get("intensity_cols") or []
+    # Voronoi pop keyed by facility location (names aren't unique — many blank).
+    def _key(p):
+        lon, lat = p.get("lon"), p.get("lat")
+        return (round(lon, 6), round(lat, 6)) if lon is not None and lat is not None else None
+    vor = {}
+    for f in r.get("facilities_voronoi", []):
+        p = f.get("properties") or {}
+        vor[_key(p)] = (p.get("vpop"), p.get("vexp"))
+
+    rows = []
+    for f in r.get("facilities_site", []):
+        p = f.get("properties") or {}
+        nm = p.get("fname")
+        vpop, vexp = vor.get(_key(p), (None, None))
+        row = {
+            "name": nm or "",
+            "lon":  round(p.get("lon"), 6) if p.get("lon") is not None else "",
+            "lat":  round(p.get("lat"), 6) if p.get("lat") is not None else "",
+            "voronoi_pop":  int(round(vpop or 0)),
+            "exposed_pop":  int(round(vexp or 0)),
+        }
+        for t in topic_cols:
+            row[t] = int(round(p.get(t) or 0))
+        for h in int_cols:
+            v = p.get(h)
+            row[h] = round(v, 4) if v is not None else ""
+        rows.append(row)
+
+    fieldnames = ["name", "lon", "lat", "voronoi_pop", "exposed_pop"] \
+                 + topic_cols + int_cols
+    comment = ("voronoi_pop/exposed_pop = children in this facility's "
+               "nearest-neighbour catchment (non-overlapping → summable); "
+               "topic columns are 0/1 site flags; hazard columns are raw "
+               "intensity in native units "
+               + "; ".join(f"{h}={ (HAZARD_INFO.get(h) or {}).get('units','') }"
+                           for h in int_cols) + ".")
+    return _infra_download(fieldnames, rows, "infra_facility_exposure.csv",
+                           comment=comment)
+
+
+# ── Map legend overlay (top-left) ─────────────────────────────────────────────
+
+def _legend_toggle(layer, swatch, label):
+    """A legend row with a leading eye toggle (clientside-controlled)."""
+    return html.Div(className="map-legend-item", children=[
+        html.I(className="bi bi-eye-fill map-legend-eye",
+               id={"type": "infra-legend-eye", "index": layer}, n_clicks=0),
+        swatch,
+        html.Span(label, className="map-legend-item-label"),
+    ])
+
+
+@app.callback(
+    Output("infra-map-legend", "children"),
+    Output("infra-map-legend", "style"),
+    Input("store-infra-viz",   "data"),
+    Input("store-tab",         "data"),
+)
+def infra_update_legend(viz, tab):
+    if tab != "infrastructure" or not viz:
+        return None, {"display": "none"}
+
+    pal   = INFRA_POP_VIS["palette"]
+    pt_color = "#" + (viz.get("color") or "e67e22")
+    grad  = ", ".join(pal)
+    rows = [
+        html.Div("Legend", className="map-legend-title"),
+        # Population: stacked block — title line, full-width bar, min/max line.
+        html.Div(className="map-legend-pop", children=[
+            html.Div(className="map-legend-pop-head", children=[
+                html.I(className="bi bi-eye-fill map-legend-eye",
+                       id={"type": "infra-legend-eye", "index": "pop"}, n_clicks=0),
+                html.Span("Children (per 100 m)", className="map-legend-item-label"),
+            ]),
+            html.Div(className="legend-bar",
+                     style={"background": f"linear-gradient(to right,{grad})",
+                            "width": "100%"}),
+            html.Div(className="legend-range",
+                     children=[html.Span(str(INFRA_POP_VIS["min"])),
+                               html.Span(f"{INFRA_POP_VIS['max']}+")]),
+        ]),
+        # Facility points
+        _legend_toggle(
+            "points",
+            html.Span(className="map-legend-dot",
+                      style={"background": pt_color, "border": "1.5px solid #fff"}),
+            "Facilities",
+        ),
+        # Facility catchments (Voronoi cells)
+        _legend_toggle(
+            "catchments",
+            html.Span(className="map-legend-line",
+                      style={"borderTop": "1.5px solid #1CABE2"}),
+            "Facility catchments",
+        ),
+        # Selected subregion (yellow adm2 highlight)
+        _legend_toggle(
+            "selection",
+            html.Span(className="map-legend-line",
+                      style={"borderTop": "2px solid #f1c40f"}),
+            "Selected subregion",
+        ),
+    ]
+    return rows, {"display": "block"}
+
+
+# ── Clientside layer toggles (eye icons → layer opacity + icon state) ──────────
+app.clientside_callback(
+    """
+    function(nPop, nPoints, nCatch, nSelection) {
+        // Even clicks = visible, odd = hidden.
+        var vis = function(n){ return (n % 2 === 0); };
+        var op  = function(n, base){ return vis(n) ? base : 0; };
+        var icon = function(n){
+            return vis(n) ? "bi bi-eye-fill map-legend-eye"
+                          : "bi bi-eye-slash map-legend-eye map-legend-eye-off";
+        };
+        // Voronoi cells GeoJSON: toggle via style opacity.
+        var cellStyle = {color:"#1CABE2", weight:1, fillOpacity:0.0,
+                         opacity: vis(nCatch) ? 0.7 : 0.0};
+        return [
+            op(nPop, 0.8), op(nPoints, 0.9), op(nSelection, 0.75),
+            {style: cellStyle},
+            icon(nPop), icon(nPoints), icon(nCatch), icon(nSelection)
+        ];
+    }
+    """,
+    Output("infra-pop-tile",        "opacity"),
+    Output("infra-points-tile",     "opacity"),
+    Output("infra-selection-tile",  "opacity"),
+    Output("infra-voronoi-geojson", "options"),
+    Output({"type": "infra-legend-eye", "index": "pop"},        "className"),
+    Output({"type": "infra-legend-eye", "index": "points"},     "className"),
+    Output({"type": "infra-legend-eye", "index": "catchments"}, "className"),
+    Output({"type": "infra-legend-eye", "index": "selection"},  "className"),
+    Input({"type": "infra-legend-eye", "index": "pop"},        "n_clicks"),
+    Input({"type": "infra-legend-eye", "index": "points"},     "n_clicks"),
+    Input({"type": "infra-legend-eye", "index": "catchments"}, "n_clicks"),
+    Input({"type": "infra-legend-eye", "index": "selection"},  "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
+# ── Basemap toggle: map ↔ satellite (clientside) ──────────────────────────────
+app.clientside_callback(
+    """
+    function(n) {
+        var on = (n % 2 === 1);                       // odd clicks = satellite on
+        var cls = on ? "basemap-toggle active" : "basemap-toggle";
+        return [on ? 1 : 0, cls];
+    }
+    """,
+    Output("sat-basemap",    "opacity"),
+    Output("basemap-toggle", "className"),
+    Input("basemap-toggle",  "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 # ---------------------------------------------------------------------------
