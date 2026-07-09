@@ -144,6 +144,14 @@ ADMIN_DATA = {
     },
 }
 
+# Infrastructure point layers for the Infrastructure analysis tab.
+# Asset paths are for Ethiopia until global data is ingested.
+INFRA_LAYERS = {
+    "Schools":           {"asset": "projects/unicef-ccri/assets/infrastructure/eth_schools",           "color": "#1f78b4", "icon": "bi-mortarboard"},
+    "Health Facilities": {"asset": "projects/unicef-ccri/assets/infrastructure/eth_health_facilities", "color": "#e31a1c", "icon": "bi-hospital"},
+    "Water Points":      {"asset": "projects/unicef-ccri/assets/infrastructure/eth_water_points",       "color": "#1CABE2", "icon": "bi-droplet"},
+}
+
 GLOBAL_GEOMETRY = [[-180, 90], [-180, -90], [180, -90], [180, 90]]
 
 MHC_OPTIONS = [str(i) for i in range(1, len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS) + 1)]
