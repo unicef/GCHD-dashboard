@@ -234,22 +234,34 @@ def compute_exposure_adm0_from_asset(feature_ucode):
 # Country helpers
 # ---------------------------------------------------------------------------
 
+# Display-name overrides for territories whose GEE asset "name" differs from
+# the UNSD/ISO name we want shown in the UI (dropdown and result labels).
+COUNTRY_NAME_OVERRIDES = {
+    "Taiwan": "China, Taiwan Province of China",
+    "Macao": "China, Macao SAR",
+    "Hong Kong": "China, Hong Kong SAR",
+}
+_COUNTRY_NAME_TO_ASSET = {v: k for k, v in COUNTRY_NAME_OVERRIDES.items()}
+
+
 @lru_cache(maxsize=1)
 def get_country_names():
-    return (
+    names = (
         ee.FeatureCollection(ADMIN_DATA["adm0 (Country)"]["asset"])
         .filter(ee.Filter.And(
             ee.Filter.neq("type", "Antarctica"),
             ee.Filter.neq("type", "Sovereignty unsettled"),
         ))
-        .aggregate_array("name").sort().getInfo()
+        .aggregate_array("name").getInfo()
     )
+    return sorted(COUNTRY_NAME_OVERRIDES.get(n, n) for n in names)
 
 
 @lru_cache(maxsize=512)
 def get_country_ucode(country_name):
     fc = ee.FeatureCollection(ADMIN_DATA["adm0 (Country)"]["asset"])
-    return fc.filter(ee.Filter.eq("name", country_name)).first().get("ucode").getInfo()
+    asset_name = _COUNTRY_NAME_TO_ASSET.get(country_name, country_name)
+    return fc.filter(ee.Filter.eq("name", asset_name)).first().get("ucode").getInfo()
 
 
 @lru_cache(maxsize=512)
