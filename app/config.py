@@ -8,7 +8,7 @@
 # is chosen from the units and known extents (noted per line below).
 HAZARDS = [
     {"id": "projects/unicef-ccri/assets/hazards/river_flood_r100",               "threshold": 0.01,       "min": 0,    "max": 10,      "name": "river_flood_100yr_jrc_2024"},        # depth m (catalog range blank)
-    {"id": "projects/unicef-ccri/assets/hazards/coastal_flood_r100",             "threshold": 0,          "min": 0,    "max": 1,       "name": "coastal_flood_100yr_jrc_2024"},      # binary
+    {"id": "projects/unicef-ccri/assets/hazards/coastal_flood_r100",             "threshold": 0,          "min": 0,    "max": 1,       "name": "coastal_flood_100yr_jrc_2024", "binary": True},      # binary
     {"id": "projects/unicef-ccri/assets/hazards/storm_giri_rp100",               "threshold": 17.5,       "min": 0,    "max": 90,      "name": "tropical_storm_100yr_giri_2024"},    # wind m/s (catalog range blank)
     {"id": "projects/unicef-ccri/assets/hazards/ASI_return_level_100yr",         "threshold": 30,         "min": 15,   "max": 100,     "name": "agricultural_drought_fao_1984-2023"},
     {"id": "projects/unicef-ccri/assets/droughts/spei12_TerraClimate_1958-2025", "band": "b2", "threshold": 0.0650162152126539, "min": 0, "max": 1, "name": "drought_spei_terraclimate_1958-2025"},
@@ -19,7 +19,7 @@ HAZARDS = [
     {"id": "projects/unicef-ccri/assets/hazards/high_temp_degree_days_return_level_100yr", "threshold": 35, "min": 0, "max": 355, "name": "extreme_heat_ecmwf_2014-2024"},
     {"id": "projects/unicef-ccri/assets/hazards/FIRMS_FRP_90th_percentile",      "threshold": 37.89,      "min": 0.53, "max": 13994.2, "name": "fire_FRP_nasa_2001-2024"},
     {"id": "projects/unicef-ccri/assets/hazards/FIRMS_count_90th_percentile",    "threshold": 4.91,       "min": 1,    "max": 1382,    "name": "fire_frequency_nasa_2001-2023"},
-    {"id": "projects/unicef-ccri/assets/hazards/sand_dust_storm_annual",         "threshold": 0,          "min": 0,    "max": 1,       "name": "sand_dust_storm_unccd_2024",          "isImage": True},
+    {"id": "projects/unicef-ccri/assets/hazards/sand_dust_storm_annual",         "threshold": 0,          "min": 0,    "max": 1,       "name": "sand_dust_storm_unccd_2024",          "isImage": True, "binary": True},
     {"id": "projects/unicef-ccri/assets/hazards/pm25_p90_1998_2023",             "threshold": 5,          "min": 1.05, "max": 286.36,  "name": "air_pollution_pm25_1998-2023"},
     {"id": "projects/unicef-ccri/assets/hazards/Pv_average_2013_2022",           "threshold": 0.001,      "min": 0,    "max": 0.25,    "name": "vectorborne_malariapv_2012-2022"},
     {"id": "projects/unicef-ccri/assets/hazards/Pf_average_2013_2022",           "threshold": 0.001,      "min": 0,    "max": 0.6,     "name": "vectorborne_malariapf_2012-2022"},
@@ -30,6 +30,12 @@ HAZARDS = [
 ]
 
 HAZARD_MAP = {h["name"]: h for h in HAZARDS}
+
+
+def is_binary_hazard(name):
+    """True for presence/absence hazards (e.g. coastal flood, sand & dust storm)
+    whose threshold is not user-meaningful — the editor shows them disabled."""
+    return bool(HAZARD_MAP.get(name, {}).get("binary"))
 
 HAZARD_TOPICS = {
     "River Flood":        ["river_flood_100yr_jrc_2024"],
