@@ -18,7 +18,8 @@ from config import (
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3,
-    INFRA_LAYERS,
+    INFRA_COUNTRIES, INFRA_ASSETS, infra_layer_style,
+    is_binary_hazard,
 )
 from ai_core import initialize_ai, ask_gemini
 from auth import request_otp, verify_otp, SESSION_HOURS
@@ -542,8 +543,12 @@ def tab_analysis():
     ])
 
 
-def _infra_layer_options():
-    return [{"label": name, "value": name} for name in INFRA_LAYERS]
+def _infra_layer_options(country=None):
+    """Layer dropdown options for the selected country — only its uploaded,
+    source-qualified layers (e.g. 'Schools (Giga)'). Empty until a country with
+    assets is picked."""
+    return [{"label": name, "value": name}
+            for name in INFRA_ASSETS.get(country, {})]
 
 
 def tab_infrastructure():
@@ -561,7 +566,7 @@ def tab_infrastructure():
             html.Div("1. Select country / territory", className="ps-label"),
             dcc.Dropdown(
                 id="infra-country-select", className="ps-select",
-                options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
+                options=[{"label": c, "value": c} for c in INFRA_COUNTRIES],
                 value=None, placeholder="Search country / territory…",
                 clearable=False, searchable=True,
             ),
@@ -572,14 +577,14 @@ def tab_infrastructure():
                      className="info-box", id="infra-region-hint"),
         ]),
 
-        # 2. Facility layer (defaults to the first layer; paste-path fallback)
+        # 2. Facility layer — options depend on the selected country (only its
+        # uploaded, source-qualified layers). Populated on country select.
         html.Div(className="ps", children=[
             html.Div("2. Facility layer", className="ps-label"),
             dcc.Dropdown(
                 id="infra-layer-select", className="ps-select",
-                options=_infra_layer_options(),
-                value=next(iter(INFRA_LAYERS)),
-                placeholder="— select a facility layer —",
+                options=[], value=None,
+                placeholder="— select a country first —",
                 clearable=True, searchable=False,
             ),
             html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
@@ -631,12 +636,10 @@ def tab_infrastructure():
             ),
         ]),
 
-        # — Stores — seed the default facility layer so Compute works without
-        # an explicit Load if the layer-select callback doesn't auto-fire.
-        dcc.Store(id="store-infra-asset", data={
-            "asset_id": INFRA_LAYERS[next(iter(INFRA_LAYERS))]["asset"],
-            "name_field": "name",
-        }),
+        # — Stores — the facility asset is empty until the user picks a country
+        # and a layer (layers are country-specific now, so there's no sensible
+        # global default to seed). infra_load_asset sets it on selection.
+        dcc.Store(id="store-infra-asset", data=None),
         # Last computed viz (asset/ucode/buffer/color) — lets update_data_layers
         # rebuild the infra tiles so they aren't wiped on store/tab changes.
         dcc.Store(id="store-infra-viz", data=None),
@@ -2466,18 +2469,28 @@ def ai_execute(pending):
     Output("store-clicked-ucode", "data", allow_duplicate=True),
     Output("store-clicked-name",  "data", allow_duplicate=True),
     Output("infra-level-section", "style"),
+    Output("infra-layer-select",  "options"),
+    Output("infra-layer-select",  "value"),
+    Output("infra-layer-select",  "placeholder"),
     Input("infra-country-select", "value"),
     prevent_initial_call=True,
 )
 def infra_on_country_select(country):
     # Analyses are adm2-only: selecting a country hard-sets the adm2 level and
     # zooms to the country, so the map is immediately clickable for districts.
+    # Also repopulate the facility-layer dropdown with THIS country's uploaded,
+    # source-qualified layers (empty if none are ingested yet).
     if not country:
-        return None, None, None, None, None, None, {"display": "none"}
+        return (None, None, None, None, None, None, {"display": "none"},
+                [], None, "— select a country first —")
     ucode  = get_country_ucode(country)
     bounds = get_country_bounds(ucode)
+    options = _infra_layer_options(country)
+    value   = options[0]["value"] if options else None
+    placeholder = ("— select a facility layer —" if options
+                   else "— no infrastructure data for this country yet —")
     return (country, ucode, bounds, "adm2 (Districts/Counties)", None, None,
-            {"display": "block"})
+            {"display": "block"}, options, value, placeholder)
 
 
 @app.callback(
@@ -2518,15 +2531,17 @@ def infra_toggle_compute(clicked_ucode, level):
     Input("infra-layer-select",       "value"),
     Input("infra-asset-load-btn",     "n_clicks"),
     Input("store-tab",                "data"),
+    Input("store-country",            "data"),
     State("infra-asset-input",        "value"),
     State("store-infra-viz",          "data"),
     prevent_initial_call=True,
 )
-def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
+def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
     """Picking/loading a facility layer previews ALL points for the country
     (no AOI) on the dedicated infra-points-tile. infra_compute later overwrites
     it with the AOI-clipped points. Same path for every layer → uniform.
-    Also fires on entering the Infra tab so the default (Schools) draws."""
+    Also fires on entering the Infra tab so the default (Schools) draws.
+    The asset is resolved for the selected country from INFRA_ASSETS."""
     err_style = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--red)"}
     ok_style  = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}
 
@@ -2539,16 +2554,29 @@ def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
         # (store-infra-viz set) so we don't overwrite the AOI-clipped points.
         if tab != "infrastructure" or not layer_name or infra_viz:
             return no_update, no_update, no_update, no_update, no_update
-        asset_id = INFRA_LAYERS[layer_name]["asset"]
-        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        if not asset_id:
+            return no_update, no_update, no_update, no_update, no_update
+        color    = infra_layer_style(layer_name)["color"].lstrip("#")
         label    = layer_name
         fit      = False
-    elif trig == "infra-layer-select":
+    elif trig in ("infra-layer-select", "store-country"):
+        # Layer picked, or country switched: reload the layer for that country.
+        # On a country switch, infra_on_country_select already zooms to the
+        # country via store-bounds, so don't also fit to the asset bounds.
+        # store-country is shared with the Analysis tab, so ignore its changes
+        # unless we're actually on the Infrastructure tab.
+        if trig == "store-country" and tab != "infrastructure":
+            return no_update, no_update, no_update, no_update, no_update
         if not layer_name:
             return None, "", ok_style, "", no_update
-        asset_id = INFRA_LAYERS[layer_name]["asset"]
-        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        if not asset_id:
+            return None, "Select a country first.", ok_style, "", no_update
+        color    = infra_layer_style(layer_name)["color"].lstrip("#")
         label    = layer_name
+        if trig == "store-country":
+            fit = False
     else:
         if not asset_input or not asset_input.strip():
             return no_update, no_update, no_update, no_update, no_update
@@ -2729,15 +2757,21 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
                              "to bound the analysis."), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
+    overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
 
     color = "e67e22"
-    for meta in INFRA_LAYERS.values():
-        if meta["asset"] == asset_id:
-            color = meta["color"].lstrip("#")
-            break
+    for layers in INFRA_ASSETS.values():
+        for layer_name, layer_asset in layers.items():
+            if layer_asset == asset_id:
+                color = infra_layer_style(layer_name)["color"].lstrip("#")
+                break
+        else:
+            continue
+        break
 
     try:
-        r = compute_facility_combined(asset_id, adm2_ucode, topics_sel)
+        r = compute_facility_combined(asset_id, adm2_ucode, topics_sel,
+                                      threshold_overrides=overrides or None)
     except Exception as e:
         return (_infra_error(f"GEE error: {e}"), *nu)
 
@@ -2781,7 +2815,8 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
     cells = r.get("voronoi_geojson") or no_update
 
     viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color}
-    pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel}
+    pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
+               "overrides": overrides or None}
     placeholder = html.Div("Preparing per-facility download…",
                            className="ps-caption", style={"padding": "4px 0"})
 
@@ -2845,6 +2880,27 @@ def infra_compute_perfacility(pending):
                            for h in int_cols) + ".")
     return _infra_download(fieldnames, rows, "infra_facility_exposure.csv",
                            comment=comment)
+
+
+# ── Clear infra map layers when leaving the Infrastructure tab ─────────────────
+
+@app.callback(
+    Output("infra-selection-tile", "url",  allow_duplicate=True),
+    Output("infra-pop-tile",       "url",  allow_duplicate=True),
+    Output("infra-points-tile",    "url",  allow_duplicate=True),
+    Output("infra-voronoi-geojson","data", allow_duplicate=True),
+    Output("store-infra-viz",      "data", allow_duplicate=True),
+    Input("store-tab",             "data"),
+    prevent_initial_call=True,
+)
+def infra_clear_layers_on_leave(tab):
+    """The infra tiles live in dedicated top-level components (not the shared
+    data-layers group), so nothing clears them on tab change. Blank them when
+    navigating away so they don't linger over other tabs' maps. Re-entering the
+    tab redraws points via infra_load_asset."""
+    if tab == "infrastructure":
+        return (no_update,) * 5
+    return "", "", "", None, None
 
 
 # ── Map legend overlay (top-left) ─────────────────────────────────────────────

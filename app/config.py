@@ -148,11 +148,75 @@ ADMIN_DATA = {
 }
 
 # Infrastructure point layers for the Infrastructure analysis tab.
-# Asset paths are for Ethiopia until global data is ingested.
-INFRA_LAYERS = {
-    "Schools":           {"asset": "projects/unicef-ccri/assets/infrastructure/eth_schools",           "color": "#1f78b4", "icon": "bi-mortarboard"},
-    "Health Facilities": {"asset": "projects/unicef-ccri/assets/infrastructure/eth_health_facilities", "color": "#e31a1c", "icon": "bi-hospital"},
-    "Water Points":      {"asset": "projects/unicef-ccri/assets/infrastructure/eth_water_points",       "color": "#1CABE2", "icon": "bi-droplet"},
+# Countries with infrastructure point data (drives the Infra tab dropdown).
+INFRA_COUNTRIES = ["Ethiopia", "Madagascar", "Malawi"]
+
+# Facility TYPE styling (color/icon) — shared by every source variant of a type.
+# A source-qualified layer label like "Schools (Giga)" is styled by its base
+# type "Schools" (see _infra_type_of / INFRA_LAYER_META below).
+INFRA_TYPE_META = {
+    "Schools":           {"color": "#1f78b4", "icon": "bi-mortarboard"},
+    "Health Facilities": {"color": "#e31a1c", "icon": "bi-hospital"},
+    "Water Points":      {"color": "#1CABE2", "icon": "bi-droplet"},
+}
+
+# Per-country GEE asset paths, keyed by country name -> source-qualified layer
+# label -> asset id. Only layers whose GEE asset actually exists (uploaded and
+# shared with the unicef-ccri service account) are listed, so the dropdown never
+# offers a layer that would fail to load. The label's trailing "(Source)" tells
+# the user which dataset it is; the leading words are the facility type used for
+# styling. Add a country's entries here as its assets are uploaded.
+_INFRA = "projects/unicef-ccri/assets/infrastructure"
+INFRA_ASSETS = {
+    "Ethiopia": {
+        "Schools (HDX)":                  f"{_INFRA}/eth_schools",
+        "Schools (Giga)":                 f"{_INFRA}/eth_giga_schools",
+        "Schools (mWater)":               f"{_INFRA}/eth_mwater_schools",
+        "Health Facilities (HDX)":        f"{_INFRA}/eth_health_facilities",
+        "Health Facilities (mWater)":     f"{_INFRA}/eth_mwater_health_facilities",
+        "Water Points (WPdx)":            f"{_INFRA}/eth_water_points",
+        "Water Points (mWater)":          f"{_INFRA}/eth_mwater_water_points",
+    },
+    "Madagascar": {
+        "Schools (Giga)":                 f"{_INFRA}/mdg_giga_schools",
+        "Schools (mWater)":               f"{_INFRA}/mdg_mwater_schools",
+        "Health Facilities (mWater)":     f"{_INFRA}/mdg_mwater_health_facilities",
+        "Water Points (mWater)":          f"{_INFRA}/mdg_mwater_water_points",
+    },
+    "Malawi": {
+        "Schools (Giga)":                 f"{_INFRA}/mwi_giga_schools",
+        "Schools (mWater)":               f"{_INFRA}/mwi_mwater_schools",
+        "Health Facilities (mWater)":     f"{_INFRA}/mwi_mwater_health_facilities",
+        "Water Points (mWater)":          f"{_INFRA}/mwi_mwater_water_points",
+    },
+}
+
+# Facility types in a stable display order; used to map a source-qualified layer
+# label back to its base type for styling.
+_INFRA_TYPES = list(INFRA_TYPE_META)
+
+
+def _infra_type_of(layer_label):
+    """Map a source-qualified layer label ('Schools (Giga)') to its base facility
+    type ('Schools'). Falls back to the label itself if no type prefix matches."""
+    for t in _INFRA_TYPES:
+        if layer_label == t or layer_label.startswith(t + " ("):
+            return t
+    return layer_label
+
+
+def infra_layer_style(layer_label):
+    """Return the {color, icon} styling for a source-qualified layer label."""
+    return INFRA_TYPE_META.get(_infra_type_of(layer_label),
+                               {"color": "#e67e22", "icon": "bi-geo-alt"})
+
+
+# Backwards-compat: some call sites still reference INFRA_LAYER_META[label]["color"].
+# Expose a mapping from every configured layer label to its type styling.
+INFRA_LAYER_META = {
+    label: INFRA_TYPE_META[_infra_type_of(label)]
+    for country in INFRA_ASSETS.values()
+    for label in country
 }
 
 GLOBAL_GEOMETRY = [[-180, 90], [-180, -90], [180, -90], [180, 90]]
