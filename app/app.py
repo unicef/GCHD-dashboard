@@ -2246,70 +2246,44 @@ def compute_custom_exposure(n_clicks, geojson, name_field, thresholds):
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
 
-    hazard_cols = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
-    extra_cols  = ["total_population", "total_population_male", "total_population_female"]
-    all_cols    = extra_cols + hazard_cols
-
-    rows = []
-    for feat in features:
-        props = feat.get("properties") or {}
-        row   = {name_field: props.get(name_field, "—")}
-        for col in all_cols:
-            row[col] = props.get(col) or 0
-        rows.append(row)
-
-    if not rows:
-        return html.Div("No results returned.",
-                        style={"padding": "12px 16px", "fontSize": "0.75rem"})
-
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    fieldnames = [name_field] + all_cols
-    writer = _csv.DictWriter(buf, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(rows)
-    csv_href = "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
-
-    n_feat = len(rows)
-    return html.Div(className="ps", children=[
-        html.Div([
-            html.I(className="bi bi-check-circle-fill",
-                   style={"color": "var(--cyan)", "marginRight": "8px"}),
-            html.Strong(f"Hazard exposure for {n_feat} feature{'s' if n_feat != 1 else ''} ready."),
-        ], style={"fontSize": "0.8rem", "color": "var(--hi)", "marginBottom": "10px"}),
-        html.A(
-            f"⬇  Download CSV ({n_feat} features × {len(hazard_cols)} hazards)",
-            href=csv_href,
-            download="custom_hazard_exposure.csv",
-            className="ps-btn",
-            style={"display": "block", "textAlign": "center", "textDecoration": "none",
-                   "padding": "10px 16px"},
-        ),
-    ])
+    return _exposure_xlsx_div(features, name_field, "custom_hazard_exposure.xlsx",
+                              overrides=thresholds or None)
 
 
 # ── GEE Asset load + compute ──────────────────────────────────────────────────
 
-def _exposure_results_div(features, name_field, filename):
+def _exposure_xlsx_div(features, name_field, filename, overrides=None):
+    """Results card + styled-Excel download for custom-boundary / GEE-asset
+    exposure (per-feature exposed-children counts, by hazard)."""
     hazard_cols = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
-    extra_cols  = ["total_population", "total_population_male", "total_population_female"]
-    all_cols    = extra_cols + hazard_cols
     rows = []
     for feat in features:
         props = feat.get("properties") or {}
-        row   = {name_field: props.get(name_field, "—")}
-        for col in all_cols:
-            row[col] = props.get(col) or 0
+        row   = {name_field: props.get(name_field) or "-"}
+        for col in ["total_population", "total_population_male",
+                    "total_population_female"] + hazard_cols:
+            row[col] = int(round(props.get(col) or 0))
         rows.append(row)
     if not rows:
         return html.Div("No results returned.",
                         style={"padding": "12px 16px", "fontSize": "0.75rem"})
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    writer = _csv.DictWriter(buf, fieldnames=[name_field] + all_cols)
-    writer.writeheader()
-    writer.writerows(rows)
-    csv_href = "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
+
+    groups = [
+        {"title": "Feature", "columns": [
+            {"key": name_field, "label": name_field, "kind": "text"},
+        ]},
+        {"title": "Population (children)", "columns": [
+            {"key": "total_population",        "label": "Total",  "kind": "int"},
+            {"key": "total_population_male",   "label": "Male",   "kind": "int"},
+            {"key": "total_population_female", "label": "Female", "kind": "int"},
+        ]},
+        {"title": "Exposed children by hazard", "columns": [
+            {"key": h, "label": _hazard_label(h), "kind": "int"} for h in hazard_cols
+        ]},
+    ]
+    climate_topics = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
+    banner = ["Hazard exposure by feature"] + _thresholds_banner(climate_topics, overrides)
+
     n_feat = len(rows)
     return html.Div(className="ps", children=[
         html.Div([
@@ -2318,8 +2292,9 @@ def _exposure_results_div(features, name_field, filename):
             html.Strong(f"Hazard exposure for {n_feat} feature{'s' if n_feat != 1 else ''} ready."),
         ], style={"fontSize": "0.8rem", "color": "var(--hi)", "marginBottom": "10px"}),
         html.A(
-            f"⬇  Download CSV ({n_feat} features × {len(hazard_cols)} hazards)",
-            href=csv_href, download=filename, className="ps-btn",
+            f"⬇  Download Excel ({n_feat} features × {len(hazard_cols)} hazards)",
+            href=build_xlsx("Hazard exposure", groups, rows, banner),
+            download=filename, className="ps-btn",
             style={"display": "block", "textAlign": "center", "textDecoration": "none",
                    "padding": "10px 16px"},
         ),
@@ -2385,8 +2360,8 @@ def compute_gee_asset_exposure(n_clicks, asset_info, name_field, thresholds):
         return html.Div(f"GEE error: {e}",
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
-    fname = asset_info["asset_id"].split("/")[-1] + "_hazard_exposure.csv"
-    return _exposure_results_div(features, name_field, fname)
+    fname = asset_info["asset_id"].split("/")[-1] + "_hazard_exposure.xlsx"
+    return _exposure_xlsx_div(features, name_field, fname, overrides=thresholds or None)
 
 
 # ---------------------------------------------------------------------------
@@ -2840,23 +2815,130 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
 
 # ── Compute (dispatches on mode) ──────────────────────────────────────────────
 
-def _csv_href(fieldnames, rows, comment=None):
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    if comment:
-        buf.write("# " + comment + "\n")
-    writer = _csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
-    return "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
+# ── Styled Excel (.xlsx) export ───────────────────────────────────────────────
+# Pastel exposed/non-exposed cell fills for 0/1 site-flag columns.
+_XLSX_GREEN = "#E2F0D9"   # 0 = not exposed
+_XLSX_RED   = "#F8CBAD"   # 1 = exposed
+_XLSX_HDR   = "#1CABE2"   # header fill (UNICEF cyan)
+_XLSX_GRP   = "#D9EEF7"   # group-title fill (light cyan)
+_XLSX_MIME  = ("application/vnd.openxmlformats-officedocument."
+               "spreadsheetml.sheet")
 
 
-def _infra_download(fieldnames, rows, filename, comment=None):
-    """Secondary (ghost) download link, demoted below the visual summary."""
+def _thresholds_banner(topics, overrides):
+    """One text line per selected topic's hazards: 'Hazard >= value unit (default|
+    custom)'. Reused by every export banner and the panel note."""
+    lines = []
+    for t in topics or []:
+        for h in HAZARD_TOPICS.get(t, []):
+            hz      = HAZARD_MAP.get(h, {})
+            default = hz.get("threshold")
+            if default is None:
+                continue
+            thr    = (overrides or {}).get(h, default)
+            units  = (HAZARD_INFO.get(h) or {}).get("units", "")
+            tag    = "custom" if h in (overrides or {}) else "default"
+            unit_s = f" {units}" if units else ""
+            lines.append(f"{_hazard_label(h)} >= {thr:g}{unit_s} ({tag})")
+    return lines
+
+
+def build_xlsx(sheet_name, groups, rows, banner_lines=None):
+    """Build a styled .xlsx workbook and return a base64 data-URI for an <a> link.
+
+    `groups`: ordered [{title, columns:[{key,label,kind}], color?}]. `kind` is one
+    of 'flag' (0/1 -> pastel red/green), 'int', 'float', 'text'. `rows`: list of
+    dicts keyed by column 'key'. `banner_lines`: optional text lines shown merged
+    across the top (e.g. title + thresholds used).
+    """
+    import io, base64
+    import xlsxwriter
+
+    flat_cols = [c for g in groups for c in g["columns"]]
+    ncols = len(flat_cols)
+
+    buf = io.BytesIO()
+    wb  = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws  = wb.add_worksheet(sheet_name[:31] or "Sheet1")
+
+    f_banner   = wb.add_format({"bold": True, "font_size": 11, "align": "left",
+                                "valign": "vcenter", "text_wrap": False})
+    f_note     = wb.add_format({"font_size": 9, "font_color": "#595959",
+                                "align": "left", "valign": "vcenter"})
+    f_grp      = wb.add_format({"bold": True, "align": "center", "valign": "vcenter",
+                                "bg_color": _XLSX_GRP, "border": 1})
+    f_hdr      = wb.add_format({"bold": True, "align": "center", "valign": "vcenter",
+                                "bg_color": _XLSX_HDR, "font_color": "white",
+                                "border": 1, "text_wrap": True})
+    f_text     = wb.add_format({"border": 1})
+    f_int      = wb.add_format({"border": 1, "num_format": "#,##0"})
+    f_float    = wb.add_format({"border": 1, "num_format": "0.####"})
+    f_flag0    = wb.add_format({"border": 1, "align": "center",
+                                "bg_color": _XLSX_GREEN})
+    f_flag1    = wb.add_format({"border": 1, "align": "center",
+                                "bg_color": _XLSX_RED, "bold": True})
+
+    r = 0
+    # Banner rows (merged across all columns).
+    for i, line in enumerate(banner_lines or []):
+        ws.merge_range(r, 0, r, ncols - 1, line,
+                       f_banner if i == 0 else f_note)
+        r += 1
+    if banner_lines:
+        r += 1  # spacer
+
+    # Group-title row (merged per group) + column-label row.
+    grp_row, hdr_row = r, r + 1
+    c = 0
+    for g in groups:
+        span = len(g["columns"])
+        if span == 1:
+            ws.write(grp_row, c, g["title"], f_grp)
+        else:
+            ws.merge_range(grp_row, c, grp_row, c + span - 1, g["title"], f_grp)
+        for col in g["columns"]:
+            ws.write(hdr_row, c, col["label"], f_hdr)
+            c += 1
+    data_row0 = hdr_row + 1
+
+    # Data rows.
+    fmt_for = {"int": f_int, "float": f_float, "text": f_text}
+    for ri, row in enumerate(rows):
+        c = 0
+        for col in flat_cols:
+            v = row.get(col["key"], "")
+            kind = col["kind"]
+            if kind == "flag":
+                iv = int(v) if v not in ("", None) else 0
+                ws.write(data_row0 + ri, c, iv, f_flag1 if iv else f_flag0)
+            elif kind in ("int", "float"):
+                ws.write(data_row0 + ri, c,
+                         v if v not in ("", None) else "", fmt_for[kind])
+            else:
+                ws.write(data_row0 + ri, c, "" if v is None else v, f_text)
+            c += 1
+
+    # Column widths + freeze + autofilter.
+    c = 0
+    for col in flat_cols:
+        width = 22 if col["kind"] == "text" else (max(len(col["label"]) + 2, 10))
+        ws.set_column(c, c, width)
+        c += 1
+    ws.freeze_panes(data_row0, 0)
+    if rows:
+        ws.autofilter(hdr_row, 0, data_row0 + len(rows) - 1, ncols - 1)
+
+    wb.close()
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:{_XLSX_MIME};base64,{b64}"
+
+
+def _infra_download(groups, rows, filename, banner_lines=None):
+    """Secondary (ghost) styled-Excel download link, below the visual summary."""
     return html.A(
-        "⬇  Download full data (CSV)",
-        href=_csv_href(fieldnames, rows, comment=comment), download=filename,
-        className="ps-btn-ghost",
+        "⬇  Download full data (Excel)",
+        href=build_xlsx("Facility exposure", groups, rows, banner_lines),
+        download=filename, className="ps-btn-ghost",
         style={"display": "block", "textAlign": "center", "textDecoration": "none",
                "padding": "9px 16px", "marginTop": "10px"},
     )
@@ -2916,9 +2998,11 @@ def _infra_panel(title, metric_cards, bar_rows, download, caption=None):
     return html.Div(className="ps", children=children)
 
 
-def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
+def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
+                          overrides=None):
     """Merged per-hazard rows: exposed children (bar) + '· N facilities' from
-    the facility-site tally, with subhazard child-population detail rows."""
+    the facility-site tally, with subhazard child-population detail rows. Each
+    row shows the effective threshold used (custom overrides honored)."""
     tdata = sorted(
         ({"topic": t,
           "pop":  int(round((per_topic or {}).get(t) or 0)),
@@ -2931,6 +3015,10 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
         topic = td["topic"]
         pct   = (td["pop"] / total * 100) if total else 0
         color = TOPIC_COLORS.get(topic, "#888")
+        # Single-hazard topics show the threshold inline; multi-hazard topics
+        # show it per-subhazard on the detail rows below.
+        hazards = HAZARD_TOPICS.get(topic, [])
+        thr_txt = _eff_threshold(hazards[0], overrides) if len(hazards) == 1 else ""
         # Bar row with an extra facility-count suffix.
         header = html.Div([
             html.Div(className="info-row", children=[
@@ -2945,6 +3033,9 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
                               style={"color": "var(--lo)"}),
                 ]),
             ]),
+            (html.Div(thr_txt, className="info-pct",
+                      style={"color": "var(--lo)", "fontSize": "0.7rem",
+                             "marginTop": "1px"}) if thr_txt else None),
             html.Div(className="bar-track", children=[
                 html.Div(className="bar-fill",
                          style={"width": f"{min(100, pct)}%", "background": color}),
@@ -2954,8 +3045,13 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
             sub_rows = []
             for h in HAZARD_TOPICS[topic]:
                 hc = int(round((per_sub or {}).get(h) or 0))
+                thr = _eff_threshold(h, overrides)
                 sub_rows.append(html.Div(className="info-row", children=[
-                    html.Span(f"└ {_hazard_label(h)}", className="info-lbl",
+                    html.Span([f"└ {_hazard_label(h)}",
+                               html.Span(f"  {thr}" if thr else "",
+                                         style={"color": "var(--lo)",
+                                                "fontSize": "0.9em"})],
+                              className="info-lbl",
                               style={"paddingLeft": "22px", "color": "var(--lo)",
                                      "fontWeight": "400", "fontSize": "0.85em"}),
                     html.Span(f"{hc:,}" if hc else "—", className="info-val",
@@ -3038,12 +3134,17 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
 
     items = _infra_combined_items(r.get("per_topic_exposed"),
                                   r.get("per_subhazard_exposed"),
-                                  site_tally, sel_topics, total)
+                                  site_tally, sel_topics, total,
+                                  overrides=overrides or None)
 
+    n_custom = len(overrides or {})
+    thr_note = (f"{n_custom} custom threshold(s) applied"
+                if n_custom else "Standard (default) thresholds")
     where = region_name or "the selected district"
     caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
                "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
-               "rows show exposed children · facilities whose site is in that hazard.")
+               "rows show exposed children · facilities whose site is in that "
+               f"hazard. {thr_note}.")
 
     panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
 
@@ -3115,16 +3216,40 @@ def infra_compute_perfacility(pending):
             row[h] = round(v, 4) if v is not None else ""
         rows.append(row)
 
-    fieldnames = ["name", "lon", "lat", "voronoi_pop", "exposed_pop"] \
-                 + topic_cols + int_cols
-    comment = ("voronoi_pop/exposed_pop = children in this facility's "
-               "nearest-neighbour catchment (non-overlapping → summable); "
-               "topic columns are 0/1 site flags; hazard columns are raw "
-               "intensity in native units "
-               + "; ".join(f"{h}={ (HAZARD_INFO.get(h) or {}).get('units','') }"
-                           for h in int_cols) + ".")
-    return _infra_download(fieldnames, rows, "infra_facility_exposure.csv",
-                           comment=comment)
+    # Column groups drive the styled workbook's merged header + cell formats.
+    groups = [
+        {"title": "Facility", "columns": [
+            {"key": "name", "label": "Name",      "kind": "text"},
+            {"key": "lon",  "label": "Longitude", "kind": "float"},
+            {"key": "lat",  "label": "Latitude",  "kind": "float"},
+        ]},
+        {"title": "Catchment population (children)", "columns": [
+            {"key": "voronoi_pop", "label": "In catchment", "kind": "int"},
+            {"key": "exposed_pop", "label": "Exposed",      "kind": "int"},
+        ]},
+        {"title": "Site in hazard (1 = exposed)", "columns": [
+            {"key": t, "label": t, "kind": "flag"} for t in topic_cols
+        ]},
+        {"title": "Hazard intensity at site (native units)", "columns": [
+            {"key": h,
+             "label": f"{_hazard_label(h)}"
+                      + (f" ({(HAZARD_INFO.get(h) or {}).get('units','')})"
+                         if (HAZARD_INFO.get(h) or {}).get("units") else ""),
+             "kind": "float"}
+            for h in int_cols
+        ]},
+    ]
+    banner = ["Facility exposure — per-facility detail"]
+    banner += _thresholds_banner(pending.get("topics")
+                                 or [t for t in HAZARD_TOPICS
+                                     if t not in EXPOSURE_ONLY_TOPICS],
+                                 pending.get("overrides"))
+    banner.append("Catchment population uses each facility's nearest-neighbour "
+                  "(Voronoi) catchment (non-overlapping, summable). Site flags and "
+                  "Exposed reflect the thresholds above; intensity columns are raw "
+                  "native values.")
+    return _infra_download(groups, rows, "infra_facility_exposure.xlsx",
+                           banner_lines=banner)
 
 
 # ── Clear infra map layers when leaving the Infrastructure tab ─────────────────
