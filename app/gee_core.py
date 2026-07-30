@@ -165,6 +165,38 @@ def build_core_images():
     }
 
 
+def apply_threshold_overrides(core, threshold_overrides, topics=None):
+    """Return (exposure_by, topic_masks) copies with the given per-hazard
+    threshold overrides applied. Only overridden hazards are recomputed via
+    _exposed_for_hazard; the topic masks containing them are rebuilt as the
+    OR-union across the topic's hazards. Untouched entries reuse cached images.
+
+    Shared by every threshold-aware path (Analysis, Exposure viz, custom
+    boundary, Infrastructure) so the override semantics stay identical.
+    """
+    exposure_by = dict(core["exposure_by_hazard"])
+    topic_masks = dict(core["topic_masks"])
+    if not threshold_overrides:
+        return exposure_by, topic_masks
+
+    childpop = core["childpop"]
+    for h_name, thr in threshold_overrides.items():
+        if h_name in HAZARD_MAP:
+            exposure_by[h_name] = _exposed_for_hazard(HAZARD_MAP[h_name], childpop, thr)
+
+    scope = topics if topics is not None else list(HAZARD_TOPICS)
+    affected = {t for t in scope
+                if t in HAZARD_TOPICS
+                and any(h in threshold_overrides for h in HAZARD_TOPICS[t])}
+    for t in affected:
+        masks = [exposure_by[n].mask() for n in HAZARD_TOPICS[t]]
+        union = masks[0]
+        for m in masks[1:]:
+            union = union.Or(m)
+        topic_masks[t] = ee.Image.constant(1).updateMask(union)
+    return exposure_by, topic_masks
+
+
 # ---------------------------------------------------------------------------
 # ADM0 fast path — pre-computed exposure asset
 # ---------------------------------------------------------------------------
@@ -295,6 +327,21 @@ def get_topic_tile_url(topic_name, color):
     core = build_core_images()
     vis  = {"palette": [color], "min": 0, "max": 1}
     mid  = core["topic_masks"][topic_name].getMapId(vis)
+    return mid["tile_fetcher"].url_format, vis
+
+
+def get_topic_tile_url_thr(topic_name, color, threshold_overrides=None):
+    """Topic exposure tile honoring per-hazard threshold overrides. Falls back to
+    the cached default tile when no override affects this topic (keeps the fast
+    path + cache for the common case)."""
+    ov = {h: v for h, v in (threshold_overrides or {}).items()
+          if h in HAZARD_TOPICS.get(topic_name, [])}
+    if not ov:
+        return get_topic_tile_url(topic_name, color)
+    core = build_core_images()
+    _, topic_masks = apply_threshold_overrides(core, ov, [topic_name])
+    vis = {"palette": [color], "min": 0, "max": 1}
+    mid = topic_masks[topic_name].getMapId(vis)
     return mid["tile_fetcher"].url_format, vis
 
 
@@ -449,9 +496,7 @@ def compute_exposure(feature_ucode, admin_level, mhc_value=None, mhi_percentile=
     childpop_m  = core["childpop_m"]
     childpop_f  = core["childpop_f"]
     pop_res     = core["pop_target_res"]
-    topic_masks = dict(core["topic_masks"])
     topic_cov   = core["topic_coverage"]
-    exposure_by = dict(core["exposure_by_hazard"])
     topic_count = core["topic_count_image"]
     hazard_score= core["hazard_score"]
     global_geom = core["global_geom"]
@@ -466,21 +511,10 @@ def compute_exposure(feature_ucode, admin_level, mhc_value=None, mhi_percentile=
     else:
         sel_topics = [t for t in topics if t in HAZARD_TOPICS]
 
-    # Recompute only the overridden hazards, then rebuild the topic masks that
-    # contain them (OR-union across the topic's hazards). Untouched topics keep
-    # their cached masks.
-    if threshold_overrides:
-        for h_name, thr in threshold_overrides.items():
-            if h_name in HAZARD_MAP:
-                exposure_by[h_name] = _exposed_for_hazard(HAZARD_MAP[h_name], childpop, thr)
-        affected = {t for t in sel_topics
-                    if any(h in threshold_overrides for h in HAZARD_TOPICS[t])}
-        for t in affected:
-            masks = [exposure_by[n].mask() for n in HAZARD_TOPICS[t]]
-            union = masks[0]
-            for m in masks[1:]:
-                union = union.Or(m)
-            topic_masks[t] = ee.Image.constant(1).updateMask(union)
+    # Recompute only the overridden hazards + rebuild affected topic masks
+    # (shared helper keeps override semantics identical across the app).
+    exposure_by, topic_masks = apply_threshold_overrides(
+        core, threshold_overrides, sel_topics)
 
     bands = []
     for topic_name in sel_topics:
@@ -590,16 +624,17 @@ def get_custom_asset_tile_url(asset_id):
     return mid["tile_fetcher"].url_format
 
 
-def compute_exposure_asset(asset_id):
+def compute_exposure_asset(asset_id, threshold_overrides=None):
     """Run per-hazard exposure for a GEE FeatureCollection asset.
     Returns list of property dicts (geometries stripped).
+    `threshold_overrides`: optional {hazard_name: value} applied per hazard.
     """
     core        = build_core_images()
     childpop    = core["childpop"]
     childpop_m  = core["childpop_m"]
     childpop_f  = core["childpop_f"]
     pop_res     = core["pop_target_res"]
-    exposure_by = core["exposure_by_hazard"]
+    exposure_by, _ = apply_threshold_overrides(core, threshold_overrides)
 
     hazard_names = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
     bands = [exposure_by[n].rename(n) for n in hazard_names if n in exposure_by]
@@ -618,16 +653,17 @@ def compute_exposure_asset(asset_id):
     return props_only.getInfo()["features"]
 
 
-def compute_exposure_custom(geojson_dict):
+def compute_exposure_custom(geojson_dict, threshold_overrides=None):
     """Run per-hazard exposure for every feature in a GeoJSON FeatureCollection.
     Returns list of property dicts (geometries stripped to reduce payload size).
+    `threshold_overrides`: optional {hazard_name: value} applied per hazard.
     """
     core        = build_core_images()
     childpop    = core["childpop"]
     childpop_m  = core["childpop_m"]
     childpop_f  = core["childpop_f"]
     pop_res     = core["pop_target_res"]
-    exposure_by = core["exposure_by_hazard"]
+    exposure_by, _ = apply_threshold_overrides(core, threshold_overrides)
 
     hazard_names = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
 
@@ -696,15 +732,17 @@ def get_infra_tile_url(asset_id, color, adm2_ucode=None):
     return mid["tile_fetcher"].url_format
 
 
-def _topic_union_mask(core, topics):
+def _topic_union_mask(core, topics, topic_masks=None):
     """Constant-1 image masked to the OR-union of the given topic footprints.
-    Falls back to the union of all infra topics when none specified."""
-    names = [t for t in (topics or _INFRA_TOPICS) if t in core["topic_masks"]]
+    Falls back to the union of all infra topics when none specified.
+    `topic_masks` lets callers pass threshold-adjusted masks; defaults to cached."""
+    tmasks = topic_masks if topic_masks is not None else core["topic_masks"]
+    names = [t for t in (topics or _INFRA_TOPICS) if t in tmasks]
     if not names:
         names = _INFRA_TOPICS
-    union = core["topic_masks"][names[0]].mask()
+    union = tmasks[names[0]].mask()
     for n in names[1:]:
-        union = union.Or(core["topic_masks"][n].mask())
+        union = union.Or(tmasks[n].mask())
     return ee.Image.constant(1).updateMask(union)
 
 
@@ -762,7 +800,7 @@ def _voronoi_cells(points, adm2_geojson):
     return {"type": "FeatureCollection", "features": feats}
 
 
-def compute_facility_combined(asset_id, adm2_ucode, topics=None):
+def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overrides=None):
     """Single combined analysis for one adm2 district:
 
       • Exposed population per hazard — aggregated over the WHOLE adm2 (Voronoi
@@ -772,26 +810,30 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None):
       • Per-facility Voronoi population — each facility's nearest-neighbour
         catchment child population + hazard-exposed share (summable, no overlap).
 
+    `threshold_overrides`: optional {hazard_name: value} applied per hazard so the
+    facility summary uses the same custom thresholds as the Analysis tab.
+
     Returns a merged dict (see keys below). Kept to a small number of sequential
     getInfo calls (never fan-out) to respect the GEE concurrency limit.
     """
     core        = build_core_images()
     childpop    = core["childpop"]
     pop_res     = core["pop_target_res"]
-    topic_masks = core["topic_masks"]
-    exposure_by = core["exposure_by_hazard"]
     region      = _adm2_region(adm2_ucode)
 
-    sel_topics = _sel_topics(topic_masks, topics)
+    sel_topics = _sel_topics(core["topic_masks"], topics)
+    exposure_by, topic_masks = apply_threshold_overrides(
+        core, threshold_overrides, sel_topics)
     sub_names  = [h for _t, hs in _subhazards_for(sel_topics)
                   for h in hs if h in exposure_by]
+    union_mask = _topic_union_mask(core, sel_topics, topic_masks)
 
     # ── (1) Aggregate exposed population per hazard over the whole adm2 ──
     def _bn(prefix, i):
         return f"b{prefix}{i}"
 
     band_imgs = [childpop.rename("bTotal"),
-                 childpop.updateMask(_topic_union_mask(core, sel_topics)).rename("bExposed")]
+                 childpop.updateMask(union_mask).rename("bExposed")]
     band_keys = [None, None]
     for i, t in enumerate(sel_topics):
         band_imgs.append(childpop.updateMask(topic_masks[t]).rename(_bn("t", i)))
@@ -814,7 +856,7 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None):
             (per_topic if key[0] == "topic" else per_sub)[key[1]] = stats.get(bname)
 
     # ── (2) Facility-site exposure (flags + raw intensity per facility) ──
-    site = compute_facility_site(asset_id, adm2_ucode, topics)
+    site = compute_facility_site(asset_id, adm2_ucode, topics, threshold_overrides)
     facilities = site["facilities"]
     site_tally = site["tally"]
 
@@ -827,7 +869,7 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None):
     cells = _voronoi_cells(points, adm2_geo)
 
     pop_bands = [childpop.rename("vpop"),
-                 childpop.updateMask(_topic_union_mask(core, sel_topics)).rename("vexp")]
+                 childpop.updateMask(union_mask).rename("vexp")]
     cell_stats = ee.Image.cat(pop_bands).reduceRegions(
         collection=ee.FeatureCollection(cells), reducer=ee.Reducer.sum(),
         scale=pop_res, tileScale=8,
@@ -852,9 +894,12 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None):
     }
 
 
-def compute_facility_site(asset_id, adm2_ucode, topics=None):
+def compute_facility_site(asset_id, adm2_ucode, topics=None, threshold_overrides=None):
     """Concept 2: whether each facility SITE sits in a hazard footprint, and at
     what raw intensity (native units) — sampled at the facility point.
+
+    `threshold_overrides`: optional {hazard_name: value} so the in-hazard flags
+    honor the same custom thresholds as the rest of the analysis.
 
     Returns {
       "facilities": [{fname, lon, lat, <topic>:0|1, <subhazard>:intensity, ...}],
@@ -866,12 +911,12 @@ def compute_facility_site(asset_id, adm2_ucode, topics=None):
     Single reduceRegions + one server-side tally (concurrency-safe).
     """
     core         = build_core_images()
-    topic_masks  = core["topic_masks"]
     raw_hazard   = core["raw_hazard"]
     target_scale = core["target_scale"]
     region       = _adm2_region(adm2_ucode)
 
-    sel_topics = _sel_topics(topic_masks, topics)
+    sel_topics = _sel_topics(core["topic_masks"], topics)
+    _, topic_masks = apply_threshold_overrides(core, threshold_overrides, sel_topics)
     # Sub-hazard intensity layers for the selected topics (skip missing).
     sub_names = [h for t in sel_topics for h in HAZARD_TOPICS[t] if h in raw_hazard]
 

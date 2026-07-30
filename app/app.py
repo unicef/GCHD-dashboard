@@ -18,7 +18,8 @@ from config import (
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3,
-    INFRA_LAYERS,
+    INFRA_COUNTRIES, INFRA_ASSETS, infra_layer_style,
+    is_binary_hazard,
 )
 from ai_core import initialize_ai, ask_gemini
 from auth import request_otp, verify_otp, SESSION_HOURS
@@ -26,7 +27,7 @@ from gee_core import (
     initialize_gee, build_core_images,
     get_country_names,
     get_country_ucode, get_country_bounds,
-    get_topic_tile_url, get_topic_count_tile_url,
+    get_topic_tile_url, get_topic_tile_url_thr, get_topic_count_tile_url,
     get_pixel_score_tile_url, get_pixel_score_percentile_tile_url,
     get_hazard_tile_url, get_admin_boundary_tile_url, get_selected_feature_tile_url,
     compute_exposure_custom, compute_exposure_asset,
@@ -251,26 +252,56 @@ def tab_hazard_layers():
     ])
 
 
+def _exposure_topic_row(t, selected):
+    """One radio-selectable topic row. The whole row is the click target; the
+    radio mirrors the single-select state (aria-checked for accessibility)."""
+    return html.Div(
+        [
+            html.Div(className="topic-radio" + (" checked" if selected else ""),
+                     **{"aria-checked": "true" if selected else "false",
+                        "role": "radio"}),
+            html.Div(className="topic-swatch",
+                     style={"background": TOPIC_COLORS.get(t, "#888")}),
+            html.Span(t, className="topic-name"),
+        ],
+        id={"type": "topic-item", "index": t},
+        className="topic-item active" if selected else "topic-item",
+        n_clicks=0,
+    )
+
+
+def _exposure_inline_editor(topic):
+    """The 'Adjust thresholds' editor for the selected topic, rendered inline
+    directly beneath its row. Ids preserved so the toggle/sync/badge callbacks
+    keep working."""
+    return html.Div(className="exposure-thr-inline", children=[
+        html.Div(id="exposure-thr-toggle", className="athr-toggle", n_clicks=0,
+                 children=[
+            html.I(className="bi bi-chevron-right", id="exposure-thr-chevron"),
+            html.Span("Adjust thresholds", className="athr-toggle-label"),
+            html.Span("", id="exposure-thr-badge", className="athr-badge"),
+        ]),
+        html.Div("Changing a threshold updates the exposure map for this topic.",
+                 className="ps-caption", style={"marginTop": "4px",
+                                                "color": "var(--mid)"}),
+        html.Div(id="exposure-thr-body", style={"display": "none"}, children=[
+            html.Div(build_threshold_editor_for("exposure", [topic]),
+                     id="exposure-threshold-block",
+                     className="analysis-threshold-block"),
+        ]),
+    ])
+
+
 def tab_exposure():
-    topics = [
-        html.Div(
-            [
-                html.Div(className="topic-swatch",
-                         style={"background": TOPIC_COLORS.get(t, "#888")}),
-                html.Span(t, className="topic-name"),
-            ],
-            id={"type": "topic-item", "index": t},
-            className="topic-item",
-            n_clicks=0,
-        )
-        for t in TOPIC_LIST
-    ]
     return html.Div(id="tab-exposure", style={"display": "none"}, children=[
         html.Div(className="ph", children=[
             html.Div("Children's Exposure", className="ph-title"),
             html.Div("Population exposed to each hazard topic", className="ph-sub"),
         ]),
-        html.Div(topics),
+        # Radio-selectable topic list; the selected row carries the inline
+        # threshold editor. Rebuilt by render_exposure_topics on selection.
+        html.Div(id="exposure-topic-list",
+                 children=[_exposure_topic_row(t, False) for t in TOPIC_LIST]),
         html.Div(className="exposure-method-note", children=[
             html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
             html.P(
@@ -411,6 +442,12 @@ def tab_analysis():
                         html.Span("Adjust thresholds", className="athr-toggle-label"),
                         html.Span("", id="analysis-thr-badge", className="athr-badge"),
                     ]),
+                    # Shown at ADM0: custom thresholds are country-level disabled.
+                    html.Div("Custom thresholds apply at ADM1/ADM2. Country-level "
+                             "(ADM0) analysis uses the standard thresholds.",
+                             id="analysis-thr-adm0-note", className="ps-caption",
+                             style={"display": "none", "marginTop": "4px",
+                                    "color": "var(--mid)"}),
                     html.Div(id="analysis-thr-body", style={"display": "none"}, children=[
                         html.Div(id="analysis-threshold-block",
                                  className="analysis-threshold-block"),
@@ -484,6 +521,9 @@ def tab_analysis():
                 html.Div(className="ps", children=[
                     html.Button("Compute Exposure", id="custom-compute-btn",
                                 className="ps-btn", n_clicks=0),
+                    html.Div("Uses your current hazard thresholds from the "
+                             "Analysis tab.", className="ps-caption",
+                             style={"marginTop": "6px", "color": "var(--mid)"}),
                 ]),
             ]),
             dcc.Loading(
@@ -528,6 +568,9 @@ def tab_analysis():
                 html.Div(className="ps", children=[
                     html.Button("Compute Exposure", id="gee-asset-compute-btn",
                                 className="ps-btn", n_clicks=0),
+                    html.Div("Uses your current hazard thresholds from the "
+                             "Analysis tab.", className="ps-caption",
+                             style={"marginTop": "6px", "color": "var(--mid)"}),
                 ]),
             ]),
             dcc.Loading(
@@ -542,8 +585,12 @@ def tab_analysis():
     ])
 
 
-def _infra_layer_options():
-    return [{"label": name, "value": name} for name in INFRA_LAYERS]
+def _infra_layer_options(country=None):
+    """Layer dropdown options for the selected country — only its uploaded,
+    source-qualified layers (e.g. 'Schools (Giga)'). Empty until a country with
+    assets is picked."""
+    return [{"label": name, "value": name}
+            for name in INFRA_ASSETS.get(country, {})]
 
 
 def tab_infrastructure():
@@ -561,7 +608,7 @@ def tab_infrastructure():
             html.Div("1. Select country / territory", className="ps-label"),
             dcc.Dropdown(
                 id="infra-country-select", className="ps-select",
-                options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
+                options=[{"label": c, "value": c} for c in INFRA_COUNTRIES],
                 value=None, placeholder="Search country / territory…",
                 clearable=False, searchable=True,
             ),
@@ -572,14 +619,14 @@ def tab_infrastructure():
                      className="info-box", id="infra-region-hint"),
         ]),
 
-        # 2. Facility layer (defaults to the first layer; paste-path fallback)
+        # 2. Facility layer — options depend on the selected country (only its
+        # uploaded, source-qualified layers). Populated on country select.
         html.Div(className="ps", children=[
             html.Div("2. Facility layer", className="ps-label"),
             dcc.Dropdown(
                 id="infra-layer-select", className="ps-select",
-                options=_infra_layer_options(),
-                value=next(iter(INFRA_LAYERS)),
-                placeholder="— select a facility layer —",
+                options=[], value=None,
+                placeholder="— select a country first —",
                 clearable=True, searchable=False,
             ),
             html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
@@ -613,9 +660,36 @@ def tab_infrastructure():
             html.Div("Exposed population is attributed to each facility's "
                      "nearest-neighbour (Voronoi) catchment across the district.",
                      className="ps-caption"),
+            # Collapsible threshold editor (mirrors the Analysis tab).
+            html.Div(id="infra-thr-toggle", className="athr-toggle", n_clicks=0,
+                     children=[
+                html.I(className="bi bi-chevron-right", id="infra-thr-chevron"),
+                html.Span("Adjust thresholds", className="athr-toggle-label"),
+                html.Span("", id="infra-thr-badge", className="athr-badge"),
+            ]),
+            html.Div(id="infra-thr-body", style={"display": "none"}, children=[
+                html.Div(id="infra-threshold-block",
+                         className="analysis-threshold-block"),
+            ]),
         ]),
 
         html.Div(className="ps", children=[
+            html.Div(className="infra-help", style={"display": "flex", "gap": "6px",
+                     "alignItems": "flex-start", "marginBottom": "8px"}, children=[
+                html.I(className="bi bi-info-circle",
+                       style={"color": "var(--cyan)", "marginTop": "2px",
+                              "flexShrink": "0"}),
+                html.Div(className="ps-caption", style={"color": "var(--mid)"}, children=[
+                    html.Div([html.Strong("How to run: "),
+                              "click a district (ADM2) on the map, then press Compute. "
+                              "Analysis is per-district — there is no country-wide "
+                              "summary, because per-facility Voronoi computation over "
+                              "many points is slow even for small areas."]),
+                    html.Div([html.Strong("Thresholds: "),
+                              "the summary applies your current hazard thresholds set "
+                              "above."], style={"marginTop": "4px"}),
+                ]),
+            ]),
             html.Button("Compute", id="infra-compute-btn", className="ps-btn",
                         n_clicks=0, disabled=True),
         ]),
@@ -631,12 +705,10 @@ def tab_infrastructure():
             ),
         ]),
 
-        # — Stores — seed the default facility layer so Compute works without
-        # an explicit Load if the layer-select callback doesn't auto-fire.
-        dcc.Store(id="store-infra-asset", data={
-            "asset_id": INFRA_LAYERS[next(iter(INFRA_LAYERS))]["asset"],
-            "name_field": "name",
-        }),
+        # — Stores — the facility asset is empty until the user picks a country
+        # and a layer (layers are country-specific now, so there's no sensible
+        # global default to seed). infra_load_asset sets it on selection.
+        dcc.Store(id="store-infra-asset", data=None),
         # Last computed viz (asset/ucode/buffer/color) — lets update_data_layers
         # rebuild the infra tiles so they aren't wiped on store/tab changes.
         dcc.Store(id="store-infra-viz", data=None),
@@ -909,6 +981,9 @@ app.layout = html.Div(id="app-root", children=[
     dcc.Store(id="store-clicked-name",  data=None),
     dcc.Store(id="store-exposure",      data=None),
     dcc.Store(id="store-last-click",    data=None),
+    # Shared custom hazard thresholds {hazard_name: value} (non-default only).
+    # Written by the Exposure-tab editor; read by the exposure visualization.
+    dcc.Store(id="store-thresholds",    data={}),
 
     # ── Embargo gate ──
     html.Div(id="embargo-gate", children=[
@@ -1092,21 +1167,114 @@ def select_hazard_layer(all_clicks):
 # ── Exposure topic selection ──────────────────────────────────────────────────
 
 @app.callback(
-    Output({"type": "topic-item", "index": ALL}, "className"),
     Output("store-exposure-topic", "data"),
     Input({"type": "topic-item", "index": ALL}, "n_clicks"),
     prevent_initial_call=True,
 )
 def select_topic(all_clicks):
-    triggered = ctx.triggered_id
+    # Row click → set the selected topic. render_exposure_topics owns the row
+    # styling/radio state and the inline editor placement.
+    triggered = ctx.triggered
     if not triggered:
-        return no_update, no_update
-    selected = triggered["index"]
-    classes = [
-        "topic-item active" if inp["id"]["index"] == selected else "topic-item"
-        for inp in ctx.inputs_list[0]
-    ]
-    return classes, selected
+        return no_update
+    # Ignore spurious fires from re-rendered rows (n_clicks resets to 0/None on
+    # re-render). Only act on a real click, where the triggered value is truthy.
+    trig = triggered[0]
+    if not trig.get("value"):
+        return no_update
+    return ctx.triggered_id["index"]
+
+
+@app.callback(
+    Output("exposure-topic-list", "children"),
+    Input("store-exposure-topic", "data"),
+)
+def render_exposure_topics(topic):
+    """Rebuild the topic list with the radio state, and inject the inline
+    threshold editor directly beneath the selected topic row."""
+    rows = []
+    for t in TOPIC_LIST:
+        rows.append(_exposure_topic_row(t, t == topic))
+        if t == topic:
+            rows.append(_exposure_inline_editor(topic))
+    return rows
+
+
+# Clientside toggle — reliable for the dynamically-rendered inline editor
+# (server callbacks with prevent_initial_call can miss the first click on
+# freshly-injected components).
+app.clientside_callback(
+    """
+    function(n) {
+        var open = !!n && (n % 2 === 1);
+        return [
+            {"display": open ? "block" : "none"},
+            open ? "bi bi-chevron-down" : "bi bi-chevron-right"
+        ];
+    }
+    """,
+    Output("exposure-thr-body",    "style"),
+    Output("exposure-thr-chevron", "className"),
+    Input("exposure-thr-toggle",   "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
+@app.callback(
+    Output("store-thresholds",   "data", allow_duplicate=True),
+    Output("exposure-thr-badge", "children"),
+    Input({"type": "exposure-threshold", "index": ALL}, "value"),
+    State({"type": "exposure-threshold", "index": ALL}, "id"),
+    State("store-exposure-topic", "data"),
+    prevent_initial_call=True,
+)
+def sync_exposure_thresholds(values, ids, topic):
+    """Publish the exposure editor's thresholds to the shared store (drives the
+    exposure map) and update the 'N changed' badge."""
+    overrides, _ = _threshold_overrides([topic] if topic else [], ids, values)
+    badge = f"{len(overrides)} changed" if overrides else ""
+    return overrides, badge
+
+
+# ── Infrastructure threshold editor ───────────────────────────────────────────
+
+def _infra_editor_topics(topics):
+    """Infra topic-select is empty for 'all hazards' — expand to all infra topics."""
+    if topics:
+        return topics
+    return [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
+
+
+@app.callback(
+    Output("infra-threshold-block", "children"),
+    Input("infra-topic-select",     "value"),
+)
+def build_infra_threshold_editor(topics):
+    return build_threshold_editor_for("infra", _infra_editor_topics(topics))
+
+
+@app.callback(
+    Output("infra-thr-body",    "style"),
+    Output("infra-thr-chevron", "className"),
+    Input("infra-thr-toggle",   "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_infra_thr(n):
+    open_ = bool(n) and (n % 2 == 1)
+    body  = {"display": "block"} if open_ else {"display": "none"}
+    chev  = "bi bi-chevron-down" if open_ else "bi bi-chevron-right"
+    return body, chev
+
+
+@app.callback(
+    Output("infra-thr-badge", "children"),
+    Input({"type": "infra-threshold", "index": ALL}, "value"),
+    State({"type": "infra-threshold", "index": ALL}, "id"),
+    State("infra-topic-select", "value"),
+)
+def infra_thr_badge(values, ids, topics):
+    overrides, _ = _threshold_overrides(_infra_editor_topics(topics), ids, values)
+    return f"{len(overrides)} changed" if overrides else ""
 
 
 # ── Topic group fold/unfold ───────────────────────────────────────────────────
@@ -1181,8 +1349,9 @@ def update_hazard_legend(sel):
     Input("mhc-select",           "value"),
     Input("mhi-select",           "value"),
     Input("store-tab",            "data"),
+    Input("store-thresholds",     "data"),
 )
-def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab):
+def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds):
     layers = []
 
     # Infrastructure layers live in dedicated top-level components
@@ -1204,7 +1373,9 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab):
 
     elif tab == "exposure" and exp_topic:
         color = TOPIC_COLORS.get(exp_topic, "#ff0000")
-        url, _ = get_topic_tile_url(exp_topic, color)
+        # Honor the exposure editor's custom thresholds (falls back to the cached
+        # default tile when this topic has no override).
+        url, _ = get_topic_tile_url_thr(exp_topic, color, thresholds or None)
         layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
 
     elif tab == "mh":
@@ -1298,37 +1469,41 @@ def _thr_step_marks(lo, hi):
     return step, marks
 
 
-def _threshold_row(h_name):
-    """One editable-threshold row: slider (bounds) + linked number input (precision)."""
+def _threshold_row(h_name, prefix="analysis"):
+    """One editable-threshold row: slider (bounds) + linked number input (precision).
+    `prefix` scopes the pattern-matching ids so the same editor can live in
+    multiple tabs (analysis | exposure | infra). Binary hazards render disabled."""
     hz      = HAZARD_MAP.get(h_name, {})
     units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
     default = hz.get("threshold", 0)
     lo, hi  = hz.get("min", 0), hz.get("max", 100)
     step, marks = _thr_step_marks(lo, hi)
+    binary  = is_binary_hazard(h_name)
     return html.Div(className="analysis-threshold-row", children=[
         html.Div(className="athr-row-head", children=[
             html.Span(_hazard_label(h_name), className="athr-label"),
             dcc.Input(
-                id={"type": "analysis-threshold", "index": h_name},
+                id={"type": f"{prefix}-threshold", "index": h_name},
                 type="number", value=default, min=lo, max=hi, step=step,
-                debounce=True, className="athr-input",
+                debounce=True, className="athr-input", disabled=binary,
             ),
-            html.Span(units, className="athr-units", title=f"range {lo}–{hi}"),
+            html.Span("presence/absence" if binary else units,
+                      className="athr-units", title=f"range {lo}–{hi}"),
         ]),
         dcc.Slider(
-            id={"type": "analysis-threshold-slider", "index": h_name},
+            id={"type": f"{prefix}-threshold-slider", "index": h_name},
             min=lo, max=hi, value=default, step=step, marks=marks,
-            updatemode="mouseup", className="athr-slider",
+            updatemode="mouseup",
+            className="athr-slider" + (" athr-slider-disabled" if binary else ""),
+            disabled=binary,
             tooltip={"placement": "bottom", "always_visible": False},
         ),
     ])
 
 
-@app.callback(
-    Output("analysis-threshold-block", "children"),
-    Input("analysis-topic-select",     "value"),
-)
-def build_threshold_editor(topics):
+def build_threshold_editor_for(prefix, topics):
+    """Reusable threshold-editor body for any tab. `prefix` scopes the row ids
+    (analysis | exposure | infra); `topics` is the selected topic list."""
     if not topics:
         return html.Div("Select at least one hazard topic to adjust thresholds.",
                         className="ps-caption", style={"padding": "4px 0"})
@@ -1336,7 +1511,7 @@ def build_threshold_editor(topics):
     for topic in HAZARD_TOPICS:            # stable, config order
         if topic not in topics:
             continue
-        rows = [_threshold_row(h) for h in HAZARD_TOPICS[topic]]
+        rows = [_threshold_row(h, prefix) for h in HAZARD_TOPICS[topic]]
         blocks.append(html.Div(className="athr-topic", children=[
             html.Div([
                 html.Span(className="topic-swatch",
@@ -1345,51 +1520,98 @@ def build_threshold_editor(topics):
             ], className="athr-topic-head"),
             *rows,
         ]))
+    # Reset-to-defaults control (restores every visible hazard to its config
+    # threshold). id is prefix-scoped so each tab's editor resets independently.
+    blocks.append(html.Button(
+        [html.I(className="bi bi-arrow-counterclockwise",
+                style={"marginRight": "5px"}), "Reset to defaults"],
+        id=f"{prefix}-thr-reset", n_clicks=0, className="athr-reset-btn",
+    ))
     return blocks
 
 
-# Clientside slider <-> number-input sync (keeps drags off the server).
-app.clientside_callback(
-    """
-    function(sliderVal, inputVal) {
-        var ctx = dash_clientside.callback_context;
-        if (!ctx || !ctx.triggered || ctx.triggered.length === 0) {
-            return [dash_clientside.no_update, dash_clientside.no_update];
-        }
-        var prop = ctx.triggered[0].prop_id;
-        // Slider moved -> update the number input; input changed -> move slider.
-        if (prop.indexOf("analysis-threshold-slider") !== -1) {
-            if (sliderVal === null || sliderVal === undefined) {
-                return [dash_clientside.no_update, dash_clientside.no_update];
-            }
-            return [sliderVal, dash_clientside.no_update];
-        } else {
-            if (inputVal === null || inputVal === undefined || inputVal === "") {
-                return [dash_clientside.no_update, dash_clientside.no_update];
-            }
-            return [dash_clientside.no_update, inputVal];
-        }
-    }
-    """,
-    Output({"type": "analysis-threshold",        "index": MATCH}, "value", allow_duplicate=True),
-    Output({"type": "analysis-threshold-slider", "index": MATCH}, "value"),
-    Input({"type": "analysis-threshold-slider",  "index": MATCH}, "value"),
-    Input({"type": "analysis-threshold",         "index": MATCH}, "value"),
-    prevent_initial_call=True,
+@app.callback(
+    Output("analysis-threshold-block", "children"),
+    Input("analysis-topic-select",     "value"),
 )
+def build_threshold_editor(topics):
+    return build_threshold_editor_for("analysis", topics)
+
+
+# Clientside slider <-> number-input sync (keeps drags off the server).
+# Registered once per editor prefix (analysis | exposure | infra).
+def _register_threshold_sync(prefix):
+    app.clientside_callback(
+        """
+        function(sliderVal, inputVal) {
+            var ctx = dash_clientside.callback_context;
+            if (!ctx || !ctx.triggered || ctx.triggered.length === 0) {
+                return [dash_clientside.no_update, dash_clientside.no_update];
+            }
+            var prop = ctx.triggered[0].prop_id;
+            // Slider moved -> update the number input; input changed -> move slider.
+            if (prop.indexOf("-threshold-slider") !== -1) {
+                if (sliderVal === null || sliderVal === undefined) {
+                    return [dash_clientside.no_update, dash_clientside.no_update];
+                }
+                return [sliderVal, dash_clientside.no_update];
+            } else {
+                if (inputVal === null || inputVal === undefined || inputVal === "") {
+                    return [dash_clientside.no_update, dash_clientside.no_update];
+                }
+                return [dash_clientside.no_update, inputVal];
+            }
+        }
+        """,
+        Output({"type": f"{prefix}-threshold",        "index": MATCH}, "value", allow_duplicate=True),
+        Output({"type": f"{prefix}-threshold-slider", "index": MATCH}, "value"),
+        Input({"type": f"{prefix}-threshold-slider",  "index": MATCH}, "value"),
+        Input({"type": f"{prefix}-threshold",         "index": MATCH}, "value"),
+        prevent_initial_call=True,
+    )
+
+
+def _register_threshold_reset(prefix):
+    """Reset every hazard input + slider in this editor to its config default."""
+    @app.callback(
+        Output({"type": f"{prefix}-threshold",        "index": ALL}, "value",
+               allow_duplicate=True),
+        Output({"type": f"{prefix}-threshold-slider", "index": ALL}, "value",
+               allow_duplicate=True),
+        Input(f"{prefix}-thr-reset", "n_clicks"),
+        State({"type": f"{prefix}-threshold", "index": ALL}, "id"),
+        prevent_initial_call=True,
+    )
+    def _reset(_n, ids):
+        defaults = [HAZARD_MAP.get(i["index"], {}).get("threshold", 0) for i in ids]
+        return defaults, defaults
+
+
+for _prefix in ("analysis", "exposure", "infra"):
+    _register_threshold_sync(_prefix)
+    _register_threshold_reset(_prefix)
 
 
 @app.callback(
     Output("analysis-thr-body",    "style"),
     Output("analysis-thr-chevron", "className"),
+    Output("analysis-thr-toggle",  "className"),
+    Output("analysis-thr-adm0-note", "style"),
     Input("analysis-thr-toggle",   "n_clicks"),
-    prevent_initial_call=True,
+    Input("store-level",           "data"),
 )
-def toggle_analysis_thr(n):
+def toggle_analysis_thr(n, level):
+    # Custom thresholds only apply at ADM1/ADM2. At ADM0 the section is shown but
+    # disabled (greyed, non-expandable) with an explanatory note.
+    note_base = {"marginTop": "4px", "color": "var(--mid)"}
+    if level == "adm0 (Country)":
+        return ({"display": "none"}, "bi bi-chevron-right",
+                "athr-toggle athr-toggle-disabled",
+                {**note_base, "display": "block"})
     open_ = bool(n) and (n % 2 == 1)         # starts collapsed
     body  = {"display": "block"} if open_ else {"display": "none"}
     chev  = "bi bi-chevron-down" if open_ else "bi bi-chevron-right"
-    return body, chev
+    return (body, chev, "athr-toggle", {**note_base, "display": "none"})
 
 
 @app.callback(
@@ -1410,6 +1632,20 @@ def analysis_thr_badge(values, ids):
         except (TypeError, ValueError):
             continue
     return f"{n} changed" if n else ""
+
+
+@app.callback(
+    Output("store-thresholds", "data", allow_duplicate=True),
+    Input({"type": "analysis-threshold", "index": ALL}, "value"),
+    State({"type": "analysis-threshold", "index": ALL}, "id"),
+    State("analysis-topic-select", "value"),
+    prevent_initial_call=True,
+)
+def sync_analysis_thresholds(values, ids, topics):
+    """Publish the Analysis-tab thresholds to the shared store so custom-boundary
+    analysis (and any consumer) applies the same current thresholds."""
+    overrides, _ = _threshold_overrides(topics, ids, values)
+    return overrides
 
 
 # ── Map cursor ───────────────────────────────────────────────────────────────
@@ -1610,6 +1846,11 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
 
     sel_topics = sel_topics or []
     overrides, sig = _threshold_overrides(sel_topics, thr_ids, thr_values)
+    # Custom thresholds are only applied at ADM1/ADM2. At ADM0 they'd bypass the
+    # fast precomputed-asset path and trigger a slow full-country chunked
+    # reduction, so drop them and let the country level use standard thresholds.
+    if level == "adm0 (Country)":
+        overrides, sig = {}, ""
     # Non-default request cannot use the precomputed adm0 asset path.
     topics_arg = None if set(sel_topics) == {t for t in HAZARD_TOPICS
                                              if t not in EXPOSURE_ONLY_TOPICS} else sel_topics
@@ -1991,83 +2232,58 @@ app.clientside_callback(
     Input("custom-compute-btn",              "n_clicks"),
     State("store-custom-geojson-stripped",   "data"),
     State("custom-name-field",               "value"),
+    State("store-thresholds",                "data"),
     prevent_initial_call=True,
 )
-def compute_custom_exposure(n_clicks, geojson, name_field):
+def compute_custom_exposure(n_clicks, geojson, name_field, thresholds):
     if not geojson or not name_field:
         return no_update
 
     try:
-        features = compute_exposure_custom(geojson)
+        features = compute_exposure_custom(geojson, threshold_overrides=thresholds or None)
     except Exception as e:
         return html.Div(f"GEE error: {e}",
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
 
-    hazard_cols = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
-    extra_cols  = ["total_population", "total_population_male", "total_population_female"]
-    all_cols    = extra_cols + hazard_cols
-
-    rows = []
-    for feat in features:
-        props = feat.get("properties") or {}
-        row   = {name_field: props.get(name_field, "—")}
-        for col in all_cols:
-            row[col] = props.get(col) or 0
-        rows.append(row)
-
-    if not rows:
-        return html.Div("No results returned.",
-                        style={"padding": "12px 16px", "fontSize": "0.75rem"})
-
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    fieldnames = [name_field] + all_cols
-    writer = _csv.DictWriter(buf, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(rows)
-    csv_href = "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
-
-    n_feat = len(rows)
-    return html.Div(className="ps", children=[
-        html.Div([
-            html.I(className="bi bi-check-circle-fill",
-                   style={"color": "var(--cyan)", "marginRight": "8px"}),
-            html.Strong(f"Hazard exposure for {n_feat} feature{'s' if n_feat != 1 else ''} ready."),
-        ], style={"fontSize": "0.8rem", "color": "var(--hi)", "marginBottom": "10px"}),
-        html.A(
-            f"⬇  Download CSV ({n_feat} features × {len(hazard_cols)} hazards)",
-            href=csv_href,
-            download="custom_hazard_exposure.csv",
-            className="ps-btn",
-            style={"display": "block", "textAlign": "center", "textDecoration": "none",
-                   "padding": "10px 16px"},
-        ),
-    ])
+    return _exposure_xlsx_div(features, name_field, "custom_hazard_exposure.xlsx",
+                              overrides=thresholds or None)
 
 
 # ── GEE Asset load + compute ──────────────────────────────────────────────────
 
-def _exposure_results_div(features, name_field, filename):
+def _exposure_xlsx_div(features, name_field, filename, overrides=None):
+    """Results card + styled-Excel download for custom-boundary / GEE-asset
+    exposure (per-feature exposed-children counts, by hazard)."""
     hazard_cols = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
-    extra_cols  = ["total_population", "total_population_male", "total_population_female"]
-    all_cols    = extra_cols + hazard_cols
     rows = []
     for feat in features:
         props = feat.get("properties") or {}
-        row   = {name_field: props.get(name_field, "—")}
-        for col in all_cols:
-            row[col] = props.get(col) or 0
+        row   = {name_field: props.get(name_field) or "-"}
+        for col in ["total_population", "total_population_male",
+                    "total_population_female"] + hazard_cols:
+            row[col] = int(round(props.get(col) or 0))
         rows.append(row)
     if not rows:
         return html.Div("No results returned.",
                         style={"padding": "12px 16px", "fontSize": "0.75rem"})
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    writer = _csv.DictWriter(buf, fieldnames=[name_field] + all_cols)
-    writer.writeheader()
-    writer.writerows(rows)
-    csv_href = "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
+
+    groups = [
+        {"title": "Feature", "columns": [
+            {"key": name_field, "label": name_field, "kind": "text"},
+        ]},
+        {"title": "Population (children)", "columns": [
+            {"key": "total_population",        "label": "Total",  "kind": "int"},
+            {"key": "total_population_male",   "label": "Male",   "kind": "int"},
+            {"key": "total_population_female", "label": "Female", "kind": "int"},
+        ]},
+        {"title": "Exposed children by hazard", "columns": [
+            {"key": h, "label": _hazard_label(h), "kind": "int"} for h in hazard_cols
+        ]},
+    ]
+    climate_topics = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
+    banner = ["Hazard exposure by feature"] + _thresholds_banner(climate_topics, overrides)
+
     n_feat = len(rows)
     return html.Div(className="ps", children=[
         html.Div([
@@ -2076,8 +2292,9 @@ def _exposure_results_div(features, name_field, filename):
             html.Strong(f"Hazard exposure for {n_feat} feature{'s' if n_feat != 1 else ''} ready."),
         ], style={"fontSize": "0.8rem", "color": "var(--hi)", "marginBottom": "10px"}),
         html.A(
-            f"⬇  Download CSV ({n_feat} features × {len(hazard_cols)} hazards)",
-            href=csv_href, download=filename, className="ps-btn",
+            f"⬇  Download Excel ({n_feat} features × {len(hazard_cols)} hazards)",
+            href=build_xlsx("Hazard exposure", groups, rows, banner),
+            download=filename, className="ps-btn",
             style={"display": "block", "textAlign": "center", "textDecoration": "none",
                    "padding": "10px 16px"},
         ),
@@ -2130,19 +2347,21 @@ def load_gee_asset(n_clicks, asset_id):
     Input("gee-asset-compute-btn",    "n_clicks"),
     State("store-gee-asset",          "data"),
     State("gee-asset-name-field",     "value"),
+    State("store-thresholds",         "data"),
     prevent_initial_call=True,
 )
-def compute_gee_asset_exposure(n_clicks, asset_info, name_field):
+def compute_gee_asset_exposure(n_clicks, asset_info, name_field, thresholds):
     if not asset_info or not name_field:
         return no_update
     try:
-        features = compute_exposure_asset(asset_info["asset_id"])
+        features = compute_exposure_asset(asset_info["asset_id"],
+                                          threshold_overrides=thresholds or None)
     except Exception as e:
         return html.Div(f"GEE error: {e}",
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
-    fname = asset_info["asset_id"].split("/")[-1] + "_hazard_exposure.csv"
-    return _exposure_results_div(features, name_field, fname)
+    fname = asset_info["asset_id"].split("/")[-1] + "_hazard_exposure.xlsx"
+    return _exposure_xlsx_div(features, name_field, fname, overrides=thresholds or None)
 
 
 # ---------------------------------------------------------------------------
@@ -2466,18 +2685,28 @@ def ai_execute(pending):
     Output("store-clicked-ucode", "data", allow_duplicate=True),
     Output("store-clicked-name",  "data", allow_duplicate=True),
     Output("infra-level-section", "style"),
+    Output("infra-layer-select",  "options"),
+    Output("infra-layer-select",  "value"),
+    Output("infra-layer-select",  "placeholder"),
     Input("infra-country-select", "value"),
     prevent_initial_call=True,
 )
 def infra_on_country_select(country):
     # Analyses are adm2-only: selecting a country hard-sets the adm2 level and
     # zooms to the country, so the map is immediately clickable for districts.
+    # Also repopulate the facility-layer dropdown with THIS country's uploaded,
+    # source-qualified layers (empty if none are ingested yet).
     if not country:
-        return None, None, None, None, None, None, {"display": "none"}
+        return (None, None, None, None, None, None, {"display": "none"},
+                [], None, "— select a country first —")
     ucode  = get_country_ucode(country)
     bounds = get_country_bounds(ucode)
+    options = _infra_layer_options(country)
+    value   = options[0]["value"] if options else None
+    placeholder = ("— select a facility layer —" if options
+                   else "— no infrastructure data for this country yet —")
     return (country, ucode, bounds, "adm2 (Districts/Counties)", None, None,
-            {"display": "block"})
+            {"display": "block"}, options, value, placeholder)
 
 
 @app.callback(
@@ -2518,15 +2747,17 @@ def infra_toggle_compute(clicked_ucode, level):
     Input("infra-layer-select",       "value"),
     Input("infra-asset-load-btn",     "n_clicks"),
     Input("store-tab",                "data"),
+    Input("store-country",            "data"),
     State("infra-asset-input",        "value"),
     State("store-infra-viz",          "data"),
     prevent_initial_call=True,
 )
-def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
+def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
     """Picking/loading a facility layer previews ALL points for the country
     (no AOI) on the dedicated infra-points-tile. infra_compute later overwrites
     it with the AOI-clipped points. Same path for every layer → uniform.
-    Also fires on entering the Infra tab so the default (Schools) draws."""
+    Also fires on entering the Infra tab so the default (Schools) draws.
+    The asset is resolved for the selected country from INFRA_ASSETS."""
     err_style = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--red)"}
     ok_style  = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}
 
@@ -2539,16 +2770,29 @@ def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
         # (store-infra-viz set) so we don't overwrite the AOI-clipped points.
         if tab != "infrastructure" or not layer_name or infra_viz:
             return no_update, no_update, no_update, no_update, no_update
-        asset_id = INFRA_LAYERS[layer_name]["asset"]
-        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        if not asset_id:
+            return no_update, no_update, no_update, no_update, no_update
+        color    = infra_layer_style(layer_name)["color"].lstrip("#")
         label    = layer_name
         fit      = False
-    elif trig == "infra-layer-select":
+    elif trig in ("infra-layer-select", "store-country"):
+        # Layer picked, or country switched: reload the layer for that country.
+        # On a country switch, infra_on_country_select already zooms to the
+        # country via store-bounds, so don't also fit to the asset bounds.
+        # store-country is shared with the Analysis tab, so ignore its changes
+        # unless we're actually on the Infrastructure tab.
+        if trig == "store-country" and tab != "infrastructure":
+            return no_update, no_update, no_update, no_update, no_update
         if not layer_name:
             return None, "", ok_style, "", no_update
-        asset_id = INFRA_LAYERS[layer_name]["asset"]
-        color    = INFRA_LAYERS[layer_name]["color"].lstrip("#")
+        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        if not asset_id:
+            return None, "Select a country first.", ok_style, "", no_update
+        color    = infra_layer_style(layer_name)["color"].lstrip("#")
         label    = layer_name
+        if trig == "store-country":
+            fit = False
     else:
         if not asset_input or not asset_input.strip():
             return no_update, no_update, no_update, no_update, no_update
@@ -2571,23 +2815,130 @@ def infra_load_asset(layer_name, _n, tab, asset_input, infra_viz):
 
 # ── Compute (dispatches on mode) ──────────────────────────────────────────────
 
-def _csv_href(fieldnames, rows, comment=None):
-    import io, csv as _csv, urllib.parse
-    buf = io.StringIO()
-    if comment:
-        buf.write("# " + comment + "\n")
-    writer = _csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
-    return "data:text/csv;charset=utf-8," + urllib.parse.quote(buf.getvalue())
+# ── Styled Excel (.xlsx) export ───────────────────────────────────────────────
+# Pastel exposed/non-exposed cell fills for 0/1 site-flag columns.
+_XLSX_GREEN = "#E2F0D9"   # 0 = not exposed
+_XLSX_RED   = "#F8CBAD"   # 1 = exposed
+_XLSX_HDR   = "#1CABE2"   # header fill (UNICEF cyan)
+_XLSX_GRP   = "#D9EEF7"   # group-title fill (light cyan)
+_XLSX_MIME  = ("application/vnd.openxmlformats-officedocument."
+               "spreadsheetml.sheet")
 
 
-def _infra_download(fieldnames, rows, filename, comment=None):
-    """Secondary (ghost) download link, demoted below the visual summary."""
+def _thresholds_banner(topics, overrides):
+    """One text line per selected topic's hazards: 'Hazard >= value unit (default|
+    custom)'. Reused by every export banner and the panel note."""
+    lines = []
+    for t in topics or []:
+        for h in HAZARD_TOPICS.get(t, []):
+            hz      = HAZARD_MAP.get(h, {})
+            default = hz.get("threshold")
+            if default is None:
+                continue
+            thr    = (overrides or {}).get(h, default)
+            units  = (HAZARD_INFO.get(h) or {}).get("units", "")
+            tag    = "custom" if h in (overrides or {}) else "default"
+            unit_s = f" {units}" if units else ""
+            lines.append(f"{_hazard_label(h)} >= {thr:g}{unit_s} ({tag})")
+    return lines
+
+
+def build_xlsx(sheet_name, groups, rows, banner_lines=None):
+    """Build a styled .xlsx workbook and return a base64 data-URI for an <a> link.
+
+    `groups`: ordered [{title, columns:[{key,label,kind}], color?}]. `kind` is one
+    of 'flag' (0/1 -> pastel red/green), 'int', 'float', 'text'. `rows`: list of
+    dicts keyed by column 'key'. `banner_lines`: optional text lines shown merged
+    across the top (e.g. title + thresholds used).
+    """
+    import io, base64
+    import xlsxwriter
+
+    flat_cols = [c for g in groups for c in g["columns"]]
+    ncols = len(flat_cols)
+
+    buf = io.BytesIO()
+    wb  = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws  = wb.add_worksheet(sheet_name[:31] or "Sheet1")
+
+    f_banner   = wb.add_format({"bold": True, "font_size": 11, "align": "left",
+                                "valign": "vcenter", "text_wrap": False})
+    f_note     = wb.add_format({"font_size": 9, "font_color": "#595959",
+                                "align": "left", "valign": "vcenter"})
+    f_grp      = wb.add_format({"bold": True, "align": "center", "valign": "vcenter",
+                                "bg_color": _XLSX_GRP, "border": 1})
+    f_hdr      = wb.add_format({"bold": True, "align": "center", "valign": "vcenter",
+                                "bg_color": _XLSX_HDR, "font_color": "white",
+                                "border": 1, "text_wrap": True})
+    f_text     = wb.add_format({"border": 1})
+    f_int      = wb.add_format({"border": 1, "num_format": "#,##0"})
+    f_float    = wb.add_format({"border": 1, "num_format": "0.####"})
+    f_flag0    = wb.add_format({"border": 1, "align": "center",
+                                "bg_color": _XLSX_GREEN})
+    f_flag1    = wb.add_format({"border": 1, "align": "center",
+                                "bg_color": _XLSX_RED, "bold": True})
+
+    r = 0
+    # Banner rows (merged across all columns).
+    for i, line in enumerate(banner_lines or []):
+        ws.merge_range(r, 0, r, ncols - 1, line,
+                       f_banner if i == 0 else f_note)
+        r += 1
+    if banner_lines:
+        r += 1  # spacer
+
+    # Group-title row (merged per group) + column-label row.
+    grp_row, hdr_row = r, r + 1
+    c = 0
+    for g in groups:
+        span = len(g["columns"])
+        if span == 1:
+            ws.write(grp_row, c, g["title"], f_grp)
+        else:
+            ws.merge_range(grp_row, c, grp_row, c + span - 1, g["title"], f_grp)
+        for col in g["columns"]:
+            ws.write(hdr_row, c, col["label"], f_hdr)
+            c += 1
+    data_row0 = hdr_row + 1
+
+    # Data rows.
+    fmt_for = {"int": f_int, "float": f_float, "text": f_text}
+    for ri, row in enumerate(rows):
+        c = 0
+        for col in flat_cols:
+            v = row.get(col["key"], "")
+            kind = col["kind"]
+            if kind == "flag":
+                iv = int(v) if v not in ("", None) else 0
+                ws.write(data_row0 + ri, c, iv, f_flag1 if iv else f_flag0)
+            elif kind in ("int", "float"):
+                ws.write(data_row0 + ri, c,
+                         v if v not in ("", None) else "", fmt_for[kind])
+            else:
+                ws.write(data_row0 + ri, c, "" if v is None else v, f_text)
+            c += 1
+
+    # Column widths + freeze + autofilter.
+    c = 0
+    for col in flat_cols:
+        width = 22 if col["kind"] == "text" else (max(len(col["label"]) + 2, 10))
+        ws.set_column(c, c, width)
+        c += 1
+    ws.freeze_panes(data_row0, 0)
+    if rows:
+        ws.autofilter(hdr_row, 0, data_row0 + len(rows) - 1, ncols - 1)
+
+    wb.close()
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:{_XLSX_MIME};base64,{b64}"
+
+
+def _infra_download(groups, rows, filename, banner_lines=None):
+    """Secondary (ghost) styled-Excel download link, below the visual summary."""
     return html.A(
-        "⬇  Download full data (CSV)",
-        href=_csv_href(fieldnames, rows, comment=comment), download=filename,
-        className="ps-btn-ghost",
+        "⬇  Download full data (Excel)",
+        href=build_xlsx("Facility exposure", groups, rows, banner_lines),
+        download=filename, className="ps-btn-ghost",
         style={"display": "block", "textAlign": "center", "textDecoration": "none",
                "padding": "9px 16px", "marginTop": "10px"},
     )
@@ -2647,9 +2998,11 @@ def _infra_panel(title, metric_cards, bar_rows, download, caption=None):
     return html.Div(className="ps", children=children)
 
 
-def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
+def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
+                          overrides=None):
     """Merged per-hazard rows: exposed children (bar) + '· N facilities' from
-    the facility-site tally, with subhazard child-population detail rows."""
+    the facility-site tally, with subhazard child-population detail rows. Each
+    row shows the effective threshold used (custom overrides honored)."""
     tdata = sorted(
         ({"topic": t,
           "pop":  int(round((per_topic or {}).get(t) or 0)),
@@ -2662,6 +3015,10 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
         topic = td["topic"]
         pct   = (td["pop"] / total * 100) if total else 0
         color = TOPIC_COLORS.get(topic, "#888")
+        # Single-hazard topics show the threshold inline; multi-hazard topics
+        # show it per-subhazard on the detail rows below.
+        hazards = HAZARD_TOPICS.get(topic, [])
+        thr_txt = _eff_threshold(hazards[0], overrides) if len(hazards) == 1 else ""
         # Bar row with an extra facility-count suffix.
         header = html.Div([
             html.Div(className="info-row", children=[
@@ -2676,6 +3033,9 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
                               style={"color": "var(--lo)"}),
                 ]),
             ]),
+            (html.Div(thr_txt, className="info-pct",
+                      style={"color": "var(--lo)", "fontSize": "0.7rem",
+                             "marginTop": "1px"}) if thr_txt else None),
             html.Div(className="bar-track", children=[
                 html.Div(className="bar-fill",
                          style={"width": f"{min(100, pct)}%", "background": color}),
@@ -2685,8 +3045,13 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
             sub_rows = []
             for h in HAZARD_TOPICS[topic]:
                 hc = int(round((per_sub or {}).get(h) or 0))
+                thr = _eff_threshold(h, overrides)
                 sub_rows.append(html.Div(className="info-row", children=[
-                    html.Span(f"└ {_hazard_label(h)}", className="info-lbl",
+                    html.Span([f"└ {_hazard_label(h)}",
+                               html.Span(f"  {thr}" if thr else "",
+                                         style={"color": "var(--lo)",
+                                                "fontSize": "0.9em"})],
+                              className="info-lbl",
                               style={"paddingLeft": "22px", "color": "var(--lo)",
                                      "fontWeight": "400", "fontSize": "0.85em"}),
                     html.Span(f"{hc:,}" if hc else "—", className="info-val",
@@ -2715,9 +3080,12 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total):
     State("store-clicked-name",   "data"),
     State("store-level",          "data"),
     State("infra-topic-select",   "value"),
+    State({"type": "infra-threshold", "index": ALL}, "value"),
+    State({"type": "infra-threshold", "index": ALL}, "id"),
     prevent_initial_call=True,
 )
-def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
+def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
+                  thr_values, thr_ids):
     """Single combined analysis: exposed population (Voronoi catchments) +
     exposed facilities (site hazard). Renders panel + map; per-facility CSV in
     phase 2."""
@@ -2729,15 +3097,21 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
                              "to bound the analysis."), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
+    overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
 
     color = "e67e22"
-    for meta in INFRA_LAYERS.values():
-        if meta["asset"] == asset_id:
-            color = meta["color"].lstrip("#")
-            break
+    for layers in INFRA_ASSETS.values():
+        for layer_name, layer_asset in layers.items():
+            if layer_asset == asset_id:
+                color = infra_layer_style(layer_name)["color"].lstrip("#")
+                break
+        else:
+            continue
+        break
 
     try:
-        r = compute_facility_combined(asset_id, adm2_ucode, topics_sel)
+        r = compute_facility_combined(asset_id, adm2_ucode, topics_sel,
+                                      threshold_overrides=overrides or None)
     except Exception as e:
         return (_infra_error(f"GEE error: {e}"), *nu)
 
@@ -2760,12 +3134,17 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
 
     items = _infra_combined_items(r.get("per_topic_exposed"),
                                   r.get("per_subhazard_exposed"),
-                                  site_tally, sel_topics, total)
+                                  site_tally, sel_topics, total,
+                                  overrides=overrides or None)
 
+    n_custom = len(overrides or {})
+    thr_note = (f"{n_custom} custom threshold(s) applied"
+                if n_custom else "Standard (default) thresholds")
     where = region_name or "the selected district"
     caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
                "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
-               "rows show exposed children · facilities whose site is in that hazard.")
+               "rows show exposed children · facilities whose site is in that "
+               f"hazard. {thr_note}.")
 
     panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
 
@@ -2781,7 +3160,8 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics):
     cells = r.get("voronoi_geojson") or no_update
 
     viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color}
-    pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel}
+    pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
+               "overrides": overrides or None}
     placeholder = html.Div("Preparing per-facility download…",
                            className="ps-caption", style={"padding": "4px 0"})
 
@@ -2800,7 +3180,8 @@ def infra_compute_perfacility(pending):
         return no_update
     try:
         r = compute_facility_combined(pending["asset_id"], pending["ucode"],
-                                      pending.get("topics"))
+                                      pending.get("topics"),
+                                      threshold_overrides=pending.get("overrides"))
     except Exception as e:
         return html.Div(f"Per-facility data failed: {e}", className="ps-caption",
                         style={"color": "var(--red)"})
@@ -2835,16 +3216,61 @@ def infra_compute_perfacility(pending):
             row[h] = round(v, 4) if v is not None else ""
         rows.append(row)
 
-    fieldnames = ["name", "lon", "lat", "voronoi_pop", "exposed_pop"] \
-                 + topic_cols + int_cols
-    comment = ("voronoi_pop/exposed_pop = children in this facility's "
-               "nearest-neighbour catchment (non-overlapping → summable); "
-               "topic columns are 0/1 site flags; hazard columns are raw "
-               "intensity in native units "
-               + "; ".join(f"{h}={ (HAZARD_INFO.get(h) or {}).get('units','') }"
-                           for h in int_cols) + ".")
-    return _infra_download(fieldnames, rows, "infra_facility_exposure.csv",
-                           comment=comment)
+    # Column groups drive the styled workbook's merged header + cell formats.
+    groups = [
+        {"title": "Facility", "columns": [
+            {"key": "name", "label": "Name",      "kind": "text"},
+            {"key": "lon",  "label": "Longitude", "kind": "float"},
+            {"key": "lat",  "label": "Latitude",  "kind": "float"},
+        ]},
+        {"title": "Catchment population (children)", "columns": [
+            {"key": "voronoi_pop", "label": "In catchment", "kind": "int"},
+            {"key": "exposed_pop", "label": "Exposed",      "kind": "int"},
+        ]},
+        {"title": "Site in hazard (1 = exposed)", "columns": [
+            {"key": t, "label": t, "kind": "flag"} for t in topic_cols
+        ]},
+        {"title": "Hazard intensity at site (native units)", "columns": [
+            {"key": h,
+             "label": f"{_hazard_label(h)}"
+                      + (f" ({(HAZARD_INFO.get(h) or {}).get('units','')})"
+                         if (HAZARD_INFO.get(h) or {}).get("units") else ""),
+             "kind": "float"}
+            for h in int_cols
+        ]},
+    ]
+    banner = ["Facility exposure — per-facility detail"]
+    banner += _thresholds_banner(pending.get("topics")
+                                 or [t for t in HAZARD_TOPICS
+                                     if t not in EXPOSURE_ONLY_TOPICS],
+                                 pending.get("overrides"))
+    banner.append("Catchment population uses each facility's nearest-neighbour "
+                  "(Voronoi) catchment (non-overlapping, summable). Site flags and "
+                  "Exposed reflect the thresholds above; intensity columns are raw "
+                  "native values.")
+    return _infra_download(groups, rows, "infra_facility_exposure.xlsx",
+                           banner_lines=banner)
+
+
+# ── Clear infra map layers when leaving the Infrastructure tab ─────────────────
+
+@app.callback(
+    Output("infra-selection-tile", "url",  allow_duplicate=True),
+    Output("infra-pop-tile",       "url",  allow_duplicate=True),
+    Output("infra-points-tile",    "url",  allow_duplicate=True),
+    Output("infra-voronoi-geojson","data", allow_duplicate=True),
+    Output("store-infra-viz",      "data", allow_duplicate=True),
+    Input("store-tab",             "data"),
+    prevent_initial_call=True,
+)
+def infra_clear_layers_on_leave(tab):
+    """The infra tiles live in dedicated top-level components (not the shared
+    data-layers group), so nothing clears them on tab change. Blank them when
+    navigating away so they don't linger over other tabs' maps. Re-entering the
+    tab redraws points via infra_load_asset."""
+    if tab == "infrastructure":
+        return (no_update,) * 5
+    return "", "", "", None, None
 
 
 # ── Map legend overlay (top-left) ─────────────────────────────────────────────
