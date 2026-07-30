@@ -23,6 +23,7 @@ from config import (
     HAZARD_VIS_PALETTES, SELF_MASK_HAZARDS, GLOBAL_GEOMETRY,
     ADMIN_DATA, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     MHC_OPTIONS, MHI_OPTIONS, SUB_TOPIC_DETAIL,
+    POP_ASSET_TMPL, POP_VIS,
 )
 
 
@@ -73,9 +74,9 @@ def _exposed_for_hazard(hazard, childpop, threshold=None):
 
 @lru_cache(maxsize=1)
 def build_core_images():
-    org_childpop   = ee.ImageCollection("projects/unicef-ccri/assets/population/worldpop_T_U18_2025_CN_100m")
-    org_childpop_m = ee.ImageCollection("projects/unicef-ccri/assets/population/worldpop_T_M_U18_2025_CN_100m")
-    org_childpop_f = ee.ImageCollection("projects/unicef-ccri/assets/population/worldpop_T_F_U18_2025_CN_100m")
+    org_childpop   = ee.ImageCollection(POP_ASSET_TMPL.format("T_U18"))
+    org_childpop_m = ee.ImageCollection(POP_ASSET_TMPL.format("T_M_U18"))
+    org_childpop_f = ee.ImageCollection(POP_ASSET_TMPL.format("T_F_U18"))
 
     childpop   = org_childpop.mosaic().select(0).rename("population")
     childpop_m = org_childpop_m.mosaic().select(0).rename("population_m")
@@ -432,6 +433,20 @@ def get_hazard_tile_url(hazard_name):
     return mid["tile_fetcher"].url_format, vis
 
 
+@_ttl_cached(cache=_tile_cache(16), lock=_tile_lock)
+def get_population_tile_url(class_id):
+    """Tile URL for a WorldPop population class ('T', 'T_F_U18', ...).
+
+    Uses the shared fixed POP_VIS stops rather than a per-layer percentile
+    stretch, so every class renders with one getMapId call (no global
+    reduceRegion) and the six classes stay directly comparable to each other.
+    """
+    img = (ee.ImageCollection(POP_ASSET_TMPL.format(class_id))
+           .mosaic().select(0).selfMask())
+    mid = img.getMapId(POP_VIS)
+    return mid["tile_fetcher"].url_format, POP_VIS
+
+
 @_ttl_cached(cache=_tile_cache(256), lock=_tile_lock)
 def get_admin_boundary_tile_url(admin_level, country_ucode):
     cfg = ADMIN_DATA[admin_level]
@@ -451,6 +466,63 @@ def get_selected_feature_tile_url(admin_level, feature_ucode):
     styled = fc.style(color="FFD700", width=2, fillColor="FFD70030")
     mid    = styled.getMapId({})
     return mid["tile_fetcher"].url_format
+
+
+# ---------------------------------------------------------------------------
+# Analysis result layers (Analysis tab) — the computed AOI drawn on the map.
+# Args are hashable (tuples, not dicts) so these can sit behind the TTL cache.
+# ---------------------------------------------------------------------------
+
+def _overrides_from_key(thr_key):
+    """('name', value) pairs -> {name: value}. Tuples keep the cache key stable."""
+    return {name: val for name, val in (thr_key or ())}
+
+
+@_ttl_cached(cache=_tile_cache(32), lock=_tile_lock)
+def get_exposed_pop_tile_url(feature_ucode, admin_level, topics_key, thr_key=()):
+    """Child population masked to the union of the selected topics' hazard
+    footprints, clipped to the AOI — the default map view of an analysis result.
+
+    `topics_key` / `thr_key` are tuples (sorted by the caller) so repeated
+    Computes of the same selection are served from cache.
+    """
+    core     = build_core_images()
+    childpop = core["childpop"]
+    region   = _admin_region(admin_level, feature_ucode)
+
+    topics = [t for t in topics_key if t in HAZARD_TOPICS] or list(HAZARD_TOPICS)
+    _, topic_masks = apply_threshold_overrides(
+        core, _overrides_from_key(thr_key), topics)
+    union = _topic_union_mask(core, topics, topic_masks)
+
+    img = childpop.updateMask(union).clip(region).selfMask()
+    mid = img.getMapId(POP_VIS)
+    return mid["tile_fetcher"].url_format, POP_VIS
+
+
+@_ttl_cached(cache=_tile_cache(64), lock=_tile_lock)
+def get_topic_tile_url_clipped(topic_name, color, feature_ucode, admin_level,
+                               thr_key=()):
+    """One topic's hazard footprint clipped to the AOI — built lazily, only
+    when the user switches that topic's legend eye on."""
+    core   = build_core_images()
+    region = _admin_region(admin_level, feature_ucode)
+    _, topic_masks = apply_threshold_overrides(
+        core, _overrides_from_key(thr_key), [topic_name])
+    vis = {"palette": [color], "min": 0, "max": 1}
+    mid = topic_masks[topic_name].clip(region).getMapId(vis)
+    return mid["tile_fetcher"].url_format, vis
+
+
+@lru_cache(maxsize=512)
+def get_feature_bounds(admin_level, feature_ucode):
+    """[[minlat, minlon], [maxlat, maxlon]] for any admin unit — used to fit
+    the map to a computed AOI. Mirrors get_country_bounds for sub-national units."""
+    coords = (_admin_region(admin_level, feature_ucode)
+              .bounds(1).coordinates().getInfo()[0])
+    lons = [c[0] for c in coords]
+    lats = [c[1] for c in coords]
+    return [[min(lats), min(lons)], [max(lats), max(lons)]]
 
 
 # ---------------------------------------------------------------------------
@@ -697,11 +769,18 @@ def compute_exposure_custom(geojson_dict, threshold_overrides=None):
 _INFRA_TOPICS = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
 
 
+def _admin_region(admin_level, feature_ucode):
+    """Resolve the geometry of any admin unit by level + ucode (the analysis
+    bound). Shared by the Infrastructure tab and the Analysis map layers."""
+    cfg = ADMIN_DATA[admin_level]
+    fc  = ee.FeatureCollection(cfg["asset"]).filter(
+        ee.Filter.eq("ucode", feature_ucode))
+    return fc.geometry()
+
+
 def _adm2_region(adm2_ucode):
     """Resolve the geometry of an adm2 unit by ucode (the analysis bound)."""
-    cfg = ADMIN_DATA["adm2 (Districts/Counties)"]
-    fc  = ee.FeatureCollection(cfg["asset"]).filter(ee.Filter.eq("ucode", adm2_ucode))
-    return fc.geometry()
+    return _admin_region("adm2 (Districts/Counties)", adm2_ucode)
 
 
 _ADM2_POP_ASSET = "projects/unicef-ccri/assets/global_boundary/admin2_pop_geom"
@@ -969,10 +1048,9 @@ def compute_facility_site(asset_id, adm2_ucode, topics=None, threshold_overrides
 
 
 # Population raster vis (yellow -> red); shared with the map legend.
-INFRA_POP_VIS = {
-    "min": 0, "max": 50,
-    "palette": ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"],
-}
+# Single source of truth lives in config.POP_VIS so the Infrastructure tab and
+# the Population layers render identically.
+INFRA_POP_VIS = POP_VIS
 
 
 @_ttl_cached(cache=_tile_cache(32), lock=_tile_lock)

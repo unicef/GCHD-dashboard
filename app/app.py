@@ -15,11 +15,14 @@ import json as _json_mod
 
 from config import (
     HAZARD_TOPICS, TOPIC_COLORS, ADMIN_DATA,
-    HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL,
+    HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL, HAZARD_VIS_PALETTES,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3,
     INFRA_COUNTRIES, INFRA_ASSETS, infra_layer_style,
     is_binary_hazard,
+    POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
+    is_pop_layer, pop_class_of,
+    gradient_spec, swatch_spec, vis_gradient_spec,
 )
 from ai_core import initialize_ai, ask_gemini
 from auth import request_otp, verify_otp, SESSION_HOURS
@@ -35,6 +38,8 @@ from gee_core import (
     get_feature_at_point, compute_exposure, compute_topic_overlap,
     get_infra_tile_url, compute_facility_combined,
     get_clipped_pop_tile_url, INFRA_POP_VIS,
+    get_population_tile_url, get_exposed_pop_tile_url,
+    get_topic_tile_url_clipped, get_feature_bounds,
 )
 
 # ---------------------------------------------------------------------------
@@ -62,6 +67,11 @@ MH_LAYERS  = ["Multi Hazard Count", "Multi Hazard Intensity"]
 HAZ_LAYERS = [h["name"] for h in HAZARDS if h["name"] != "Pixel Based Hazard Score"]
 ALL_LAYERS = MH_LAYERS + HAZ_LAYERS   # order matches pattern-match order in layout
 
+# Analysis tab: one map slot per selectable hazard topic. Slots are declared
+# once at layout time and filled lazily (only when a topic's legend eye is
+# switched on), so a Compute never fans out into a tile request per topic.
+ANALYSIS_TOPIC_SLOTS = len(HAZARD_TOPICS)
+
 
 def _hazard_info_body(info):
     if not isinstance(info, dict):
@@ -88,6 +98,8 @@ def _hazard_info_body(info):
 def _layer_label(name):
     if name in ("Multi Hazard Count", "Multi Hazard Intensity"):
         return name
+    if is_pop_layer(name):
+        return POP_LAYER_MAP.get(pop_class_of(name), {}).get("label", name)
     # "flood_river_2yr" → "Flood River 2yr"
     return " ".join(w.capitalize() for w in name.replace("-", " ").split("_"))
 
@@ -97,6 +109,8 @@ def _layer_meta(name):
         return f"{len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)} hazard topics combined"
     if name == "Multi Hazard Intensity":
         return "Pixel-based hazard score (MHI)"
+    if is_pop_layer(name):
+        return "WorldPop 2025 · 100 m"
     h = HAZARD_MAP.get(name)
     return h["id"].split("/")[-1] if h else ""
 
@@ -242,13 +256,26 @@ def tab_hazard_layers():
         else:
             items.extend(layer_divs)
 
+    # ── Population section — WorldPop 2025 grids, grouped by age band. Reuses
+    # _layer_item so selection/click behaviour matches the hazard layers. ──
+    items.append(html.Div("Population", className="layer-section-header"))
+    for group in dict.fromkeys(p["group"] for p in POPULATION_LAYERS):
+        items.append(html.Div(
+            group,
+            className="layer-section-header",
+            style={"paddingLeft": "24px", "fontWeight": "500",
+                   "fontSize": "0.65rem", "color": "var(--mid)",
+                   "background": "var(--panel)", "borderTop": "none"},
+        ))
+        items.extend(_layer_item(POP_PREFIX + p["id"])
+                     for p in POPULATION_LAYERS if p["group"] == group)
+
     return html.Div(id="tab-hazard", children=[
         html.Div(className="ph", children=[
             html.Div("Hazard Layers", className="ph-title"),
             html.Div("Select a layer to display on the map", className="ph-sub"),
         ]),
         html.Div(items, className="layer-list"),
-        html.Div(id="hazard-legend"),
     ])
 
 
@@ -323,9 +350,8 @@ def tab_exposure():
 
 
 def tab_mh():
-    mhc_pal = ["#ffffd4","#fed98e","#fe9929","#d95f0e","#993404"]
-    mhi_pal = ["#000004","#3b0f70","#8c2981","#de4968","#fe9f6d"]
-    n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
+    # Colour ramps for these layers live in the floating map legend
+    # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
         html.Div(className="ph", children=[
             html.Div("Multi Hazard Indicators", className="ph-title"),
@@ -342,13 +368,6 @@ def tab_mh():
             ),
         ]),
         html.Div(className="ps", children=[
-            html.Div("Count layer legend", className="ps-label"),
-            html.Div(className="legend-bar",
-                     style={"background": f"linear-gradient(to right,{','.join(mhc_pal)})"}),
-            html.Div(className="legend-range",
-                     children=[html.Span("1 topic"), html.Span(f"{n} topics")]),
-        ]),
-        html.Div(className="ps", children=[
             html.Div("Hazard Intensity (MHI)", className="ps-label"),
             html.Div("Areas with pixel hazard score above global percentile", className="ps-caption"),
             dcc.Dropdown(
@@ -357,13 +376,6 @@ def tab_mh():
                 value=None, placeholder="None",
                 clearable=True, searchable=False,
             ),
-        ]),
-        html.Div(className="ps", children=[
-            html.Div("Intensity layer legend", className="ps-label"),
-            html.Div(className="legend-bar",
-                     style={"background": f"linear-gradient(to right,{','.join(mhi_pal)})"}),
-            html.Div(className="legend-range",
-                     children=[html.Span("Low (0)"), html.Span("High (10)")]),
         ]),
         html.Div(className="exposure-method-note", children=[
             html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
@@ -780,8 +792,17 @@ def tab_ai():
 
 def map_component():
     return html.Div(id="map-container", children=[
-        html.Div(id="infra-map-legend", className="map-legend",
-                 style={"display": "none"}),
+        # Unified floating legend — every tab renders into this one overlay
+        # (see render_map_legend). Collapsible via the header chevron.
+        html.Div(id="map-legend", className="map-legend",
+                 style={"display": "none"}, children=[
+            html.Div(id="map-legend-header", className="map-legend-header",
+                     n_clicks=0, children=[
+                html.Span("Legend", className="map-legend-title"),
+                html.I(className="bi bi-chevron-up", id="map-legend-chevron"),
+            ]),
+            html.Div(id="map-legend-body"),
+        ]),
         # Basemap toggle (map ↔ satellite) — bottom-left floating control.
         html.Button(
             [html.I(className="bi bi-globe-americas"), html.Span("Satellite")],
@@ -810,6 +831,10 @@ def map_component():
                 dl.TileLayer(id="sat-basemap", url=ESRI_SAT,
                              attribution=ESRI_ATTR, maxZoom=19, opacity=0),
                 dl.ZoomControl(position="topright"),
+                # Metric scalebar — bottom-right keeps it clear of the
+                # basemap toggle (bottom-left) and the attribution strip.
+                dl.ScaleControl(position="bottomright", metric=True,
+                                imperial=False, maxWidth=140),
                 dl.LayerGroup(id="data-layers"),
                 dl.LayerGroup(id="boundary-layers"),
                 dl.LayerGroup(id="selection-layer"),
@@ -831,6 +856,15 @@ def map_component():
                                        "fillOpacity": 0.0, "opacity": 0.7}},
                 ),
                 dl.TileLayer(id="infra-points-tile", url="", opacity=0.9),
+                # ── Analysis result layers: exposed-population raster plus a
+                # fixed pool of per-topic hazard slots. Declared at layout time
+                # (not inside a LayerGroup) so the clientside eye toggles bind
+                # to stable ids and hiding a layer costs no server round-trip.
+                dl.TileLayer(id="analysis-selection-tile", url="", opacity=0.75),
+                dl.TileLayer(id="analysis-exposed-tile", url="", opacity=0.85),
+                *[dl.TileLayer(id={"type": "analysis-topic-tile", "index": i},
+                               url="", opacity=0)
+                  for i in range(ANALYSIS_TOPIC_SLOTS)],
             ],
             style={"height": "100vh", "width": "100%"},
         ),
@@ -984,6 +1018,17 @@ app.layout = html.Div(id="app-root", children=[
     # Shared custom hazard thresholds {hazard_name: value} (non-default only).
     # Written by the Exposure-tab editor; read by the exposure visualization.
     dcc.Store(id="store-thresholds",    data={}),
+    # Active legend rows (list of specs from config.py) for the floating overlay.
+    dcc.Store(id="store-legend",        data=None),
+    # Layer whose info popover is open (None = closed). Drives the open/close
+    # toggle and tells the clientside positioner which button to anchor to.
+    dcc.Store(id="store-info-open",     data=None),
+    # Last computed analysis result as map layers: {ucode, level, topics, thr}.
+    # Survives tab switches so returning to Analysis restores the view for free.
+    dcc.Store(id="store-analysis-viz",  data=None),
+    # Lazily fetched per-topic clipped tiles {slot_index: url} — populated only
+    # when a topic's legend eye is first switched on.
+    dcc.Store(id="store-analysis-topic-urls", data={}),
 
     # ── Embargo gate ──
     html.Div(id="embargo-gate", children=[
@@ -1121,27 +1166,88 @@ def switch_tab(n1, n2, n3, n4, n5, n6, current):
     Output("hazard-info-panel",       "style"),
     Output("hazard-info-panel-title", "children"),
     Output("hazard-info-panel-body",  "children"),
+    Output("store-info-open",         "data"),
     Input({"type": "hazard-info-btn", "index": ALL}, "n_clicks"),
     Input("hazard-info-close",    "n_clicks"),
     Input("store-hazard-layer",   "data"),
-    State("hazard-info-panel",    "style"),
+    State("store-info-open",      "data"),
     prevent_initial_call=True,
 )
-def toggle_hazard_info(info_clicks, _close, layer_name, panel_style):
+def toggle_hazard_info(info_clicks, _close, layer_name, open_for):
+    """Open the info popover for a layer. It closes on: a second click of the
+    same button, the × button, or selecting any layer on the map.
+
+    `store-info-open` holds the layer the popover is showing (None = closed);
+    deriving this from the panel's own style is what made re-clicking a no-op.
+    """
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     if triggered == "hazard-info-close":
-        return {"display": "none"}, no_update, no_update
+        return {"display": "none"}, no_update, no_update, None
     if triggered == "store-hazard-layer":
-        # Only follow the active layer when the panel is already open
-        if not layer_name or not panel_style or panel_style.get("display") == "none":
-            return no_update, no_update, no_update
-        return no_update, _layer_label(layer_name), _hazard_info_body(HAZARD_INFO.get(layer_name, layer_name))
+        # Selecting a layer dismisses an open popover rather than retargeting
+        # it: the popover answers "what is this hazard?", so once the user
+        # moves on to loading a layer it has served its purpose and would
+        # otherwise sit over the map describing something they didn't ask about.
+        if not open_for:
+            return no_update, no_update, no_update, no_update
+        return {"display": "none"}, no_update, no_update, None
     if isinstance(triggered, dict) and triggered.get("type") == "hazard-info-btn":
-        name  = triggered["index"]
-        return {"display": "flex"}, _layer_label(name), _hazard_info_body(HAZARD_INFO.get(name, name))
-    return no_update, no_update, no_update
+        name = triggered["index"]
+        if open_for == name:                      # same button → toggle closed
+            return {"display": "none"}, no_update, no_update, None
+        return ({"display": "flex"}, _layer_label(name),
+                _hazard_info_body(HAZARD_INFO.get(name, name)), name)
+    return no_update, no_update, no_update, no_update
+
+
+# Anchor the popover to the info button that opened it, and mark that button
+# active. The layer list scrolls inside #panel, so the button's position is only
+# knowable in the browser — hence clientside. Runs after the server callback
+# has set the panel's display, and vertically clamps to stay on screen.
+app.clientside_callback(
+    """
+    function(openFor, ids) {
+        var OFF = {display: "none"};
+        var classes = (ids || []).map(function(id){
+            return (openFor && id.index === openFor)
+                ? "hazard-info-btn active" : "hazard-info-btn";
+        });
+        if (!openFor) { return [OFF, classes]; }
+
+        // Dash serialises pattern-matching ids as JSON with sorted keys, so
+        // build the exact id rather than substring-matching (layer names would
+        // otherwise collide, e.g. "fire_FRP..." inside another id).
+        var exact = JSON.stringify({index: openFor, type: "hazard-info-btn"});
+        var btn = document.getElementById(exact);
+        if (!btn) {
+            btn = (Array.prototype.find.call(
+                document.querySelectorAll(".hazard-info-btn"),
+                function(el){
+                    try { return JSON.parse(el.id).index === openFor; }
+                    catch (e) { return false; }
+                }) || null);
+        }
+        if (!btn) { return [window.dash_clientside.no_update, classes]; }
+
+        var r = btn.getBoundingClientRect();
+        var H = 260, W = 260, M = 8;             // popover height/width, margin
+        // Centre on the button, then clamp inside the viewport.
+        var top = r.top + r.height / 2 - H / 2;
+        top = Math.max(M, Math.min(top, window.innerHeight - H - M));
+        return [{
+            display: "flex", top: top + "px", left: (r.right + 10) + "px",
+            height: H + "px", width: W + "px", bottom: "auto"
+        }, classes];
+    }
+    """,
+    Output("hazard-info-panel", "style", allow_duplicate=True),
+    Output({"type": "hazard-info-btn", "index": ALL}, "className"),
+    Input("store-info-open", "data"),
+    State({"type": "hazard-info-btn", "index": ALL}, "id"),
+    prevent_initial_call=True,
+)
 
 
 # ── Hazard layer selection ────────────────────────────────────────────────────
@@ -1307,57 +1413,111 @@ def toggle_topic_group(all_clicks):
     return body_styles, chevron_styles
 
 
-# ── Hazard legend ─────────────────────────────────────────────────────────────
+# ── Legend specs per layer ────────────────────────────────────────────────────
+# Palettes are read back from the vis dict GEE actually rendered with, so the
+# legend stops can never drift from the tiles on screen.
 
-@app.callback(
-    Output("hazard-legend", "children"),
-    Input("store-hazard-layer", "data"),
-)
-def update_hazard_legend(sel):
+MHC_PALETTE = ["#ffffd4", "#fed98e", "#fe9929", "#d95f0e", "#993404"]
+MHI_PALETTE = ["#000004", "#3b0f70", "#8c2981", "#de4968", "#fe9f6d"]
+
+
+def _layer_legend_specs(sel):
+    """Legend specs for a Layers-tab selection (hazard, multi-hazard or
+    population). Returns [] when nothing meaningful is selected."""
     if not sel:
-        return None
+        return []
 
-    from config import HAZARD_VIS_PALETTES
+    if is_pop_layer(sel):
+        meta = POP_LAYER_MAP.get(pop_class_of(sel), {})
+        return [vis_gradient_spec(f"{meta.get('label', 'Population')} (per 100 m)",
+                                  POP_VIS, unit="+")]
+
     if sel == "Multi Hazard Count":
-        pal = ["#ffffd4","#fed98e","#fe9929","#d95f0e","#993404"]
-        n   = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
-        sub = [html.Span("1 topic"), html.Span(f"{n} topics")]
-    elif sel == "Multi Hazard Intensity":
-        pal = ["#000004","#3b0f70","#8c2981","#de4968","#fe9f6d"]
-        sub = [html.Span("Low (0)"), html.Span("High (10)")]
-    else:
-        hazard = HAZARD_MAP.get(sel)
-        if not hazard:
-            return None
-        pal = HAZARD_VIS_PALETTES.get(sel, ["#ffffb2","#fecc5c","#fd8d3c","#f03b20","#bd0026"])
-        sub = [html.Span("Low"), html.Span("High")]
+        n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
+        return [gradient_spec("Hazard topics (count)", MHC_PALETTE, 1, n)]
 
-    return html.Div(className="legend-wrap", children=[
-        html.Div("Legend", className="legend-label"),
-        html.Div(className="legend-bar",
-                 style={"background": f"linear-gradient(to right,{','.join(pal)})"}),
-        html.Div(className="legend-range", children=sub),
-    ])
+    if sel == "Multi Hazard Intensity":
+        return [gradient_spec("Hazard score", MHI_PALETTE, 0, 10)]
+
+    if sel not in HAZARD_MAP:
+        return []
+    pal   = HAZARD_VIS_PALETTES.get(
+        sel, ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"])
+    units = (HAZARD_INFO.get(sel) or {}).get("units", "")
+    return [gradient_spec(_layer_label(sel), pal, "Low", "High", unit=units)]
+
+
+def _infra_legend_specs(viz):
+    """Legend for the Infrastructure tab (population raster, facility points,
+    Voronoi catchments, selected subregion) — all toggleable."""
+    if not viz:
+        return []
+    pt_color = "#" + (viz.get("color") or "e67e22")
+    return [
+        vis_gradient_spec("Children (per 100 m)", INFRA_POP_VIS,
+                          layer_id="infra-pop", unit="+", toggleable=True),
+        swatch_spec("Facilities", pt_color,
+                    layer_id="infra-points", toggleable=True),
+        swatch_spec("Facility catchments", "#1CABE2", shape="line",
+                    layer_id="infra-catchments", toggleable=True),
+        swatch_spec("Selected subregion", "#f1c40f", shape="line",
+                    layer_id="infra-selection", toggleable=True),
+    ]
+
+
+def _analysis_legend_specs(viz):
+    """Legend for a computed Analysis result: the exposed-population raster is
+    shown by default; each selected hazard topic gets a row that starts hidden
+    so the map stays readable (its tile is fetched only on first reveal)."""
+    if not viz:
+        return []
+    specs = [
+        vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
+                          layer_id="analysis-exposed", unit="+",
+                          toggleable=True),
+    ]
+    for i, topic in enumerate(viz.get("topics") or []):
+        if i >= ANALYSIS_TOPIC_SLOTS:
+            break
+        specs.append(swatch_spec(
+            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
+            layer_id=f"analysis-topic-{i}", toggleable=True, visible=False))
+    specs.append(swatch_spec("Selected region", "#FFD700", shape="line",
+                             layer_id="analysis-selection", toggleable=True))
+    return specs
 
 
 # ── Map data layers ───────────────────────────────────────────────────────────
 
 @app.callback(
     Output("data-layers", "children"),
+    Output("store-legend", "data"),
     Input("store-hazard-layer",   "data"),
     Input("store-exposure-topic", "data"),
     Input("mhc-select",           "value"),
     Input("mhi-select",           "value"),
     Input("store-tab",            "data"),
     Input("store-thresholds",     "data"),
+    Input("store-infra-viz",      "data"),
+    Input("store-analysis-viz",   "data"),
 )
-def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds):
-    layers = []
+def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
+                       infra_viz, analysis_viz):
+    """Build this tab's map tiles and the legend specs that describe them.
+
+    Single source of truth for the legend: whichever tab is active writes its
+    specs here, so the floating overlay always matches what's on the map.
+    """
+    layers, specs = [], []
 
     # Infrastructure layers live in dedicated top-level components
-    # (infra-pop-tile / infra-points-tile / etc.), not in this group.
+    # (infra-pop-tile / infra-points-tile / etc.), not in this group — but
+    # their legend is still rendered by the shared overlay.
     if tab == "infrastructure":
-        return layers
+        return layers, _infra_legend_specs(infra_viz)
+
+    if tab == "analysis":
+        return layers, _analysis_legend_specs(analysis_viz)
 
     if tab == "hazard" and sel_layer:
         if sel_layer == "Multi Hazard Count":
@@ -1366,10 +1526,14 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds):
         elif sel_layer == "Multi Hazard Intensity":
             url, _ = get_pixel_score_tile_url()
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
+        elif is_pop_layer(sel_layer):
+            url, _ = get_population_tile_url(pop_class_of(sel_layer))
+            layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.85))
         else:
             url, _ = get_hazard_tile_url(sel_layer)
             if url:
                 layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
+        specs = _layer_legend_specs(sel_layer)
 
     elif tab == "exposure" and exp_topic:
         color = TOPIC_COLORS.get(exp_topic, "#ff0000")
@@ -1377,16 +1541,22 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds):
         # default tile when this topic has no override).
         url, _ = get_topic_tile_url_thr(exp_topic, color, thresholds or None)
         layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
+        specs = [swatch_spec(f"{exp_topic} — children exposed", color)]
 
     elif tab == "mh":
+        n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
         if mhc:
             url, _ = get_topic_count_tile_url(int(mhc))
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
+            specs.append(gradient_spec(f"Hazard count (≥ {mhc})",
+                                       MHC_PALETTE, int(mhc), n))
         if mhi:
             url, _ = get_pixel_score_percentile_tile_url(mhi)
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.65))
+            specs.append(gradient_spec(f"Hazard score (> P{mhi})",
+                                       MHI_PALETTE, 0, 10))
 
-    return layers
+    return layers, specs
 
 
 # ── Country selection ─────────────────────────────────────────────────────────
@@ -1688,9 +1858,10 @@ def update_map_view(bounds, ucode, level):
     State("store-level",          "data"),
 )
 def update_selection_layer(ucode, tab, level):
-    # On the infra tab the yellow highlight is drawn by the dedicated,
-    # toggleable infra-selection-tile instead of this group.
-    if tab == "infrastructure":
+    # On the infra and analysis tabs the yellow highlight is drawn by their
+    # dedicated, toggleable *-selection-tile components instead of this group
+    # (a LayerGroup's children can't be flipped clientside).
+    if tab in ("infrastructure", "analysis"):
         return []
     if not ucode or not level:
         return []
@@ -1818,6 +1989,7 @@ def _threshold_overrides(topic_values, threshold_ids, threshold_values):
 @app.callback(
     Output("store-exposure",      "data", allow_duplicate=True),
     Output("results-panel",       "children"),
+    Output("store-analysis-viz",  "data"),
     Input("analysis-compute-btn", "n_clicks"),
     Input("mhc-select",           "value"),
     Input("mhi-select",           "value"),
@@ -1835,14 +2007,14 @@ def _threshold_overrides(topic_values, threshold_ids, threshold_values):
 def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, country_name,
                  sel_topics, thr_values, thr_ids, level, existing):
     if not level:
-        return no_update, None
+        return no_update, None, no_update
     # Resolve region by level: adm0 uses the country; sub-national uses the click.
     if level == "adm0 (Country)":
         ucode, name = country_ucode, country_name
     else:
         ucode, name = clicked_ucode, clicked_name
     if not ucode:
-        return no_update, None
+        return no_update, None, no_update
 
     sel_topics = sel_topics or []
     overrides, sig = _threshold_overrides(sel_topics, thr_ids, thr_values)
@@ -1862,10 +2034,10 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     # (Topic/threshold edits only take effect when Compute is pressed.)
     if filter_only:
         if not existing:
-            return no_update, no_update
+            return no_update, no_update, no_update
         data = _apply_force_null(existing, ucode)
         return no_update, render_results(data, name, mhc, mhi,
-                                         data.get("_topics"), data.get("_overrides"))
+                                         data.get("_topics"), data.get("_overrides")), no_update
 
     # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
@@ -1879,7 +2051,115 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     result["_sig"]       = sig
     result["_topics"]    = sel_topics
     result["_overrides"] = overrides
-    return result, render_results(result, name, mhc, mhi, sel_topics, overrides)
+
+    # Map layers for this result. Only topics that actually have data here get a
+    # legend row — a toggle for a hazard with no local coverage is just noise.
+    map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
+                  and (result.get(t) or 0) > 0][:ANALYSIS_TOPIC_SLOTS]
+    viz = {
+        "ucode": ucode, "level": level, "name": name,
+        "topics": map_topics,
+        # Sorted tuple-of-pairs: stable, hashable cache key for the tile helpers.
+        "thr": sorted((h, v) for h, v in (overrides or {}).items()),
+    }
+    return (result,
+            render_results(result, name, mhc, mhi, sel_topics, overrides),
+            viz)
+
+
+# ── Analysis result → map layers ──────────────────────────────────────────────
+
+@app.callback(
+    Output("analysis-exposed-tile",   "url"),
+    Output("analysis-selection-tile", "url"),
+    Output("main-map", "viewport", allow_duplicate=True),
+    Output("store-analysis-topic-urls", "data"),
+    Input("store-analysis-viz", "data"),
+    Input("store-tab",          "data"),
+    prevent_initial_call=True,
+)
+def update_analysis_layers(viz, tab):
+    """Draw the computed result: child population masked to the selected
+    hazards, clipped to the AOI, plus the AOI outline, and fit the map to it.
+
+    Only these two tiles are built eagerly — per-topic hazard tiles are fetched
+    lazily on first reveal (see reveal_analysis_topic), so a Compute never fans
+    out into one GEE call per selected topic. The outline gets its own
+    component (not the shared selection-layer group) so the legend's eye can
+    flip it clientside.
+    """
+    if tab != "analysis" or not viz:
+        # Clear the rasters when leaving the tab; store-analysis-viz is kept so
+        # returning to Analysis restores the view without recomputing.
+        return "", "", no_update, {}
+
+    thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
+    try:
+        url, _ = get_exposed_pop_tile_url(
+            viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
+    except Exception:
+        return "", "", no_update, {}
+
+    # AOI outline — cached, so this is free on repeat Computes of the region.
+    try:
+        sel_url = get_selected_feature_tile_url(viz["level"], viz["ucode"])
+    except Exception:
+        sel_url = ""
+
+    viewport = no_update
+    try:
+        viewport = {"bounds": get_feature_bounds(viz["level"], viz["ucode"]),
+                    "transition": "flyToBounds"}
+    except Exception:
+        pass
+    return url, sel_url, viewport, {}
+
+
+@app.callback(
+    Output({"type": "analysis-topic-tile", "index": ALL}, "url"),
+    Input({"type": "legend-eye", "index": ALL}, "n_clicks"),
+    State({"type": "analysis-topic-tile", "index": ALL}, "url"),
+    State("store-analysis-viz", "data"),
+    prevent_initial_call=True,
+)
+def reveal_analysis_topic(_eye_clicks, existing_urls, viz):
+    """Fetch a topic's clipped hazard tile the first time its legend eye is
+    switched on — lazily, one GEE call per topic the user actually looks at.
+
+    Once a slot holds a URL it is never refetched; subsequent show/hide is a
+    pure clientside opacity flip with no server round-trip.
+    """
+    triggered = ctx.triggered_id
+    if not viz or not isinstance(triggered, dict):
+        raise dash.exceptions.PreventUpdate
+
+    # Legend eyes are shared with the infra tab; only analysis rows matter here.
+    layer_id = str(triggered.get("index", ""))
+    if not layer_id.startswith("analysis-topic-"):
+        raise dash.exceptions.PreventUpdate
+    try:
+        slot = int(layer_id.rsplit("-", 1)[1])
+    except ValueError:
+        raise dash.exceptions.PreventUpdate
+
+    topics = viz.get("topics") or []
+    if slot >= len(topics) or slot >= len(existing_urls):
+        raise dash.exceptions.PreventUpdate
+    if existing_urls[slot]:
+        raise dash.exceptions.PreventUpdate      # already fetched
+
+    topic   = topics[slot]
+    thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
+    try:
+        url, _ = get_topic_tile_url_clipped(
+            topic, TOPIC_COLORS.get(topic, "#888888"),
+            viz["ucode"], viz["level"], thr_key)
+    except Exception:
+        raise dash.exceptions.PreventUpdate
+
+    out = list(existing_urls)
+    out[slot] = url
+    return out
 
 
 def _apply_force_null(result, ucode):
@@ -3273,90 +3553,131 @@ def infra_clear_layers_on_leave(tab):
     return "", "", "", None, None
 
 
-# ── Map legend overlay (top-left) ─────────────────────────────────────────────
+# ── Unified map legend overlay (top-left) ─────────────────────────────────────
+# Every tab writes a list of legend specs (plain dicts from config.py) into
+# store-legend; this single renderer turns them into DOM. Adding a legend for a
+# new layer is therefore data, not markup.
 
-def _legend_toggle(layer, swatch, label):
-    """A legend row with a leading eye toggle (clientside-controlled)."""
-    return html.Div(className="map-legend-item", children=[
-        html.I(className="bi bi-eye-fill map-legend-eye",
-               id={"type": "infra-legend-eye", "index": layer}, n_clicks=0),
-        swatch,
-        html.Span(label, className="map-legend-item-label"),
-    ])
+def _legend_eye(layer_id, visible=True):
+    """Leading eye toggle for a legend row (clientside-controlled)."""
+    cls = "bi bi-eye-fill map-legend-eye" if visible else \
+          "bi bi-eye-slash map-legend-eye map-legend-eye-off"
+    return html.I(className=cls, n_clicks=0 if visible else 1,
+                  id={"type": "legend-eye", "index": layer_id})
 
 
-@app.callback(
-    Output("infra-map-legend", "children"),
-    Output("infra-map-legend", "style"),
-    Input("store-infra-viz",   "data"),
-    Input("store-tab",         "data"),
-)
-def infra_update_legend(viz, tab):
-    if tab != "infrastructure" or not viz:
-        return None, {"display": "none"}
+def _legend_row(spec):
+    """Render one legend spec (see config.gradient_spec / swatch_spec)."""
+    layer_id   = spec.get("layer_id")
+    toggleable = spec.get("toggleable") and layer_id
+    visible    = spec.get("visible", True)
+    eye        = _legend_eye(layer_id, visible) if toggleable else None
 
-    pal   = INFRA_POP_VIS["palette"]
-    pt_color = "#" + (viz.get("color") or "e67e22")
-    grad  = ", ".join(pal)
-    rows = [
-        html.Div("Legend", className="map-legend-title"),
-        # Population: stacked block — title line, full-width bar, min/max line.
-        html.Div(className="map-legend-pop", children=[
+    if spec["kind"] == "gradient":
+        pal  = spec.get("palette") or ["#ccc"]
+        grad = ", ".join(pal)
+        unit = spec.get("unit") or ""
+        lo   = spec.get("min", 0)
+        hi   = spec.get("max", 1)
+        return html.Div(className="map-legend-pop", children=[
             html.Div(className="map-legend-pop-head", children=[
-                html.I(className="bi bi-eye-fill map-legend-eye",
-                       id={"type": "infra-legend-eye", "index": "pop"}, n_clicks=0),
-                html.Span("Children (per 100 m)", className="map-legend-item-label"),
+                eye,
+                html.Span(spec["label"], className="map-legend-item-label"),
             ]),
             html.Div(className="legend-bar",
                      style={"background": f"linear-gradient(to right,{grad})",
                             "width": "100%"}),
-            html.Div(className="legend-range",
-                     children=[html.Span(str(INFRA_POP_VIS["min"])),
-                               html.Span(f"{INFRA_POP_VIS['max']}+")]),
-        ]),
-        # Facility points
-        _legend_toggle(
-            "points",
-            html.Span(className="map-legend-dot",
-                      style={"background": pt_color, "border": "1.5px solid #fff"}),
-            "Facilities",
-        ),
-        # Facility catchments (Voronoi cells)
-        _legend_toggle(
-            "catchments",
-            html.Span(className="map-legend-line",
-                      style={"borderTop": "1.5px solid #1CABE2"}),
-            "Facility catchments",
-        ),
-        # Selected subregion (yellow adm2 highlight)
-        _legend_toggle(
-            "selection",
-            html.Span(className="map-legend-line",
-                      style={"borderTop": "2px solid #f1c40f"}),
-            "Selected subregion",
-        ),
-    ]
-    return rows, {"display": "block"}
+            html.Div(className="legend-range", children=[
+                html.Span(f"{lo:g}" if isinstance(lo, (int, float)) else str(lo)),
+                html.Span((f"{hi:g}" if isinstance(hi, (int, float)) else str(hi))
+                          + (f" {unit}" if unit else "")),
+            ]),
+        ])
+
+    # swatch: a dot (points) or a line (outlines)
+    color = spec.get("color") or "#888"
+    if spec.get("shape") == "line":
+        mark = html.Span(className="map-legend-line",
+                         style={"borderTop": f"2px solid {color}"})
+    else:
+        mark = html.Span(className="map-legend-dot",
+                         style={"background": color, "border": "1.5px solid #fff"})
+    return html.Div(className="map-legend-item", children=[
+        eye, mark,
+        html.Span(spec["label"], className="map-legend-item-label"),
+    ])
+
+
+@app.callback(
+    Output("map-legend-body", "children"),
+    Output("map-legend",      "style"),
+    Input("store-legend",     "data"),
+)
+def render_map_legend(specs):
+    if not specs:
+        return None, {"display": "none"}
+    # "flex" (not "block") so the stylesheet's column layout applies — the
+    # header stays pinned while a long row list scrolls inside the body.
+    return [_legend_row(s) for s in specs], {"display": "flex"}
+
+
+# Collapse / expand the legend panel (clientside — no server round-trip).
+app.clientside_callback(
+    """
+    function(n) {
+        var open = (n % 2 === 0);                     // even clicks = expanded
+        return [
+            open ? {} : {display: "none"},
+            open ? "bi bi-chevron-up" : "bi bi-chevron-down"
+        ];
+    }
+    """,
+    Output("map-legend-body",    "style"),
+    Output("map-legend-chevron", "className"),
+    Input("map-legend-header",   "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 # ── Clientside layer toggles (eye icons → layer opacity + icon state) ──────────
+# One generalized handler for every toggleable layer, keyed by the legend row's
+# layer_id. Purely clientside: showing/hiding a layer never hits the server.
 app.clientside_callback(
     """
-    function(nPop, nPoints, nCatch, nSelection) {
-        // Even clicks = visible, odd = hidden.
-        var vis = function(n){ return (n % 2 === 0); };
-        var op  = function(n, base){ return vis(n) ? base : 0; };
-        var icon = function(n){
-            return vis(n) ? "bi bi-eye-fill map-legend-eye"
-                          : "bi bi-eye-slash map-legend-eye map-legend-eye-off";
+    function(clicks, ids, topicOpacities) {
+        // Even clicks = visible, odd = hidden. Rows render with n_clicks=1
+        // when they start hidden, so the same parity rule covers both.
+        var vis = function(n){ return ((n || 0) % 2 === 0); };
+        var state = {};
+        (ids || []).forEach(function(id, i){
+            state[id.index] = vis((clicks || [])[i]);
+        });
+        var on = function(key, base){
+            return (key in state) ? (state[key] ? base : 0) : base;
         };
-        // Voronoi cells GeoJSON: toggle via style opacity.
+
+        // Per-topic analysis slots keep their existing opacity when the legend
+        // has no row for them (e.g. a stale slot from a previous Compute).
+        var topics = (topicOpacities || []).map(function(_, i){
+            var key = "analysis-topic-" + i;
+            return (key in state) ? (state[key] ? 0.7 : 0) : 0;
+        });
+
         var cellStyle = {color:"#1CABE2", weight:1, fillOpacity:0.0,
-                         opacity: vis(nCatch) ? 0.7 : 0.0};
+                         opacity: (("infra-catchments" in state)
+                                   && !state["infra-catchments"]) ? 0.0 : 0.7};
+
+        var icons = (ids || []).map(function(id, i){
+            return vis((clicks || [])[i])
+                ? "bi bi-eye-fill map-legend-eye"
+                : "bi bi-eye-slash map-legend-eye map-legend-eye-off";
+        });
+
         return [
-            op(nPop, 0.8), op(nPoints, 0.9), op(nSelection, 0.75),
-            {style: cellStyle},
-            icon(nPop), icon(nPoints), icon(nCatch), icon(nSelection)
+            on("infra-pop", 0.8), on("infra-points", 0.9),
+            on("infra-selection", 0.75), {style: cellStyle},
+            on("analysis-exposed", 0.85), on("analysis-selection", 0.75),
+            topics, icons
         ];
     }
     """,
@@ -3364,14 +3685,13 @@ app.clientside_callback(
     Output("infra-points-tile",     "opacity"),
     Output("infra-selection-tile",  "opacity"),
     Output("infra-voronoi-geojson", "options"),
-    Output({"type": "infra-legend-eye", "index": "pop"},        "className"),
-    Output({"type": "infra-legend-eye", "index": "points"},     "className"),
-    Output({"type": "infra-legend-eye", "index": "catchments"}, "className"),
-    Output({"type": "infra-legend-eye", "index": "selection"},  "className"),
-    Input({"type": "infra-legend-eye", "index": "pop"},        "n_clicks"),
-    Input({"type": "infra-legend-eye", "index": "points"},     "n_clicks"),
-    Input({"type": "infra-legend-eye", "index": "catchments"}, "n_clicks"),
-    Input({"type": "infra-legend-eye", "index": "selection"},  "n_clicks"),
+    Output("analysis-exposed-tile", "opacity"),
+    Output("analysis-selection-tile", "opacity"),
+    Output({"type": "analysis-topic-tile", "index": ALL}, "opacity"),
+    Output({"type": "legend-eye", "index": ALL}, "className"),
+    Input({"type": "legend-eye", "index": ALL},  "n_clicks"),
+    State({"type": "legend-eye", "index": ALL},  "id"),
+    State({"type": "analysis-topic-tile", "index": ALL}, "opacity"),
     prevent_initial_call=True,
 )
 
