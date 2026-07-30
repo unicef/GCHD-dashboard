@@ -218,13 +218,7 @@ body {
   background: var(--cyan-lt);
 }
 
-/* ── Legend ── */
-.legend-wrap { padding: 12px 16px; }
-.legend-label {
-  font-size: 0.58rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.1em;
-  color: var(--lo); margin-bottom: 7px;
-}
+/* ── Legend bar/range — shared by the floating map legend overlay ── */
 .legend-bar   { height: 6px; border-radius: 3px; }
 .legend-range {
   display: flex; justify-content: space-between;
@@ -246,19 +240,49 @@ body {
   background: var(--cyan); color: #fff; border-color: var(--cyan);
 }
 
-/* ── Map legend overlay (top-left) ── */
+/* ── Scalebar (bottom-right) ── */
+.leaflet-control-scale { margin-bottom: 22px !important; margin-right: 12px !important; }
+.leaflet-control-scale-line {
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--border2); border-top: none;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  color: var(--mid); font-size: 0.62rem; font-weight: 600;
+  font-family: 'Source Sans Pro', sans-serif;
+  line-height: 1.2; padding: 2px 6px 1px; text-shadow: none;
+}
+
+/* ── Map legend overlay (bottom-left, stacked above the basemap toggle) ──
+   Bottom-anchored so the panel grows upward as rows are added: the Analysis
+   tab can list a dozen hazard topics, and growing downward from the top would
+   collide with the hazard info panel (fixed, left:397px, top:0 → 40vh).
+   max-height keeps a tall legend inside the map, scrolling its body instead. */
 .map-legend {
-  position: absolute; top: 14px; left: 14px; z-index: 600;
+  position: absolute; bottom: 67px; left: 14px; z-index: 600;
   background: rgba(255,255,255,0.95);
   border: 1px solid var(--border2); border-radius: 8px;
   padding: 10px 12px; width: 168px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.15);
   font-family: 'Source Sans Pro', sans-serif;
+  max-height: calc(100vh - 150px);
+  display: flex; flex-direction: column;
 }
+/* Only the rows scroll — the header stays pinned as a grab/collapse target. */
+#map-legend-body { overflow-y: auto; min-height: 0; }
 .map-legend-title {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--hi); margin-bottom: 8px;
+  letter-spacing: 0.08em; color: var(--hi);
 }
+/* Clickable header collapses the legend body to just this bar. */
+.map-legend-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; cursor: pointer; margin-bottom: 8px; user-select: none;
+}
+.map-legend-header:hover .map-legend-title { color: var(--cyan); }
+#map-legend-chevron { font-size: 0.6rem; color: var(--lo); }
+.map-legend-header:hover #map-legend-chevron { color: var(--cyan); }
+/* Collapsed: drop the header's bottom gap so the panel is a tight bar. */
+.map-legend-header:last-child { margin-bottom: 0; }
 .map-legend-row-label {
   font-size: 0.62rem; color: var(--mid); margin-bottom: 4px;
 }
@@ -482,24 +506,39 @@ body {
   transition: color 0.15s;
 }
 .hazard-info-btn:hover { color: var(--cyan); }
+/* The button whose popover is open reads as the anchor. */
+.hazard-info-btn.active { color: var(--cyan); }
 
-/* ── Hazard info side panel ── */
+/* ── Hazard info popover ──
+   Anchored to the info button that opened it (positioned clientside — the
+   layer list scrolls, so the button's coordinates are only known in the
+   browser). Sits above the map legend (z-index 600) so the two never fight. */
 .hazard-info-panel {
   position: fixed;
-  left: 397px; /* 77px sidebar + 320px layers panel */
-  top: 0; height: 40vh; width: 260px;
-  z-index: 500;
+  /* top/left/height set clientside; these are the pre-anchor fallbacks. */
+  left: 397px; top: 0; height: 260px; width: 260px;
+  z-index: 700;
   background: var(--panel);
-  border-right: 1px solid var(--border);
-  box-shadow: 4px 0 20px rgba(0,0,0,0.14);
+  border: 1px solid var(--border2); border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
   flex-direction: column;
   overflow: hidden;
+}
+/* Arrow pointing back at the anchoring button. */
+.hazard-info-panel::before {
+  content: ""; position: absolute;
+  left: -7px; top: 50%; transform: translateY(-50%);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 7px solid var(--panel-h);
+  filter: drop-shadow(-1px 0 0 var(--border2));
 }
 .hazard-info-panel-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 14px 16px 12px;
   background: var(--panel-h);
   border-bottom: 2px solid var(--cyan);
+  border-radius: 7px 7px 0 0;   /* match the popover's rounded corners */
   flex-shrink: 0;
 }
 .hazard-info-panel-title {

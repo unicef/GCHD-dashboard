@@ -135,6 +135,81 @@ SELF_MASK_HAZARDS = [
     "volcanoes_gvp_1800-2025",
 ]
 
+# =============================================================================
+# Population layers (WorldPop 2025, 100 m) — shown as their own Layers-tab
+# section and reused as the exposure denominator in gee_core.build_core_images.
+# =============================================================================
+
+POP_ASSET_TMPL = "projects/unicef-ccri/assets/population/worldpop_{}_2025_CN_100m"
+
+# Fixed vis stops shared by every population class. Deliberately NOT a
+# per-layer percentile stretch (unlike hazards): a shared 0-50 people-per-100m
+# ramp is what makes two classes — e.g. Boys vs Girls — visually comparable,
+# and it avoids a global reduceRegion on every layer selection.
+POP_VIS = {
+    "min": 0, "max": 50,
+    "palette": ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"],
+}
+
+# Ordered population classes; `id` is the {} slot in POP_ASSET_TMPL.
+POPULATION_LAYERS = [
+    {"id": "T",       "label": "Total population",    "group": "All ages"},
+    {"id": "T_M",     "label": "Male",                "group": "All ages"},
+    {"id": "T_F",     "label": "Female",              "group": "All ages"},
+    {"id": "T_U18",   "label": "Children (under 18)", "group": "Children"},
+    {"id": "T_M_U18", "label": "Boys (under 18)",     "group": "Children"},
+    {"id": "T_F_U18", "label": "Girls (under 18)",    "group": "Children"},
+]
+
+POP_LAYER_MAP = {p["id"]: p for p in POPULATION_LAYERS}
+
+# Layer ids carry a "pop:" prefix in store-hazard-layer so population classes
+# never collide with hazard names in the shared selection state.
+POP_PREFIX = "pop:"
+
+
+def is_pop_layer(layer_id):
+    return bool(layer_id) and str(layer_id).startswith(POP_PREFIX)
+
+
+def pop_class_of(layer_id):
+    """'pop:T_U18' -> 'T_U18'. Returns None for non-population ids."""
+    return str(layer_id)[len(POP_PREFIX):] if is_pop_layer(layer_id) else None
+
+
+# =============================================================================
+# Legend specs — serializable descriptions of a map legend row.
+# Callbacks return specs (plain dicts, dcc.Store-safe); a single renderer in
+# app.py turns them into DOM. This keeps gradient-bar markup in one place
+# instead of duplicated per tab.
+# =============================================================================
+
+def gradient_spec(label, palette, vmin, vmax, layer_id=None,
+                  unit="", toggleable=False, visible=True):
+    """A continuous colour ramp row (raster layers)."""
+    return {
+        "kind": "gradient", "label": label, "palette": list(palette),
+        "min": vmin, "max": vmax, "layer_id": layer_id, "unit": unit,
+        "toggleable": toggleable, "visible": visible,
+    }
+
+
+def swatch_spec(label, color, layer_id=None, shape="dot",
+                toggleable=False, visible=True):
+    """A single-colour row: `shape` is "dot" (points) or "line" (outlines)."""
+    return {
+        "kind": "swatch", "label": label, "color": color, "shape": shape,
+        "layer_id": layer_id, "toggleable": toggleable, "visible": visible,
+    }
+
+
+def vis_gradient_spec(label, vis, layer_id=None, unit="", **kw):
+    """Build a gradient row straight from a GEE vis dict ({min,max,palette}),
+    so the legend stops can never drift from what was actually rendered."""
+    return gradient_spec(label, vis.get("palette", []), vis.get("min", 0),
+                         vis.get("max", 1), layer_id=layer_id, unit=unit, **kw)
+
+
 ADMIN_DATA = {
     "adm0 (Country)": {
         "asset":       "projects/unicef-ccri/assets/global_boundary/adm0",
@@ -375,3 +450,24 @@ HAZARD_INFO = {
         "source_url": "https://www.unicef.org/reports/climate-crisis-child-rights-crisis",
     },
 }
+
+# Population layers reuse the same info panel as hazards, keyed by their
+# prefixed layer id, so provenance stays in one place across the app.
+_POP_DESCRIPTIONS = {
+    "T":       "Estimated total population of all ages.",
+    "T_M":     "Estimated male population of all ages.",
+    "T_F":     "Estimated female population of all ages.",
+    "T_U18":   "Estimated population of children under 18 years of age. This is "
+               "the denominator used for every child-exposure figure in the app.",
+    "T_M_U18": "Estimated population of boys under 18 years of age.",
+    "T_F_U18": "Estimated population of girls under 18 years of age.",
+}
+
+for _p in POPULATION_LAYERS:
+    HAZARD_INFO[POP_PREFIX + _p["id"]] = {
+        "description": _POP_DESCRIPTIONS[_p["id"]],
+        "units": "Persons per 100 m pixel",
+        "availability": "2025",
+        "source": "WorldPop",
+        "source_url": "https://www.worldpop.org/",
+    }
