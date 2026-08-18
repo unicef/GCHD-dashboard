@@ -1,0 +1,11 @@
+.venv/
+app/data/
+
+# Secrets — never commit
+scripts/.env
+app/credentials/
+
+# Generated / local
+__pycache__/
+*.pyc
+scripts/iso3_mwater_review.csv

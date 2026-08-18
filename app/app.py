@@ -18,7 +18,7 @@ from config import (
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL, HAZARD_VIS_PALETTES,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3,
-    INFRA_COUNTRIES, INFRA_ASSETS, infra_layer_style,
+    infra_layer_style,
     is_binary_hazard,
     POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
     is_pop_layer, pop_class_of,
@@ -37,6 +37,7 @@ from gee_core import (
     get_asset_info, get_asset_bounds, get_custom_asset_tile_url,
     get_feature_at_point, compute_exposure, compute_topic_overlap,
     get_infra_tile_url, compute_facility_combined,
+    infra_countries, infra_layers_for, infra_asset_id,
     get_clipped_pop_tile_url, INFRA_POP_VIS,
     get_population_tile_url, get_exposed_pop_tile_url,
     get_topic_tile_url_clipped, get_feature_bounds,
@@ -597,12 +598,28 @@ def tab_analysis():
     ])
 
 
+def _infra_color_for_asset(asset_id):
+    """Map an infrastructure asset id to its facility-type colour (no '#').
+
+    The asset id ends in {iso3}_{source}_{layer}, so the facility type is
+    readable straight from the name — no need to scan the discovered assets.
+    Falls back to the neutral colour for a custom/unrecognised asset."""
+    stem = (asset_id or "").split("/")[-1]
+    for layer, label in (("health_facilities", "Health Facilities"),
+                         ("water_points",      "Water Points"),
+                         ("schools",           "Schools")):
+        if stem.endswith("_" + layer):
+            return infra_layer_style(label)["color"].lstrip("#")
+    return "e67e22"
+
+
 def _infra_layer_options(country=None):
     """Layer dropdown options for the selected country — only its uploaded,
     source-qualified layers (e.g. 'Schools (Giga)'). Empty until a country with
-    assets is picked."""
+    assets is picked. Discovered from GEE, so a newly uploaded layer appears
+    without a code change."""
     return [{"label": name, "value": name}
-            for name in INFRA_ASSETS.get(country, {})]
+            for name in infra_layers_for(country)]
 
 
 def tab_infrastructure():
@@ -620,7 +637,10 @@ def tab_infrastructure():
             html.Div("1. Select country / territory", className="ps-label"),
             dcc.Dropdown(
                 id="infra-country-select", className="ps-select",
-                options=[{"label": c, "value": c} for c in INFRA_COUNTRIES],
+                # Populated by infra_populate_countries on tab entry, not here:
+                # tab_infrastructure() runs once at import, so baking the list
+                # in would freeze it at server start and defeat discovery.
+                options=[],
                 value=None, placeholder="Search country / territory…",
                 clearable=False, searchable=True,
             ),
@@ -2955,6 +2975,35 @@ def ai_execute(pending):
 # Infrastructure tab
 # ---------------------------------------------------------------------------
 
+# ── Country dropdown (discovered from GEE, not hardcoded) ────────────────────
+
+@app.callback(
+    Output("infra-country-select", "options"),
+    Output("infra-country-select", "placeholder"),
+    Input("store-tab", "data"),
+)
+def infra_populate_countries(tab):
+    """Fill the country dropdown from the assets actually in the GEE
+    infrastructure folder.
+
+    Runs on tab entry rather than at import so a country uploaded while the
+    server is running appears without a restart (discovery is cached with a
+    short TTL). A discovery failure yields an empty list and an explanatory
+    placeholder instead of an error page.
+    """
+    if tab != "infrastructure":
+        return no_update, no_update
+    try:
+        countries = infra_countries()
+    except Exception as e:
+        print(f"[infra] country discovery failed: {e}")
+        countries = []
+    if not countries:
+        return [], "— no infrastructure data available —"
+    return ([{"label": c, "value": c} for c in countries],
+            "Search country / territory…")
+
+
 # ── Region selection (writes the shared region stores) ────────────────────────
 
 @app.callback(
@@ -3037,7 +3086,8 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
     (no AOI) on the dedicated infra-points-tile. infra_compute later overwrites
     it with the AOI-clipped points. Same path for every layer → uniform.
     Also fires on entering the Infra tab so the default (Schools) draws.
-    The asset is resolved for the selected country from INFRA_ASSETS."""
+    The asset is resolved for the selected country from the discovered
+    infrastructure assets."""
     err_style = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--red)"}
     ok_style  = {"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}
 
@@ -3050,7 +3100,7 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
         # (store-infra-viz set) so we don't overwrite the AOI-clipped points.
         if tab != "infrastructure" or not layer_name or infra_viz:
             return no_update, no_update, no_update, no_update, no_update
-        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        asset_id = infra_asset_id(country, layer_name)
         if not asset_id:
             return no_update, no_update, no_update, no_update, no_update
         color    = infra_layer_style(layer_name)["color"].lstrip("#")
@@ -3066,7 +3116,7 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
             return no_update, no_update, no_update, no_update, no_update
         if not layer_name:
             return None, "", ok_style, "", no_update
-        asset_id = INFRA_ASSETS.get(country, {}).get(layer_name)
+        asset_id = infra_asset_id(country, layer_name)
         if not asset_id:
             return None, "Select a country first.", ok_style, "", no_update
         color    = infra_layer_style(layer_name)["color"].lstrip("#")
@@ -3379,15 +3429,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     topics_sel = topics or None
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
 
-    color = "e67e22"
-    for layers in INFRA_ASSETS.values():
-        for layer_name, layer_asset in layers.items():
-            if layer_asset == asset_id:
-                color = infra_layer_style(layer_name)["color"].lstrip("#")
-                break
-        else:
-            continue
-        break
+    color = _infra_color_for_asset(asset_id)
 
     try:
         r = compute_facility_combined(asset_id, adm2_ucode, topics_sel,
