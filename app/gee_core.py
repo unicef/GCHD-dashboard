@@ -320,6 +320,149 @@ def get_country_bounds(country_ucode):
 
 
 # ---------------------------------------------------------------------------
+# Infrastructure asset discovery
+#
+# The Infrastructure tab's country and layer dropdowns are built from whatever
+# actually exists in the GEE infrastructure folder, not from a hardcoded list —
+# so uploading a new country's assets makes it appear in the app with no code
+# change and no redeploy.
+#
+# Every asset is named {iso3}_{source}_{layer} (written by scripts/prep_infra.py
+# and preserved by geeup, which derives the asset id from the CSV filename).
+# Anything not matching that shape is ignored rather than guessed at.
+# ---------------------------------------------------------------------------
+
+INFRA_FOLDER = "projects/unicef-ccri/assets/infrastructure"
+
+_INFRA_ASSET_RE = re.compile(
+    r"^(?P<iso3>[a-z]{3})_(?P<source>[a-z0-9]+)_"
+    r"(?P<layer>schools|health_facilities|water_points)$")
+
+# Layer -> the facility-type words the styling in config.INFRA_TYPE_META keys on.
+_LAYER_LABELS = {
+    "schools":           "Schools",
+    "health_facilities": "Health Facilities",
+    "water_points":      "Water Points",
+}
+
+# Source -> how it's shown in the layer label's "(Source)" suffix. Unknown
+# sources fall back to a title-cased version of the code, so a new source shows
+# up sensibly without needing an entry here.
+_SOURCE_LABELS = {
+    "giga":        "Giga",
+    "healthsites": "healthsites.io",
+    "wpdx":        "WPdx",
+    "mwater":      "mWater",
+    "hdx":         "HDX",
+}
+
+# Refreshed on this interval so assets uploaded while the server is running are
+# picked up without a restart.
+_DISCOVERY_TTL = 600   # 10 min
+
+
+def _source_label(source):
+    return _SOURCE_LABELS.get(source, source.replace("_", " ").title())
+
+
+@lru_cache(maxsize=1)
+def _iso3_to_country_name():
+    """{ISO3: display name} from the adm0 boundary asset.
+
+    adm0 is the project's naming authority, so the Infrastructure tab shows the
+    same country names as the Analysis tab (including the territory overrides).
+    """
+    fc = ee.FeatureCollection(ADMIN_DATA["adm0 (Country)"]["asset"])
+    rows = fc.reduceColumns(
+        ee.Reducer.toList(3), ["ISO3", "name", "ucode"]).get("list").getInfo()
+
+    names = {}
+    for iso3, name, ucode in rows:
+        if not iso3 or not name:
+            continue
+        # adm0 splits some states into mainland + territories; the mainland's
+        # ucode is '{ISO3}_V<n>' with no digit before the version (AUS_V1),
+        # territories carry one (AUS1_V1). Prefer the mainland name.
+        is_main = bool(re.match(r"^[A-Za-z]{3}_V\d+$", ucode or ""))
+        if is_main or iso3.upper() not in names:
+            names[iso3.upper()] = COUNTRY_NAME_OVERRIDES.get(name, name)
+    return names
+
+
+@_ttl_cached(cache=TTLCache(maxsize=1, ttl=_DISCOVERY_TTL), lock=RLock())
+def discover_infra_assets():
+    """{country name: {layer label: asset id}} built by listing the GEE folder.
+
+    Returns {} rather than raising if GEE is unreachable, so a discovery
+    failure degrades the Infrastructure tab to "no data" instead of breaking
+    every page of the app.
+    """
+    try:
+        iso3_names = _iso3_to_country_name()
+    except Exception as e:
+        print(f"[infra discovery] could not read adm0 country names: {e}")
+        return {}
+
+    assets, page_token = [], None
+    try:
+        while True:
+            req = {"parent": INFRA_FOLDER}
+            if page_token:
+                req["pageToken"] = page_token
+            res = ee.data.listAssets(req)
+            assets.extend(res.get("assets", []))
+            page_token = res.get("nextPageToken")
+            if not page_token:
+                break
+    except Exception as e:
+        print(f"[infra discovery] could not list {INFRA_FOLDER}: {e}")
+        return {}
+
+    out, unknown = {}, []
+    for asset in assets:
+        if asset.get("type") != "TABLE":
+            continue
+        stem = asset["id"].split("/")[-1]
+        m = _INFRA_ASSET_RE.match(stem)
+        if not m:
+            unknown.append(stem)
+            continue
+
+        country = iso3_names.get(m.group("iso3").upper())
+        if not country:
+            unknown.append(stem)      # ISO3 not in adm0 (territory, or a typo)
+            continue
+
+        label = (f'{_LAYER_LABELS[m.group("layer")]} '
+                 f'({_source_label(m.group("source"))})')
+        out.setdefault(country, {})[label] = asset["id"]
+
+    if unknown:
+        print(f"[infra discovery] ignored {len(unknown)} asset(s) not matching "
+              f"{{iso3}}_{{source}}_{{layer}}: {', '.join(sorted(unknown)[:8])}"
+              + (" ..." if len(unknown) > 8 else ""))
+
+    # Sort each country's layers so the dropdown order is stable across reloads.
+    return {country: dict(sorted(layers.items()))
+            for country, layers in sorted(out.items())}
+
+
+def infra_countries():
+    """Country names that have at least one discoverable infrastructure asset."""
+    return list(discover_infra_assets())
+
+
+def infra_layers_for(country):
+    """{layer label: asset id} for one country ({} when it has none)."""
+    return discover_infra_assets().get(country, {})
+
+
+def infra_asset_id(country, layer_label):
+    """Resolve a country + layer label to its GEE asset id, or None."""
+    return discover_infra_assets().get(country, {}).get(layer_label)
+
+
+# ---------------------------------------------------------------------------
 # Tile URL helpers (cached 1 h — GEE tokens expire)
 # ---------------------------------------------------------------------------
 
