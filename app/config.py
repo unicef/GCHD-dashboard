@@ -435,3 +435,26 @@ for _p in POPULATION_LAYERS:
         "source": "WorldPop",
         "source_url": "https://www.worldpop.org/",
     }
+
+# Forecast datasets reuse the same info panel too, keyed by a "fc:" prefix so
+# their names can never collide with a hazard name. Same pattern as the
+# population loop above. forecast_config has no imports of its own, so this
+# introduces no cycle and no load-time cost.
+from forecast_config import FORECAST_DATASETS as _FC_DATASETS   # noqa: E402
+
+FC_INFO_PREFIX = "fc:"
+
+for _d in _FC_DATASETS:
+    # `availability` doubles as the kind line — it is the first thing a reader
+    # needs in order to know whether they are looking at a prediction or a
+    # measurement.
+    _avail = _d.get("kind_label", "")
+    if _d.get("temporal"):
+        _avail = f"{_avail} · {_d['temporal']}"
+    HAZARD_INFO[FC_INFO_PREFIX + _d["name"]] = {
+        "description": _d.get("description") or _d.get("note", ""),
+        "units": _d.get("units", ""),
+        "availability": _avail,
+        "source": _d.get("provider", ""),
+        "source_url": _d.get("source_url", ""),
+    }

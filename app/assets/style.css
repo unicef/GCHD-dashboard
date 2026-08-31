@@ -619,3 +619,37 @@ body {
 #ai-confirm-line {
   font-size: 0.76rem; color: var(--lo); font-style: italic;
 }
+
+/* ── Forecast tab: kind badge ──────────────────────────────────────────────
+   Distinguishes a prediction from a measurement at a glance. The dropdown
+   groups by kind, but the badge keeps that fact visible after selection. */
+.fc-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 3px;
+  font-size: 0.55rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fc-badge-forecast { background: var(--cyan-lt, #e3f4fb); color: #0b6d8f; }
+.fc-badge-obs      { background: #fff4e0;                 color: #9a6700; }
+
+/* ── Map loading badge ─────────────────────────────────────────────────────
+   Top-centre pill shown while tiles are being fetched AND painted. Driven by
+   the clientside callback watching tile urls + n_loads, so it clears only when
+   the imagery is actually on screen. pointer-events:none keeps the map fully
+   interactive underneath. */
+.map-loading {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 660; pointer-events: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 20px;
+  background: var(--panel); border: 1px solid var(--border2);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+}
+.map-loading-text {
+  font-size: 0.7rem; color: var(--mid); font-weight: 500; white-space: nowrap;
+}
+.map-loading-spinner {
+  width: 13px; height: 13px; flex-shrink: 0;
+  border: 2px solid var(--border2); border-top-color: var(--cyan);
+  border-radius: 50%; animation: map-spin 0.7s linear infinite;
+}
+@keyframes map-spin { to { transform: rotate(360deg); } }

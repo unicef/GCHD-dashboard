@@ -9,3 +9,6 @@ app/credentials/
 __pycache__/
 *.pyc
 scripts/iso3_mwater_review.csv
+
+# Excel lock files (created when a workbook is open)
+~$*.xlsx
