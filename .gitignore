@@ -3,6 +3,7 @@ app/data/
 
 # Secrets — never commit
 scripts/.env
+app/credentials
 app/credentials/
 
 # Generated / local
