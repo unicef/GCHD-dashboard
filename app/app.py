@@ -55,7 +55,9 @@ build_core_images()
 COUNTRY_NAMES  = get_country_names()
 initialize_ai(COUNTRY_NAMES)
 UN_CLEARMAP    = "https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}"
-CARTO_FALLBACK = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+with open(os.path.join(os.path.dirname(__file__), "credentials", "carto_api_key.txt")) as _f:
+    CARTO_API_KEY = _f.read().strip()
+CARTO_FALLBACK = f"https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_API_KEY}"
 ESRI_SAT       = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 GEE_ATTR       = "Google Earth Engine / UNICEF"
 UN_ATTR        = "© United Nations Geospatial"
@@ -840,7 +842,6 @@ def map_component():
                     url=CARTO_FALLBACK,
                     attribution=CARTO_ATTR,
                     maxZoom=19,
-                    subdomains="abcd",
                 ),
                 dl.TileLayer(
                     url=UN_CLEARMAP,
