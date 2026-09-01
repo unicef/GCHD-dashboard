@@ -70,7 +70,9 @@ build_core_images()
 COUNTRY_NAMES  = get_country_names()
 initialize_ai(COUNTRY_NAMES)
 UN_CLEARMAP    = "https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}"
-CARTO_FALLBACK = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+with open(os.path.join(os.path.dirname(__file__), "credentials", "carto_api_key.txt")) as _f:
+    CARTO_API_KEY = _f.read().strip()
+CARTO_FALLBACK = f"https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_API_KEY}"
 ESRI_SAT       = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 GEE_ATTR       = "Google Earth Engine / UNICEF"
 UN_ATTR        = "© United Nations Geospatial"
@@ -166,7 +168,7 @@ def sidebar():
     }, children=[
         html.Div(
             html.Img(
-                src="/assets/unicef_logo.webp?v=3",
+                src=app.get_asset_url("unicef_logo.webp") + "?v=3",
                 style={
                     "width": "77px",
                     "height": "77px",
@@ -1168,7 +1170,6 @@ def map_component():
                     url=CARTO_FALLBACK,
                     attribution=CARTO_ATTR,
                     maxZoom=19,
-                    subdomains="abcd",
                 ),
                 dl.TileLayer(
                     url=UN_CLEARMAP,
@@ -1227,8 +1228,12 @@ def map_component():
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
-app.title = "UNICEF GCHD — Global Child Hazard Database"
+# This instance is served under the /ew subpath on the shared gchd.unicef.org
+# domain (alongside the main instance at the root path) — see TECHNICAL_DOCUMENTATION.md.
+_BASE_PATHNAME = "/ew/"
+
+app = dash.Dash(__name__, suppress_callback_exceptions=True, url_base_pathname=_BASE_PATHNAME)
+app.title = "UNICEF GCHD — Global Child Hazard Database (EW)"
 server = app.server
 
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -1240,6 +1245,11 @@ app.server.wsgi_app = ProxyFix(app.server.wsgi_app, x_for=1, x_proto=1, x_host=1
 import secrets as _secrets, datetime as _dt
 from flask import session as _fsess, request as _freq, redirect as _fredirect
 
+# Scope the session cookie to /ew and give it its own name so it can never be
+# confused with the main instance's session cookie on the same domain.
+app.server.config["SESSION_COOKIE_PATH"] = _BASE_PATHNAME.rstrip("/") + "/"
+app.server.config["SESSION_COOKIE_NAME"] = "gchd_ew_session"
+
 _key_path = os.path.join(os.path.dirname(__file__), "credentials", "flask_secret.txt")
 if os.path.exists(_key_path):
     app.server.secret_key = open(_key_path).read().strip()
@@ -1248,7 +1258,8 @@ else:
     open(_key_path, "w").write(_key)
     app.server.secret_key = _key
 
-_PUBLIC_PATHS = ("/login", "/assets/", "/_dash-component-suites/", "/favicon.ico")
+_PUBLIC_PATHS = tuple(_BASE_PATHNAME.rstrip("/") + p
+                      for p in ("/login", "/assets/", "/_dash-component-suites/", "/favicon.ico"))
 
 
 def _render_login(step, email, error):
@@ -1297,21 +1308,21 @@ def _render_login(step, email, error):
             ' style="letter-spacing:.3em;font-size:1.1rem;text-align:center">'
         )
         btn_label = "Sign In"
-        hint = '<a href="/login">Use a different email</a>'
+        hint = f'<a href="{_BASE_PATHNAME}login">Use a different email</a>'
     err_html = '<div class="lc-err">' + error + "</div>" if error else '<div class="lc-err"></div>'
     return (
         "<!DOCTYPE html><html><head>"
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         "<title>UNICEF Hazard DB — Sign In</title>"
-        '<link rel="stylesheet" href="/assets/style.css">'
+        f'<link rel="stylesheet" href="{_BASE_PATHNAME}assets/style.css">'
         "<style>" + _CSS + "</style>"
         "</head><body>"
         '<div class="lc">'
         '<div class="lc-icon"><i class="bi bi-globe2"></i></div>'
         '<div class="lc-title">UNICEF Global Child Hazard Database</div>'
         '<div class="lc-sub">Staff access only · @unicef.org required</div>'
-        '<form method="POST" action="/login">'
+        f'<form method="POST" action="{_BASE_PATHNAME}login">'
         + form_inner + err_html
         + '<button type="submit" class="lc-btn">' + btn_label + "</button>"
         "</form>"
@@ -1325,10 +1336,10 @@ def _render_login(step, email, error):
 #     if any(_freq.path.startswith(p) for p in _PUBLIC_PATHS):
 #         return
 #     if not _fsess.get("authed"):
-#         return _fredirect("/login")
+#         return _fredirect(_BASE_PATHNAME + "login")
 
 
-@app.server.route("/login", methods=["GET", "POST"])
+@app.server.route(_BASE_PATHNAME + "login", methods=["GET", "POST"])
 def _login_page():
     error = ""
     step  = "email"
@@ -1341,7 +1352,7 @@ def _login_page():
                 _fsess["authed"] = True
                 _fsess.permanent = True
                 app.server.permanent_session_lifetime = _dt.timedelta(hours=SESSION_HOURS)
-                return _fredirect("/")
+                return _fredirect(_BASE_PATHNAME)
             error = "Incorrect or expired code. Please try again."
             step  = "code"
         else:
