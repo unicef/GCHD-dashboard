@@ -71,8 +71,83 @@ FORCE_NULL_RULES = {
     "MCO": ["Air Pollution"],
 }
 
-# Countries excluded from exposure analysis: all data columns nulled
-EXCLUDE_ISO3 = ["PSE", "NIC", "VAT"]
+# =============================================================================
+# Country availability
+#
+# Matched on the ucode STEM (the part before "_V<n>"), not a derived ISO3:
+# the codes below include territory and disputed-area forms — xJK_V1, EGY1_V1 —
+# whose stems are not ISO3 codes at all, so an ISO3-keyed list cannot express
+# them. Stems are case-sensitive; the x-prefixed ones are lowercase.
+#
+# HIDE_UCODE_STEMS   — never offered for selection anywhere in the app.
+# NO_DATA_ISO3       — selectable, but no figures are shown: the result panel
+#                      says data is unavailable instead of reporting zeros.
+# =============================================================================
+
+# Not applicable for this analysis. adm0 types these as Territory or
+# Non-Self Governing Territory — they are NOT sovereignty-unsettled, and were
+# selectable before the public release. Hidden by decision, not by data quality.
+# Names as held in adm0.
+_HIDE_NON_OFFICIAL = [
+    "ALA",   # Åland Islands
+    "CCK",   # Cocos (Keeling) Islands
+    "CXR",   # Christmas Island
+    "ESH",   # Western Sahara
+    "GGY",   # Guernsey
+    "JEY",   # Jersey
+    "NFK",   # Norfolk Island
+    "PCN",   # Pitcairn
+    "SJM",   # Svalbard and Jan Mayen Islands
+]
+
+# Sovereignty unsettled (not applicable). Every entry here carries
+# type="Sovereignty unsettled" in adm0. Pending UN Geospatial confirmation —
+# edit this list when guidance arrives.
+_HIDE_SOVEREIGNTY_UNSETTLED = [
+    "EGY1",  # Bi'r Tawil
+    "SDN1",  # Hala'ib Triangle
+    "SSD1",  # Ilemi Triangle
+    "xAB",   # Abyei
+    "xAC",   # Aksai Chin
+    "xAP",   # Arunachal Pradesh
+    "xJK",   # Jammu and Kashmir
+    "xJL",   # unnamed in adm0 (its name field reads "Sovereignty unsettled")
+    "xPI",   # Paracel Islands
+    "xRI",   # Kuril Islands
+    "xSI",   # Spratly Islands
+    "xSK",   # Senkaku Islands
+    "xSR",   # Scarborough Reef
+    "xxx",   # China/India
+]
+
+HIDE_UCODE_STEMS = set(_HIDE_NON_OFFICIAL + _HIDE_SOVEREIGNTY_UNSETTLED)
+
+# Insufficient data for all hazards. Kept ISO3-keyed: these are ordinary
+# countries, so the ucode stem and the ISO3 are the same string.
+NO_DATA_ISO3 = [
+    "NIC",   # Nicaragua
+    "PSE",   # State of Palestine
+    "CUB",   # Cuba
+    "VAT",   # Holy See
+]
+
+# Back-compat alias — _apply_force_null still reads this name.
+EXCLUDE_ISO3 = NO_DATA_ISO3
+
+
+def ucode_stem(ucode):
+    """'IND_V1' -> 'IND', 'xJK_V1' -> 'xJK'. Case preserved."""
+    return (ucode or "").split("_")[0]
+
+
+def is_hidden_ucode(ucode):
+    """True for areas that must not be offered for selection."""
+    return ucode_stem(ucode) in HIDE_UCODE_STEMS
+
+
+def is_no_data_ucode(ucode):
+    """True where every hazard lacks usable data for the whole country."""
+    return ucode_stem(ucode).upper() in {c.upper() for c in NO_DATA_ISO3}
 
 # Topics excluded from Multi Hazard Count: climate-related (not climate) + geophysical
 MHC_EXCLUDED_TOPICS = ["Air Pollution", "Malaria", "Landslide", "Earthquake", "Volcanoes"]
