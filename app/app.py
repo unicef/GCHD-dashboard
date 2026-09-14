@@ -17,7 +17,7 @@ from config import (
     HAZARD_TOPICS, TOPIC_COLORS, ADMIN_DATA,
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL, HAZARD_VIS_PALETTES,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
-    FORCE_NULL_RULES, EXCLUDE_ISO3,
+    FORCE_NULL_RULES, EXCLUDE_ISO3, is_no_data_ucode,
     infra_layer_style,
     is_binary_hazard,
     POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
@@ -1572,6 +1572,9 @@ def _analysis_legend_specs(viz):
     so the map stays readable (its tile is fetched only on first reveal)."""
     if not viz:
         return []
+    if viz.get("no_data"):
+        return [swatch_spec("Selected region", "#FFD700", shape="line",
+                            layer_id="analysis-selection", toggleable=True)]
     specs = [
         vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
                           layer_id="analysis-exposed", unit="+",
@@ -2138,7 +2141,8 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
             return no_update, no_update, no_update
         data = _apply_force_null(existing, ucode)
         return no_update, render_results(data, name, mhc, mhi,
-                                         data.get("_topics"), data.get("_overrides")), no_update
+                                         data.get("_topics"), data.get("_overrides"),
+                                         ucode=ucode), no_update
 
     # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
@@ -2157,14 +2161,20 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     # legend row — a toggle for a hazard with no local coverage is just noise.
     map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
                   and (result.get(t) or 0) > 0][:ANALYSIS_TOPIC_SLOTS]
+    no_data = is_no_data_ucode(ucode)
     viz = {
         "ucode": ucode, "level": level, "name": name,
-        "topics": map_topics,
+        # Where no hazard data exists, the region outline is the only honest
+        # thing to draw: an exposed-population raster would render a figure the
+        # results panel is explicitly declining to report.
+        "topics": [] if no_data else map_topics,
+        "no_data": no_data,
         # Sorted tuple-of-pairs: stable, hashable cache key for the tile helpers.
         "thr": sorted((h, v) for h, v in (overrides or {}).items()),
     }
     return (result,
-            render_results(result, name, mhc, mhi, sel_topics, overrides),
+            render_results(result, name, mhc, mhi, sel_topics, overrides,
+                           ucode=ucode),
             viz)
 
 
@@ -2195,11 +2205,14 @@ def update_analysis_layers(viz, tab):
         return "", "", no_update, {}
 
     thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
-    try:
-        url, _ = get_exposed_pop_tile_url(
-            viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
-    except Exception:
-        return "", "", no_update, {}
+    if viz.get("no_data"):
+        url = ""
+    else:
+        try:
+            url, _ = get_exposed_pop_tile_url(
+                viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
+        except Exception:
+            return "", "", no_update, {}
 
     # AOI outline — cached, so this is free on repeat Computes of the region.
     try:
@@ -2348,7 +2361,29 @@ def _eff_threshold(h_name, overrides):
     return f"thr {thr_str}" + (f" {units}" if units else "")
 
 
-def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overrides=None):
+def _no_data_panel(region_name):
+    """Shown instead of figures where no hazard has usable data.
+
+    Deliberately reports nothing numeric — not even a population total. The
+    previous behaviour zeroed every field, which a reader cannot distinguish
+    from a measured "no children are exposed here".
+    """
+    return html.Div(className="ps", children=[
+        html.Div("Data not available", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(
+            f"Hazard and exposure data are not available for {region_name}, "
+            "so no figures are reported. This reflects a gap in the underlying "
+            "global datasets, not an absence of hazard or of children.",
+            className="ps-caption", style={"marginBottom": "0"},
+        ),
+    ])
+
+
+def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
+                   overrides=None, ucode=None):
+    if ucode and is_no_data_ucode(ucode):
+        return _no_data_panel(region_name)
     if not result:
         return html.Div("No data available.", className="ps-caption",
                         style={"padding": "14px 16px"})
@@ -3557,6 +3592,10 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     if not adm2_ucode or not level or level == "adm0 (Country)":
         return (_infra_error("Select an adm2 region and click a district on the map "
                              "to bound the analysis."), *nu)
+    # Districts inherit their country's data availability: the adm2 ucode
+    # carries the same stem, so this catches them without a separate list.
+    if is_no_data_ucode(adm2_ucode):
+        return (_no_data_panel(region_name or "this region"), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
