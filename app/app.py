@@ -130,6 +130,64 @@ def _fmt(v):
 # Layout helpers
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Tab registry — the single source of truth for the nav rail.
+#
+# Order here IS the visual order of the sidebar. Everything that used to be
+# duplicated across four sites (the nav_btn calls, the #panel children, and
+# switch_tab's Output list + id->key dict) is now derived from this table, so
+# adding or reordering a tab is a one-line edit instead of a four-site edit
+# whose mistakes only show up at runtime as a tab that silently won't switch.
+#
+# `key`   - internal tab id held in store-tab. NOT the label: `hazard` in
+#           particular is load-bearing (store-tab's default, and several
+#           callbacks compare against it), so it stays put across renames.
+# `label` - rail text. CSS uppercases it (.nav-label), so casing here is free.
+# `title` / `desc` - the pane's own .ph header, rendered by tab_header().
+# ---------------------------------------------------------------------------
+
+TABS = [
+    {"key": "hazard",         "btn": "btn-hazard",   "pane": "tab-hazard",
+     "icon": "bi bi-layers",         "label": "hazard layers",
+     "title": "Hazard Layers",
+     "desc": "Select a layer to show the occurrence probability of each type of hazard"},
+    {"key": "mh",             "btn": "btn-mh",       "pane": "tab-mh",
+     "icon": "bi bi-stack",          "label": "Multi hazard",
+     "title": "Multi Hazard Indicators",
+     "desc": "Display areas exposed to multiple hazards"},
+    {"key": "exposure",       "btn": "btn-exposure", "pane": "tab-exposure",
+     "icon": "bi bi-people",         "label": "Pop Exposure",
+     "title": "Children's Exposure",
+     "desc": "Display child population exposed to each type of hazard at "
+             "different thresholds"},
+    {"key": "analysis",       "btn": "btn-analysis", "pane": "tab-analysis",
+     "icon": "bi bi-bar-chart-line", "label": "Pop Analysis",
+     "title": "Exposure Analysis",
+     "desc": "Compute number of children exposed by admin unit"},
+    {"key": "infrastructure", "btn": "btn-infra",    "pane": "tab-infrastructure",
+     "icon": "bi bi-buildings",      "label": "Infra Analysis",
+     "title": "Infrastructure Analysis",
+     "desc": "Compute number of facilities exposed, and number of children "
+             "affected by admin unit"},
+    {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
+     "icon": "bi bi-robot",          "label": "AI",
+     "title": "AI Assistant",
+     "desc": "Ask about hazard layers or child exposure"},
+]
+
+TAB_BY_KEY = {t["key"]: t for t in TABS}
+
+
+def tab_header(key):
+    """The .ph title/subtitle block for a pane, sourced from TABS so the rail
+    label and the pane header can never drift apart."""
+    t = TAB_BY_KEY[key]
+    return html.Div(className="ph", children=[
+        html.Div(t["title"], className="ph-title"),
+        html.Div(t["desc"],  className="ph-sub"),
+    ])
+
+
 def nav_btn(icon_cls, label, btn_id, active=False):
     return html.Button(
         [html.I(className=icon_cls), html.Span(label, className="nav-label")],
@@ -175,12 +233,8 @@ def sidebar():
             }
         ),
         html.Div(className="sb-nav", children=[
-            nav_btn("bi bi-layers",        "Layers",   "btn-hazard",   active=True),
-            nav_btn("bi bi-people",        "Exposure", "btn-exposure"),
-            nav_btn("bi bi-stack",         "Multi HZ", "btn-mh"),
-            nav_btn("bi bi-bar-chart-line","Analysis", "btn-analysis"),
-            nav_btn("bi bi-buildings",     "Infra",    "btn-infra"),
-            nav_btn("bi bi-robot",         "AI",       "btn-ai"),
+            nav_btn(t["icon"], t["label"], t["btn"], active=(i == 0))
+            for i, t in enumerate(TABS)
         ]),
     ])
 
@@ -274,10 +328,7 @@ def tab_hazard_layers():
                      for p in POPULATION_LAYERS if p["group"] == group)
 
     return html.Div(id="tab-hazard", children=[
-        html.Div(className="ph", children=[
-            html.Div("Hazard Layers", className="ph-title"),
-            html.Div("Select a layer to display on the map", className="ph-sub"),
-        ]),
+        tab_header("hazard"),
         html.Div(items, className="layer-list"),
     ])
 
@@ -324,10 +375,7 @@ def _exposure_inline_editor(topic):
 
 def tab_exposure():
     return html.Div(id="tab-exposure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Children's Exposure", className="ph-title"),
-            html.Div("Population exposed to each hazard topic", className="ph-sub"),
-        ]),
+        tab_header("exposure"),
         # Radio-selectable topic list; the selected row carries the inline
         # threshold editor. Rebuilt by render_exposure_topics on selection.
         html.Div(id="exposure-topic-list",
@@ -356,10 +404,7 @@ def tab_mh():
     # Colour ramps for these layers live in the floating map legend
     # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Multi Hazard Indicators", className="ph-title"),
-            html.Div("Combined hazard count & intensity", className="ph-sub"),
-        ]),
+        tab_header("mh"),
         html.Div(className="ps", children=[
             html.Div("Hazard Count (MHC)", className="ps-label"),
             html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
@@ -404,10 +449,7 @@ def tab_mh():
 
 def tab_analysis():
     return html.Div(id="tab-analysis", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Exposure Analysis", className="ph-title"),
-            html.Div("Compute children exposed by admin region", className="ph-sub"),
-        ]),
+        tab_header("analysis"),
         # ── Sub-tab switcher ──
         html.Div(className="analysis-sub-tabs", children=[
             html.Button("GeoRepo Boundaries", id="btn-georapo-tab",
@@ -626,11 +668,7 @@ def _infra_layer_options(country=None):
 
 def tab_infrastructure():
     return html.Div(id="tab-infrastructure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Infrastructure Analysis", className="ph-title"),
-            html.Div("Correlate facilities with hazards & child population",
-                     className="ph-sub"),
-        ]),
+        tab_header("infrastructure"),
 
         # 1. Region — own selector that writes to the shared region stores.
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
@@ -753,10 +791,7 @@ def tab_infrastructure():
 
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("AI Assistant", className="ph-title"),
-            html.Div("Ask about hazard layers or child exposure", className="ph-sub"),
-        ]),
+        tab_header("ai"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
             html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
             html.P([
@@ -1098,9 +1133,11 @@ app.layout = html.Div(id="app-root", children=[
                     "letterSpacing": "0.01em",
                 }
             ),
+            # Order mirrors TABS so the file reads in rail order; panes are
+            # display-toggled, so DOM order itself is not visually significant.
             tab_hazard_layers(),
-            tab_exposure(),
             tab_mh(),
+            tab_exposure(),
             tab_analysis(),
             tab_infrastructure(),
             tab_ai(),
@@ -1141,42 +1178,31 @@ def restore_embargo_state(accepted):
 # ── Tab switching ─────────────────────────────────────────────────────────────
 
 @app.callback(
-    Output("store-tab",         "data"),
-    Output("btn-hazard",        "className"),
-    Output("btn-exposure",      "className"),
-    Output("btn-mh",            "className"),
-    Output("btn-analysis",      "className"),
-    Output("btn-infra",         "className"),
-    Output("btn-ai",            "className"),
-    Output("tab-hazard",        "style"),
-    Output("tab-exposure",      "style"),
-    Output("tab-mh",            "style"),
-    Output("tab-analysis",      "style"),
-    Output("tab-infrastructure","style"),
-    Output("tab-ai",            "style"),
+    Output("store-tab", "data"),
+    *[Output(t["btn"],  "className") for t in TABS],
+    *[Output(t["pane"], "style")     for t in TABS],
     Output("hazard-info-panel", "style", allow_duplicate=True),
-    Input("btn-hazard",    "n_clicks"),
-    Input("btn-exposure",  "n_clicks"),
-    Input("btn-mh",        "n_clicks"),
-    Input("btn-analysis",  "n_clicks"),
-    Input("btn-infra",     "n_clicks"),
-    Input("btn-ai",        "n_clicks"),
-    State("store-tab",     "data"),
+    *[Input(t["btn"], "n_clicks") for t in TABS],
+    State("store-tab", "data"),
     prevent_initial_call=True,
 )
-def switch_tab(n1, n2, n3, n4, n5, n6, current):
-    tab = {"btn-hazard":"hazard","btn-exposure":"exposure",
-           "btn-mh":"mh","btn-analysis":"analysis",
-           "btn-infra":"infrastructure","btn-ai":"ai"}.get(ctx.triggered_id, current)
-    cls = lambda t: "nav-btn active" if tab == t else "nav-btn"
-    vis = lambda t: {"display": "block"} if tab == t else {"display": "none"}
+def switch_tab(*args):
+    """Show one pane and highlight its rail button.
+
+    Outputs are generated from TABS, so the arity can never drift out of sync
+    with the rail the way a hand-maintained Output list could — a mismatch
+    there used to fail silently at click time rather than at import.
+    """
+    current = args[-1]
+    btn_to_key = {t["btn"]: t["key"] for t in TABS}
+    tab = btn_to_key.get(ctx.triggered_id, current)
+    cls = lambda k: "nav-btn active" if tab == k else "nav-btn"
+    vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
     info_panel = no_update if tab == "hazard" else {"display": "none"}
     return (
         tab,
-        cls("hazard"), cls("exposure"), cls("mh"), cls("analysis"),
-        cls("infrastructure"), cls("ai"),
-        vis("hazard"), vis("exposure"), vis("mh"), vis("analysis"),
-        vis("infrastructure"), vis("ai"),
+        *[cls(t["key"]) for t in TABS],
+        *[vis(t["key"]) for t in TABS],
         info_panel,
     )
 
