@@ -866,6 +866,15 @@ def map_component():
             id="basemap-toggle", className="basemap-toggle", n_clicks=0,
             title="Toggle satellite basemap",
         ),
+        # PLACEHOLDER COPY — pending comms/legal sign-off.
+        html.Div(id="map-disclaimer", className="map-disclaimer", children=[
+            html.Span(
+                "Modelled estimates, not observed impacts. Boundaries and names "
+                "shown do not imply endorsement or acceptance by the United "
+                "Nations.",
+                className="map-disclaimer-text",
+            ),
+        ]),
         dl.Map(
             id="main-map",
             center=[10, 20], zoom=3, zoomControl=False,
@@ -1059,7 +1068,7 @@ def _login_page():
 # ---------------------------------------------------------------------------
 app.layout = html.Div(id="app-root", children=[
     # ── Stores ──
-    dcc.Store(id="store-embargo",       storage_type="session", data=False),
+    dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
     dcc.Store(id="store-tab",           data="hazard"),
     dcc.Store(id="store-hazard-layer",  data=None),
     dcc.Store(id="store-exposure-topic",data=None),
@@ -1086,18 +1095,30 @@ app.layout = html.Div(id="app-root", children=[
     # when a topic's legend eye is first switched on.
     dcc.Store(id="store-analysis-topic-urls", data={}),
 
-    # ── Embargo gate ──
+    # ── Data-use gate ──────────────────────────────────────────────────────
+    # PLACEHOLDER COPY — pending comms/legal sign-off before public launch.
     html.Div(id="embargo-gate", children=[
         html.Div(className="embargo-card", children=[
-            html.Div("UNICEF CCRR — Data Access", className="embargo-tag"),
-            html.Div("Official Data Release Policy", className="embargo-title"),
+            html.Div("UNICEF — Data Use Notice", className="embargo-tag"),
+            html.Div("About this data", className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Results are ", html.Strong("not final"),
-                " and currently under review. External sharing is under ",
-                html.Strong("embargo"),
-                " until the Children Climate Risk Report (CCRR) global release.",
+                "Figures shown are ", html.Strong("modelled estimates"),
+                ", derived from global hazard datasets combined with WorldPop "
+                "gridded population. They indicate relative exposure — not "
+                "observed impacts — and carry uncertainty that increases at "
+                "finer administrative levels.",
+                html.Br(), html.Br(),
+                "The designations employed and the presentation of material on "
+                "this site do not imply the expression of any opinion on the "
+                "part of UNICEF concerning the legal status of any country or "
+                "territory, or the delimitation of its frontiers or boundaries.",
             ]),
-            html.Button("I Understand and Accept",
+            dcc.Checklist(
+                id="embargo-dismiss-forever",
+                options=[{"label": "Don't show this again", "value": "yes"}],
+                value=[], className="embargo-check",
+            ),
+            html.Button("I Understand",
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
         ]),
     ]),
@@ -1154,25 +1175,27 @@ app.layout = html.Div(id="app-root", children=[
 # ── Embargo ──────────────────────────────────────────────────────────────────
 
 @app.callback(
-    Output("store-embargo", "data"),
-    Output("embargo-gate",  "style"),
-    Input("embargo-btn",    "n_clicks"),
-    State("store-embargo",  "data"),
+    Output("store-embargo-permanent", "data"),
+    Output("embargo-gate",            "style"),
+    Input("embargo-btn",              "n_clicks"),
+    State("embargo-dismiss-forever",  "value"),
     prevent_initial_call=True,
 )
-def accept_embargo(n, _accepted):
-    if n:
-        return True, {"display": "none"}
-    return no_update, no_update
+def accept_embargo(n, dismiss_forever):
+    """Dismiss the notice, persisting only if the box was ticked."""
+    if not n:
+        return no_update, no_update
+    return bool(dismiss_forever), {"display": "none"}
 
 
 @app.callback(
-    Output("embargo-gate", "style", allow_duplicate=True),
-    Input("store-embargo", "data"),
+    Output("embargo-gate",           "style", allow_duplicate=True),
+    Input("store-embargo-permanent", "data"),
     prevent_initial_call=True,
 )
-def restore_embargo_state(accepted):
-    return {"display": "none"} if accepted else no_update
+def restore_embargo_state(accepted_forever):
+    """Hide on load only for users who ticked 'don't show this again'."""
+    return {"display": "none"} if accepted_forever else no_update
 
 
 # ── Tab switching ─────────────────────────────────────────────────────────────
@@ -1215,12 +1238,13 @@ def switch_tab(*args):
     Output("hazard-info-panel-body",  "children"),
     Output("store-info-open",         "data"),
     Input({"type": "hazard-info-btn", "index": ALL}, "n_clicks"),
+    Input({"type": "prov-info-btn",   "index": ALL}, "n_clicks"),
     Input("hazard-info-close",    "n_clicks"),
     Input("store-hazard-layer",   "data"),
     State("store-info-open",      "data"),
     prevent_initial_call=True,
 )
-def toggle_hazard_info(info_clicks, _close, layer_name, open_for):
+def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name, open_for):
     """Open the info popover for a layer. It closes on: a second click of the
     same button, the × button, or selecting any layer on the map.
 
@@ -1240,8 +1264,22 @@ def toggle_hazard_info(info_clicks, _close, layer_name, open_for):
         if not open_for:
             return no_update, no_update, no_update, no_update
         return {"display": "none"}, no_update, no_update, None
-    if isinstance(triggered, dict) and triggered.get("type") == "hazard-info-btn":
+    if (isinstance(triggered, dict)
+            and triggered.get("type") in ("hazard-info-btn", "prov-info-btn")):
+        # The results-panel ⓘ buttons are created when a result renders, and
+        # Dash re-fires an ALL pattern input when new matching components enter
+        # the layout — with triggered_id set to one of them. prevent_initial_call
+        # does not cover that, so without this guard the popover opens by itself
+        # as soon as results appear. A real click always leaves a non-zero
+        # n_clicks somewhere in the group.
+        if not any(c for c in ((info_clicks or []) + (_prov_clicks or [])) if c):
+            return no_update, no_update, no_update, no_update
         name = triggered["index"]
+        # Results-panel icons carry a "<scope>:" prefix to keep their ids unique
+        # across the Analysis and Infrastructure panels; the popover is keyed on
+        # the hazard itself.
+        if triggered["type"] == "prov-info-btn":
+            name = name.split(":", 1)[1]
         if open_for == name:                      # same button → toggle closed
             return {"display": "none"}, no_update, no_update, None
         return ({"display": "flex"}, _layer_label(name),
@@ -1268,15 +1306,31 @@ app.clientside_callback(
         // otherwise collide, e.g. "fire_FRP..." inside another id).
         var exact = JSON.stringify({index: openFor, type: "hazard-info-btn"});
         var btn = document.getElementById(exact);
+        // Results-panel icons prefix their index with a scope ("an:", "infra:")
+        // to stay unique across panels, so match on the part after the colon.
         if (!btn) {
             btn = (Array.prototype.find.call(
-                document.querySelectorAll(".hazard-info-btn"),
+                document.querySelectorAll(".hazard-info-btn, .info-icon-btn"),
                 function(el){
-                    try { return JSON.parse(el.id).index === openFor; }
-                    catch (e) { return false; }
+                    try {
+                        var idx = JSON.parse(el.id).index;
+                        if (idx === openFor) { return true; }
+                        var c = idx.indexOf(":");
+                        return c >= 0 && idx.slice(c + 1) === openFor;
+                    } catch (e) { return false; }
                 }) || null);
         }
         if (!btn) { return [window.dash_clientside.no_update, classes]; }
+
+        // The panel div persists across opens — only its children are swapped —
+        // so the browser keeps the previous scrollTop. Without this, opening a
+        // short description after a long one starts it scrolled past the text.
+        // rAF: run after Dash has painted the new children, or the reset lands
+        // on the old content and is undone by the re-render.
+        window.requestAnimationFrame(function() {
+            var body = document.getElementById("hazard-info-panel-body");
+            if (body) { body.scrollTop = 0; }
+        });
 
         var r = btn.getBoundingClientRect();
         var H = 260, W = 260, M = 8;             // popover height/width, margin
@@ -2239,6 +2293,50 @@ def _hazard_label(name):
     return " ".join(words[:2])
 
 
+POP_BASIS = "WorldPop under-18 gridded population, 2025, 100 m"
+
+
+_ESTIMATE_CAVEAT = (
+    "Figures are the modelled child population in areas where the hazard "
+    "exceeds the stated threshold — indicative of relative exposure, not "
+    "observed impacts."
+)
+
+
+def _info_icon(hazard_name, scope="an"):
+    """Inline ⓘ opening the shared layer-info popover.
+
+    A distinct `type` from the Layers tab's buttons, and a `scope`-prefixed
+    index: that tab renders one button per hazard already, and the Analysis and
+    Infrastructure panels both persist in the layout at once, so an unprefixed
+    id would put duplicate component ids on the page for the same hazard.
+    """
+    return html.Button(
+        html.I(className="bi bi-info-circle"),
+        id={"type": "prov-info-btn", "index": f"{scope}:{hazard_name}"},
+        className="info-icon-btn", n_clicks=0,
+        title=_layer_label(hazard_name),
+    )
+
+
+def _provenance_block(extra_lines=None):
+    """Methodology section for a results panel.
+
+    Numbers get copied into slides and emails, so the basis travels with them.
+    Shared by Analysis and Infrastructure so the two panels can never state it
+    differently.
+    """
+    lines = [f"Population: {POP_BASIS}", *(extra_lines or [])]
+    return html.Div(className="ps", children=[
+        html.Div("Methodology", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(_ESTIMATE_CAVEAT, className="ps-caption"),
+        html.Div([html.Div(t) for t in lines],
+                 className="ps-caption", style={"lineHeight": "1.7",
+                                                "marginBottom": "0"}),
+    ])
+
+
 def _eff_threshold(h_name, overrides):
     """Effective threshold + unit label for a hazard, given the user overrides."""
     default = HAZARD_MAP.get(h_name, {}).get("threshold")
@@ -2294,6 +2392,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0]) if hazards else None,
                     topic.upper(),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ]),
@@ -2315,7 +2414,9 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             thr_txt = _eff_threshold(h_name, overrides)
             rows.append(html.Div(className="info-row", children=[
                 html.Span([
-                    f"└ {_hazard_label(h_name)}",
+                    "└ ",
+                    _info_icon(h_name),
+                    _hazard_label(h_name),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ], className="info-lbl",
                     style={"paddingLeft": "22px", "color": "var(--lo)",
@@ -2436,6 +2537,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
                  for t in no_data_topics],
             ),
         ]) if no_data_topics else None,
+        _provenance_block([f"Region: {region_name}"]),
         html.Div(className="ps", children=[
             html.A(
                 "⬇  Download results (JSON)",
@@ -3381,6 +3483,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0], "infra") if hazards else None,
                     topic.upper(),
                 ]),
                 html.Span([
@@ -3404,7 +3507,9 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                 hc = int(round((per_sub or {}).get(h) or 0))
                 thr = _eff_threshold(h, overrides)
                 sub_rows.append(html.Div(className="info-row", children=[
-                    html.Span([f"└ {_hazard_label(h)}",
+                    html.Span(["└ ",
+                               _info_icon(h, "infra"),
+                               _hazard_label(h),
                                html.Span(f"  {thr}" if thr else "",
                                          style={"color": "var(--lo)",
                                                 "fontSize": "0.9em"})],
@@ -3495,7 +3600,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                "rows show exposed children · facilities whose site is in that "
                f"hazard. {thr_note}.")
 
-    panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
+    panel = html.Div([
+        _infra_panel("Facility exposure", cards, items, None, caption=caption),
+        _provenance_block([
+            f"Region: {region_name or adm2_ucode} · {level}",
+            "Facilities: as supplied by the selected infrastructure layer "
+            "(see the layer name for its source)",
+        ]),
+    ])
 
     # ── Map layers ──
     try:
