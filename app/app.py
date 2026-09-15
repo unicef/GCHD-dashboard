@@ -19,7 +19,7 @@ from config import (
     HAZARD_TOPICS, TOPIC_COLORS, ADMIN_DATA,
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL, HAZARD_VIS_PALETTES,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
-    FORCE_NULL_RULES, EXCLUDE_ISO3,
+    FORCE_NULL_RULES, EXCLUDE_ISO3, is_no_data_ucode,
     infra_layer_style,
     is_binary_hazard,
     POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
@@ -145,6 +145,78 @@ def _fmt(v):
 # Layout helpers
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Tab registry — the single source of truth for the nav rail.
+#
+# Order here IS the visual order of the sidebar. Everything that used to be
+# duplicated across four sites (the nav_btn calls, the #panel children, and
+# switch_tab's Output list + id->key dict) is now derived from this table, so
+# adding or reordering a tab is a one-line edit instead of a four-site edit
+# whose mistakes only show up at runtime as a tab that silently won't switch.
+#
+# `key`   - internal tab id held in store-tab. NOT the label: `hazard` in
+#           particular is load-bearing (store-tab's default, and several
+#           callbacks compare against it), so it stays put across renames.
+# `label` - rail text. CSS uppercases it (.nav-label), so casing here is free.
+# `title` / `desc` - the pane's own .ph header, rendered by tab_header().
+# ---------------------------------------------------------------------------
+
+TABS = [
+    {"key": "hazard",         "btn": "btn-hazard",   "pane": "tab-hazard",
+     "icon": "bi bi-layers",         "label": "hazard layers",
+     "title": "Hazard Layers",
+     "desc": "Select a layer to show the occurrence probability of each type of hazard"},
+    {"key": "mh",             "btn": "btn-mh",       "pane": "tab-mh",
+     "icon": "bi bi-stack",          "label": "Multi hazard",
+     "title": "Multi Hazard Indicators",
+     "desc": "Display areas exposed to multiple hazards"},
+    {"key": "exposure",       "btn": "btn-exposure", "pane": "tab-exposure",
+     "icon": "bi bi-people",         "label": "Pop Exposure",
+     "title": "Children's Exposure",
+     "desc": "Display child population exposed to each type of hazard at "
+             "different thresholds"},
+    {"key": "analysis",       "btn": "btn-analysis", "pane": "tab-analysis",
+     "icon": "bi bi-bar-chart-line", "label": "Pop Analysis",
+     "title": "Exposure Analysis",
+     "desc": "Compute number of children exposed by admin unit"},
+    {"key": "infrastructure", "btn": "btn-infra",    "pane": "tab-infrastructure",
+     "icon": "bi bi-buildings",      "label": "Infra Analysis",
+     "title": "Infrastructure Analysis",
+     "desc": "Compute number of facilities exposed, and number of children "
+             "affected by admin unit"},
+    {"key": "observed",       "btn": "btn-observed", "pane": "tab-observed",
+     "icon": "bi bi-cloud-sun",      "label": "Observed",
+     "title": "Observed Hazards",
+     "desc": "Compute number of children recently experiencing each type of "
+             "hazard by admin region (under development)"},
+    {"key": "forecast",       "btn": "btn-forecast", "pane": "tab-forecast",
+     "icon": "bi bi-cloud-drizzle",  "label": "Forecast",
+     "title": "Forecast Hazards",
+     "desc": "Compute number of children forecast to experience each type of "
+             "hazard by admin region (under development)"},
+    {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
+     "icon": "bi bi-robot",          "label": "AI",
+     "title": "AI Assistant",
+     "desc": "Ask about hazard layers or child exposure"},
+]
+
+TAB_BY_KEY = {t["key"]: t for t in TABS}
+
+# Observed and Forecast are two tabs over one shared control stack and one set
+# of map layers, so anything keyed on "the forecast tab" must accept either.
+FORECAST_TABS = ("forecast", "observed")
+
+
+def tab_header(key):
+    """The .ph title/subtitle block for a pane, sourced from TABS so the rail
+    label and the pane header can never drift apart."""
+    t = TAB_BY_KEY[key]
+    return html.Div(className="ph", children=[
+        html.Div(t["title"], className="ph-title"),
+        html.Div(t["desc"],  className="ph-sub"),
+    ])
+
+
 def nav_btn(icon_cls, label, btn_id, active=False):
     return html.Button(
         [html.I(className=icon_cls), html.Span(label, className="nav-label")],
@@ -190,13 +262,8 @@ def sidebar():
             }
         ),
         html.Div(className="sb-nav", children=[
-            nav_btn("bi bi-layers",        "Layers",   "btn-hazard",   active=True),
-            nav_btn("bi bi-people",        "Exposure", "btn-exposure"),
-            nav_btn("bi bi-stack",         "Multi HZ", "btn-mh"),
-            nav_btn("bi bi-bar-chart-line","Analysis", "btn-analysis"),
-            nav_btn("bi bi-buildings",     "Infra",    "btn-infra"),
-            nav_btn("bi bi-cloud-drizzle", "Forecast", "btn-forecast"),
-            nav_btn("bi bi-robot",         "AI",       "btn-ai"),
+            nav_btn(t["icon"], t["label"], t["btn"], active=(i == 0))
+            for i, t in enumerate(TABS)
         ]),
     ])
 
@@ -290,10 +357,7 @@ def tab_hazard_layers():
                      for p in POPULATION_LAYERS if p["group"] == group)
 
     return html.Div(id="tab-hazard", children=[
-        html.Div(className="ph", children=[
-            html.Div("Hazard Layers", className="ph-title"),
-            html.Div("Select a layer to display on the map", className="ph-sub"),
-        ]),
+        tab_header("hazard"),
         html.Div(items, className="layer-list"),
     ])
 
@@ -340,10 +404,7 @@ def _exposure_inline_editor(topic):
 
 def tab_exposure():
     return html.Div(id="tab-exposure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Children's Exposure", className="ph-title"),
-            html.Div("Population exposed to each hazard topic", className="ph-sub"),
-        ]),
+        tab_header("exposure"),
         # Radio-selectable topic list; the selected row carries the inline
         # threshold editor. Rebuilt by render_exposure_topics on selection.
         html.Div(id="exposure-topic-list",
@@ -372,10 +433,7 @@ def tab_mh():
     # Colour ramps for these layers live in the floating map legend
     # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Multi Hazard Indicators", className="ph-title"),
-            html.Div("Combined hazard count & intensity", className="ph-sub"),
-        ]),
+        tab_header("mh"),
         html.Div(className="ps", children=[
             html.Div("Hazard Count (MHC)", className="ps-label"),
             html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
@@ -420,10 +478,7 @@ def tab_mh():
 
 def tab_analysis():
     return html.Div(id="tab-analysis", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Exposure Analysis", className="ph-title"),
-            html.Div("Compute children exposed by admin region", className="ph-sub"),
-        ]),
+        tab_header("analysis"),
         # ── Sub-tab switcher ──
         html.Div(className="analysis-sub-tabs", children=[
             html.Button("GeoRepo Boundaries", id="btn-georapo-tab",
@@ -642,11 +697,7 @@ def _infra_layer_options(country=None):
 
 def tab_infrastructure():
     return html.Div(id="tab-infrastructure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Infrastructure Analysis", className="ph-title"),
-            html.Div("Correlate facilities with hazards & child population",
-                     className="ph-sub"),
-        ]),
+        tab_header("infrastructure"),
 
         # 1. Region — own selector that writes to the shared region stores.
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
@@ -678,6 +729,11 @@ def tab_infrastructure():
                 options=[], value=None,
                 placeholder="— select a country first —",
                 clearable=True, searchable=False,
+            ),
+            html.Button(
+                [html.I(className="bi bi-plus-circle"),
+                 html.Span("Add your own facility data")],
+                id="infra-add-layer-btn", className="link-btn", n_clicks=0,
             ),
             html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
                 dcc.Input(
@@ -867,38 +923,53 @@ def _forecast_kind_badge(cfg):
     return html.Span(KIND_LABELS.get(kind, kind).upper(), className=cls)
 
 
-def tab_forecast():
-    return html.Div(id="tab-forecast", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Forecast & Live Hazards", className="ph-title"),
-            html.Div("Children exposed to forecast and near-real-time conditions",
-                     className="ph-sub"),
-        ]),
+_FC_CAVEAT = (
+    "Both describe a specific time window, so these numbers are not comparable "
+    "with the Pop Analysis tab, whose hazards are fixed 100-year return periods."
+)
+
+
+def tab_observed():
+    """Recently observed (near-real-time) hazards.
+
+    Carries only its own dataset list. The window / region / threshold controls
+    and every store live once in tab_forecast() — Dash ids must be unique, so
+    they cannot be duplicated per pane — and are shared by both tabs, with the
+    active tab supplying the dataset `kind`.
+    """
+    return html.Div(id="tab-observed", style={"display": "none"}, children=[
+        tab_header("observed"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
-                html.Strong("Forecast"), " layers predict conditions ahead; ",
                 html.Strong("Observation"), " layers report what recently "
-                "happened. Both describe a specific time window, so these "
-                "numbers are ", html.Strong("not comparable"), " with the ",
-                html.Strong("Analysis"), " tab, whose hazards are fixed "
-                "100-year return periods.",
+                "happened, from near-real-time satellite and reanalysis data. ",
+                _FC_CAVEAT,
+            ], className="exposure-method-p", style={"marginBottom": "0"}),
+        ]),
+        html.Div(id="observed-list-wrap", children=[
+            html.Div(id="observed-dataset-list", className="layer-list"),
+        ]),
+        html.Div("Set the window, region and threshold on the Forecast tab — "
+                 "the controls are shared between both tabs.",
+                 className="ps-caption", style={"padding": "10px 16px"}),
+    ])
+
+
+def tab_forecast():
+    return html.Div(id="tab-forecast", style={"display": "none"}, children=[
+        tab_header("forecast"),
+        html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
+                 children=[
+            html.P([
+                html.Strong("Forecast"), " layers predict conditions ahead. ",
+                _FC_CAVEAT,
             ], className="exposure-method-p", style={"marginBottom": "0"}),
         ]),
 
-        # 1. Dataset — a segmented kind switch over a browsable row list,
-        # reusing the Layers tab's .layer-item pattern. A dropdown hid the
-        # catalog behind a click and gave no room for units or the ⓘ; the list
-        # shows every option, its topic and units at once, and clicking a row
-        # previews it on the map straight away.
-        # Segment visibility is resolved by forecast_switch_segment on tab
-        # entry: a kind with no active datasets loses its button entirely.
         html.Div(className="analysis-sub-tabs", children=[
-            html.Button("Forecast", id="fc-seg-forecast",
+            html.Button("Catalog", id="fc-seg-forecast",
                         className="analysis-sub-tab active", n_clicks=0,
-                        style={"display": "block"}),
-            html.Button("Observed", id="fc-seg-nrt",
-                        className="analysis-sub-tab", n_clicks=0,
                         style={"display": "block"}),
             html.Button("Custom", id="fc-seg-custom",
                         className="analysis-sub-tab", n_clicks=0),
@@ -906,7 +977,6 @@ def tab_forecast():
         html.Div(id="fc-seg-blurb", className="ps-caption",
                  style={"padding": "8px 16px 0"}),
 
-        # Catalog rows (Forecast / Observed segments)
         html.Div(id="forecast-list-wrap", children=[
             html.Div(id="forecast-dataset-list", className="layer-list"),
         ]),
@@ -1057,7 +1127,6 @@ def tab_forecast():
         dcc.Store(id="store-forecast-asset",   data=None),
         dcc.Store(id="store-forecast-result",  data=None),
         dcc.Store(id="store-forecast-viz",     data=None),
-        dcc.Store(id="store-forecast-segment", data="forecast"),
         # Topic groups currently unfolded. Empty = all collapsed, the default.
         dcc.Store(id="store-fc-expanded",      data=[]),
         # Previewed layer's vis + units, so the map legend can describe it
@@ -1068,10 +1137,7 @@ def tab_forecast():
 
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("AI Assistant", className="ph-title"),
-            html.Div("Ask about hazard layers or child exposure", className="ph-sub"),
-        ]),
+        tab_header("ai"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
             html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
             html.P([
@@ -1159,6 +1225,15 @@ def map_component():
             id="basemap-toggle", className="basemap-toggle", n_clicks=0,
             title="Toggle satellite basemap",
         ),
+        # PLACEHOLDER COPY — pending comms/legal sign-off.
+        html.Div(id="map-disclaimer", className="map-disclaimer", children=[
+            html.Span(
+                "Modelled estimates, not observed impacts. Boundaries and names "
+                "shown do not imply endorsement or acceptance by the United "
+                "Nations.",
+                className="map-disclaimer-text",
+            ),
+        ]),
         dl.Map(
             id="main-map",
             center=[10, 20], zoom=3, zoomControl=False,
@@ -1367,7 +1442,7 @@ def _login_page():
 # ---------------------------------------------------------------------------
 app.layout = html.Div(id="app-root", children=[
     # ── Stores ──
-    dcc.Store(id="store-embargo",       storage_type="session", data=False),
+    dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
     dcc.Store(id="store-tab",           data="hazard"),
     dcc.Store(id="store-hazard-layer",  data=None),
     dcc.Store(id="store-exposure-topic",data=None),
@@ -1397,19 +1472,95 @@ app.layout = html.Div(id="app-root", children=[
     # badge watches this alongside the tile layers' n_loads.
     dcc.Store(id="store-map-busy",      data=None),
 
-    # ── Embargo gate ──
+    # ── Data-use gate ──────────────────────────────────────────────────────
+    # PLACEHOLDER COPY — pending comms/legal sign-off before public launch.
     html.Div(id="embargo-gate", children=[
         html.Div(className="embargo-card", children=[
-            html.Div("UNICEF CCRR — Data Access", className="embargo-tag"),
-            html.Div("Official Data Release Policy", className="embargo-title"),
+            html.Div("UNICEF — Data Use Notice", className="embargo-tag"),
+            html.Div("About this data", className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Results are ", html.Strong("not final"),
-                " and currently under review. External sharing is under ",
-                html.Strong("embargo"),
-                " until the Children Climate Risk Report (CCRR) global release.",
+                "Figures shown are ", html.Strong("modelled estimates"),
+                ", derived from global hazard datasets combined with WorldPop "
+                "gridded population. They indicate relative exposure — not "
+                "observed impacts — and carry uncertainty that increases at "
+                "finer administrative levels.",
+                html.Br(), html.Br(),
+                "The designations employed and the presentation of material on "
+                "this site do not imply the expression of any opinion on the "
+                "part of UNICEF concerning the legal status of any country or "
+                "territory, or the delimitation of its frontiers or boundaries.",
             ]),
-            html.Button("I Understand and Accept",
+            dcc.Checklist(
+                id="embargo-dismiss-forever",
+                options=[{"label": "Don't show this again", "value": "yes"}],
+                value=[], className="embargo-check",
+            ),
+            html.Button("I Understand",
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
+        ]),
+    ]),
+
+    # ── Add-your-own-data dialog (Infra tab) ───────────────────────────────
+    html.Div(id="co-template-gate", style={"display": "none"}, children=[
+        html.Div(className="embargo-card co-template-card", children=[
+            html.Div("UNICEF — Infrastructure Data", className="embargo-tag"),
+            html.Div("Add your own facility data", className="embargo-title"),
+            html.Div(className="embargo-body", children=[
+                "Country offices can have their own schools, health facilities "
+                "or water points added as a layer in this tab. Send us the data "
+                "in the format below and we prepare and load it for you.",
+                html.Br(), html.Br(),
+                html.Strong("1. Download the template"), " for the facility "
+                "type you hold:",
+                html.Div(className="co-template-links", children=[
+                    html.A([html.I(className="bi bi-download"), "Schools"],
+                           href="/assets/templates/co_schools_template.csv",
+                           download="co_schools_template.csv",
+                           className="co-template-link"),
+                    html.A([html.I(className="bi bi-download"),
+                            "Health facilities"],
+                           href="/assets/templates/co_health_template.csv",
+                           download="co_health_template.csv",
+                           className="co-template-link"),
+                    html.A([html.I(className="bi bi-download"), "Water points"],
+                           href="/assets/templates/co_water_template.csv",
+                           download="co_water_template.csv",
+                           className="co-template-link"),
+                ]),
+                html.Strong("2. Fill it in."), " Coordinates must be decimal "
+                "degrees in WGS84 (EPSG:4326) — longitude between −180 and 180, "
+                "latitude between −90 and 90, negative south and west. Leave "
+                "out any column you do not hold; do not add columns for "
+                "country, facility type or source.",
+                html.Br(), html.Br(),
+                html.Strong("3. Check it here"), " before sending — drop your "
+                "filled file below and we will tell you straight away if "
+                "anything needs fixing. Nothing is uploaded; the check runs in "
+                "your browser.",
+                dcc.Upload(
+                    id="co-validate-upload",
+                    accept=".csv",
+                    multiple=False,
+                    className="co-validate-drop",
+                    children=html.Div([
+                        html.I(className="bi bi-file-earmark-check"),
+                        html.Span("Drop your CSV here, or click to choose"),
+                    ]),
+                ),
+                # Markdown with raw HTML: the clientside check builds its report
+                # as an HTML string, and a plain Div would render the tags as
+                # visible text. Content is generated in-browser from the user's
+                # own file and escaped before insertion.
+                dcc.Markdown(id="co-validate-report", children="",
+                             dangerously_allow_html=True,
+                             className="co-validate-report"),
+                html.Strong("4. Send it to the GCHD team"), " through your usual "
+                "channel, telling us the country, the source and date of the "
+                "data, and whether it may be shown publicly. We confirm once "
+                "the layer is live.",
+            ]),
+            html.Button("Close", id="co-template-close",
+                        className="embargo-btn", n_clicks=0),
         ]),
     ]),
 
@@ -1444,11 +1595,14 @@ app.layout = html.Div(id="app-root", children=[
                     "letterSpacing": "0.01em",
                 }
             ),
+            # Order mirrors TABS so the file reads in rail order; panes are
+            # display-toggled, so DOM order itself is not visually significant.
             tab_hazard_layers(),
-            tab_exposure(),
             tab_mh(),
+            tab_exposure(),
             tab_analysis(),
             tab_infrastructure(),
+            tab_observed(),
             tab_forecast(),
             tab_ai(),
         ]),
@@ -1463,73 +1617,214 @@ app.layout = html.Div(id="app-root", children=[
 
 # ── Embargo ──────────────────────────────────────────────────────────────────
 
-@app.callback(
-    Output("store-embargo", "data"),
-    Output("embargo-gate",  "style"),
-    Input("embargo-btn",    "n_clicks"),
-    State("store-embargo",  "data"),
+# Mirrors scripts/validate_co_submission.py. Clientside so a country office
+# needs nothing installed and no file ever leaves their machine — the Python
+# version stays for the GCHD team's own use on arrival. Keep the two in step:
+# the rules are the coordinate ranges and the column aliases, both of which
+# change rarely.
+app.clientside_callback(
+    """
+    function(contents, filename) {
+        if (!contents) { return ""; }
+        var LON = ["longitude","lon","long","x"];
+        var LAT = ["latitude","lat","y"];
+        var NAME = ["name","facility_name","school_name","water_source"];
+        var ID  = ["facility_id","id","code","school_id","facility_code","wpdx_id"];
+
+        function esc(s){ return String(s).replace(/[<>&]/g, ""); }
+        function report(errs, warns, nOk, total) {
+            var h = "";
+            errs.forEach(function(e){
+                h += '<div class="co-v-err"><b>Error</b> ' + esc(e) + '</div>'; });
+            warns.forEach(function(w){
+                h += '<div class="co-v-warn"><b>Check</b> ' + esc(w) + '</div>'; });
+            if (errs.length) {
+                h += '<div class="co-v-sum co-v-bad">Not ready to send - '
+                   + 'fix the errors above.</div>';
+            } else if (warns.length) {
+                h += '<div class="co-v-sum co-v-ok">' + nOk + ' of ' + total
+                   + ' rows usable. Review the points above, then send.</div>';
+            } else {
+                h += '<div class="co-v-sum co-v-ok">All checks passed - '
+                   + nOk + ' rows ready to send.</div>';
+            }
+            return h;
+        }
+
+        try {
+            var raw = atob((contents.split(",")[1]) || "");
+            // Strip a UTF-8 BOM: Excel writes one and it corrupts the first header.
+            if (raw.charCodeAt(0) === 0xEF) { raw = raw.slice(3); }
+            var lines = raw.split(/\\r\\n|\\n|\\r/).filter(function(l){
+                return l.trim().length; });
+            if (lines.length < 2) {
+                return report(["The file has no data rows."], [], 0, 0);
+            }
+            // Split on commas outside quotes, so a quoted name with a comma
+            // does not shift every column after it.
+            function cells(line) {
+                var out = [], cur = "", q = false;
+                for (var i = 0; i < line.length; i++) {
+                    var c = line[i];
+                    if (c === '"') { q = !q; }
+                    else if (c === "," && !q) { out.push(cur); cur = ""; }
+                    else { cur += c; }
+                }
+                out.push(cur);
+                return out.map(function(s){ return s.trim().replace(/^"|"$/g, ""); });
+            }
+
+            var hdr = cells(lines[0]).map(function(h){ return h.toLowerCase(); });
+            function find(cands) {
+                for (var i = 0; i < cands.length; i++) {
+                    var j = hdr.indexOf(cands[i]);
+                    if (j >= 0) { return j; }
+                }
+                return -1;
+            }
+            var iLon = find(LON), iLat = find(LAT),
+                iName = find(NAME), iId = find(ID);
+
+            var errs = [], warns = [];
+            if (iLon < 0) { errs.push("No longitude column. Name it 'longitude' "
+                                      + "(also accepted: lon, long, x)."); }
+            if (iLat < 0) { errs.push("No latitude column. Name it 'latitude' "
+                                      + "(also accepted: lat, y)."); }
+            if (iName < 0) { warns.push("No name column - facilities will be "
+                                        + "unlabelled."); }
+            if (iId < 0) { warns.push("No facility_id column - ids will be "
+                                      + "generated, so a re-submission cannot "
+                                      + "update existing records."); }
+            ["iso3","country","source","facility_type"].forEach(function(c){
+                if (hdr.indexOf(c) >= 0) {
+                    warns.push("Column '" + c + "' is ignored - country, type "
+                             + "and source are set when the layer is registered.");
+                }
+            });
+            if (errs.length) { return report(errs, warns, 0, lines.length - 1); }
+
+            var nBad = 0, nLonR = 0, nLatR = 0, nNull = 0, nMulti = 0,
+                nMetres = 0, nPos = 0, nNeg = 0, nOk = 0, seen = {}, nDup = 0;
+
+            for (var r = 1; r < lines.length; r++) {
+                var row = cells(lines[r]);
+                var lo = parseFloat(row[iLon]), la = parseFloat(row[iLat]);
+                if (isNaN(lo) || isNaN(la)) { nBad++; continue; }
+                nOk++;
+                if (Math.abs(lo) > 180) { nLonR++; }
+                if (Math.abs(la) > 90)  { nLatR++; }
+                if (Math.abs(lo) > 1000 || Math.abs(la) > 1000) { nMetres++; }
+                if (lo === 0 && la === 0) { nNull++; }
+                if (la > 0) { nPos++; } else if (la < 0) { nNeg++; }
+                var key = lo + "," + la;
+                if (seen[key]) { nDup++; } else { seen[key] = 1; }
+                if (iName >= 0 && /[\\r\\n]/.test(row[iName] || "")) { nMulti++; }
+            }
+
+            var total = lines.length - 1;
+            if (nBad) { warns.push(nBad + " of " + total + " rows have a missing "
+                      + "or non-numeric coordinate and will be dropped."); }
+            if (!nOk) { return report(["No row has a usable coordinate pair."],
+                                      warns, 0, total); }
+            if (nLonR) { errs.push(nLonR + " rows have longitude outside "
+                       + "-180..180."); }
+            if (nLatR) { errs.push(nLatR + " rows have latitude outside -90..90. "
+                       + "If these look like longitudes, the two columns are "
+                       + "swapped."); }
+            if (nMetres) { errs.push("Coordinates look like metres, not degrees "
+                         + "- reproject to WGS84 (EPSG:4326) before exporting."); }
+            if (nNull) { warns.push(nNull + " rows sit at exactly 0,0 - usually "
+                       + "a blank coordinate rather than a real location."); }
+            if (nPos && nNeg) { warns.push("Latitudes span both hemispheres - "
+                              + "check for a missing minus sign if the country "
+                              + "is entirely north or south of the equator."); }
+            if (nDup) { warns.push(nDup + " rows share a coordinate with another "
+                      + "row - possible duplicates."); }
+            if (nMulti) { warns.push(nMulti + " names contain a line break. "
+                        + "These are collapsed automatically, but a line break "
+                        + "can shift columns in some exports."); }
+
+            return report(errs, warns, nOk, total);
+        } catch (e) {
+            return report(["Could not read that file as CSV: " + e.message],
+                          [], 0, 0);
+        }
+    }
+    """,
+    Output("co-validate-report", "children"),
+    Input("co-validate-upload",  "contents"),
+    State("co-validate-upload",  "filename"),
     prevent_initial_call=True,
 )
-def accept_embargo(n, _accepted):
-    if n:
-        return True, {"display": "none"}
-    return no_update, no_update
 
 
 @app.callback(
-    Output("embargo-gate", "style", allow_duplicate=True),
-    Input("store-embargo", "data"),
+    Output("co-template-gate",   "style"),
+    Input("infra-add-layer-btn", "n_clicks"),
+    Input("co-template-close",   "n_clicks"),
     prevent_initial_call=True,
 )
-def restore_embargo_state(accepted):
-    return {"display": "none"} if accepted else no_update
+def toggle_co_template_dialog(_open, _close):
+    if ctx.triggered_id == "infra-add-layer-btn":
+        return {"display": "flex"}
+    return {"display": "none"}
+
+
+@app.callback(
+    Output("store-embargo-permanent", "data"),
+    Output("embargo-gate",            "style"),
+    Input("embargo-btn",              "n_clicks"),
+    State("embargo-dismiss-forever",  "value"),
+    prevent_initial_call=True,
+)
+def accept_embargo(n, dismiss_forever):
+    """Dismiss the notice, persisting only if the box was ticked."""
+    if not n:
+        return no_update, no_update
+    return bool(dismiss_forever), {"display": "none"}
+
+
+@app.callback(
+    Output("embargo-gate",           "style", allow_duplicate=True),
+    Input("store-embargo-permanent", "data"),
+    prevent_initial_call=True,
+)
+def restore_embargo_state(accepted_forever):
+    """Hide on load only for users who ticked 'don't show this again'."""
+    return {"display": "none"} if accepted_forever else no_update
 
 
 # ── Tab switching ─────────────────────────────────────────────────────────────
 
 @app.callback(
-    Output("store-tab",         "data"),
-    Output("btn-hazard",        "className"),
-    Output("btn-exposure",      "className"),
-    Output("btn-mh",            "className"),
-    Output("btn-analysis",      "className"),
-    Output("btn-infra",         "className"),
-    Output("btn-forecast",      "className"),
-    Output("btn-ai",            "className"),
-    Output("tab-hazard",        "style"),
-    Output("tab-exposure",      "style"),
-    Output("tab-mh",            "style"),
-    Output("tab-analysis",      "style"),
-    Output("tab-infrastructure","style"),
-    Output("tab-forecast",      "style"),
-    Output("tab-ai",            "style"),
+    Output("store-tab", "data"),
+    *[Output(t["btn"],  "className") for t in TABS],
+    *[Output(t["pane"], "style")     for t in TABS],
     Output("hazard-info-panel", "style", allow_duplicate=True),
-    Input("btn-hazard",    "n_clicks"),
-    Input("btn-exposure",  "n_clicks"),
-    Input("btn-mh",        "n_clicks"),
-    Input("btn-analysis",  "n_clicks"),
-    Input("btn-infra",     "n_clicks"),
-    Input("btn-forecast",  "n_clicks"),
-    Input("btn-ai",        "n_clicks"),
-    State("store-tab",     "data"),
+    *[Input(t["btn"], "n_clicks") for t in TABS],
+    State("store-tab", "data"),
     prevent_initial_call=True,
 )
-def switch_tab(n1, n2, n3, n4, n5, n6, n7, current):
-    tab = {"btn-hazard":"hazard","btn-exposure":"exposure",
-           "btn-mh":"mh","btn-analysis":"analysis",
-           "btn-infra":"infrastructure","btn-forecast":"forecast",
-           "btn-ai":"ai"}.get(ctx.triggered_id, current)
-    cls = lambda t: "nav-btn active" if tab == t else "nav-btn"
-    vis = lambda t: {"display": "block"} if tab == t else {"display": "none"}
-    # The popover serves both the Layers tab and the Forecast dataset ⓘ, so it
-    # must survive a switch to either.
-    info_panel = no_update if tab in ("hazard", "forecast") else {"display": "none"}
+def switch_tab(*args):
+    """Show one pane and highlight its rail button.
+
+    Outputs are generated from TABS, so the arity can never drift out of sync
+    with the rail the way a hand-maintained Output list could — a mismatch
+    there used to fail silently at click time rather than at import.
+    """
+    current = args[-1]
+    btn_to_key = {t["btn"]: t["key"] for t in TABS}
+    tab = btn_to_key.get(ctx.triggered_id, current)
+    cls = lambda k: "nav-btn active" if tab == k else "nav-btn"
+    vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
+    # The popover serves the Layers list and the Forecast dataset info
+    # button, so it must survive a switch to either.
+    info_panel = (no_update if tab in ("hazard", *FORECAST_TABS)
+                  else {"display": "none"})
     return (
         tab,
-        cls("hazard"), cls("exposure"), cls("mh"), cls("analysis"),
-        cls("infrastructure"), cls("forecast"), cls("ai"),
-        vis("hazard"), vis("exposure"), vis("mh"), vis("analysis"),
-        vis("infrastructure"), vis("forecast"), vis("ai"),
+        *[cls(t["key"]) for t in TABS],
+        *[vis(t["key"]) for t in TABS],
         info_panel,
     )
 
@@ -1542,13 +1837,15 @@ def switch_tab(n1, n2, n3, n4, n5, n6, n7, current):
     Output("hazard-info-panel-body",  "children"),
     Output("store-info-open",         "data"),
     Input({"type": "hazard-info-btn", "index": ALL}, "n_clicks"),
+    Input({"type": "prov-info-btn",   "index": ALL}, "n_clicks"),
     Input("hazard-info-close",       "n_clicks"),
     Input("store-hazard-layer",      "data"),
     Input("forecast-dataset-select", "value"),
     State("store-info-open",         "data"),
     prevent_initial_call=True,
 )
-def toggle_hazard_info(info_clicks, _close, layer_name, fc_dataset, open_for):
+def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name,
+                       fc_dataset, open_for):
     """Open the info popover for a layer. It closes on: a second click of the
     same button, the × button, selecting any layer on the map, or changing the
     forecast dataset.
@@ -1574,16 +1871,22 @@ def toggle_hazard_info(info_clicks, _close, layer_name, fc_dataset, open_for):
         if not open_for:
             return no_update, no_update, no_update, no_update
         return {"display": "none"}, no_update, no_update, None
-    if isinstance(triggered, dict) and triggered.get("type") == "hazard-info-btn":
-        # The forecast ⓘ buttons are created dynamically by
-        # forecast_render_list, and Dash re-fires an ALL pattern input when new
-        # matching components enter the layout — with triggered_id set to one of
-        # them. prevent_initial_call does not cover that, so without this guard
-        # the popover opens by itself on the first list render. A real click
-        # always leaves a non-zero n_clicks somewhere in the group.
-        if not any(c for c in (info_clicks or []) if c):
+    if (isinstance(triggered, dict)
+            and triggered.get("type") in ("hazard-info-btn", "prov-info-btn")):
+        # The results-panel ⓘ buttons are created when a result renders, and
+        # Dash re-fires an ALL pattern input when new matching components enter
+        # the layout — with triggered_id set to one of them. prevent_initial_call
+        # does not cover that, so without this guard the popover opens by itself
+        # as soon as results appear. A real click always leaves a non-zero
+        # n_clicks somewhere in the group.
+        if not any(c for c in ((info_clicks or []) + (_prov_clicks or [])) if c):
             return no_update, no_update, no_update, no_update
         name = triggered["index"]
+        # Results-panel icons carry a "<scope>:" prefix to keep their ids unique
+        # across the Analysis and Infrastructure panels; the popover is keyed on
+        # the hazard itself.
+        if triggered["type"] == "prov-info-btn":
+            name = name.split(":", 1)[1]
         if open_for == name:                      # same button → toggle closed
             return {"display": "none"}, no_update, no_update, None
         if name.startswith(FC_INFO_PREFIX):
@@ -1615,12 +1918,18 @@ app.clientside_callback(
         // otherwise collide, e.g. "fire_FRP..." inside another id).
         var exact = JSON.stringify({index: openFor, type: "hazard-info-btn"});
         var btn = document.getElementById(exact);
+        // Results-panel icons prefix their index with a scope ("an:", "infra:")
+        // to stay unique across panels, so match on the part after the colon.
         if (!btn) {
             btn = (Array.prototype.find.call(
-                document.querySelectorAll(".hazard-info-btn"),
+                document.querySelectorAll(".hazard-info-btn, .info-icon-btn"),
                 function(el){
-                    try { return JSON.parse(el.id).index === openFor; }
-                    catch (e) { return false; }
+                    try {
+                        var idx = JSON.parse(el.id).index;
+                        if (idx === openFor) { return true; }
+                        var c = idx.indexOf(":");
+                        return c >= 0 && idx.slice(c + 1) === openFor;
+                    } catch (e) { return false; }
                 }) || null);
         }
         if (!btn) { return [window.dash_clientside.no_update, classes]; }
@@ -1875,6 +2184,9 @@ def _analysis_legend_specs(viz):
     so the map stays readable (its tile is fetched only on first reveal)."""
     if not viz:
         return []
+    if viz.get("no_data"):
+        return [swatch_spec("Selected region", "#FFD700", shape="line",
+                            layer_id="analysis-selection", toggleable=True)]
     specs = [
         vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
                           layer_id="analysis-exposed", unit="+",
@@ -1925,8 +2237,8 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
     if tab == "analysis":
         return layers, _analysis_legend_specs(analysis_viz)
 
-    # Forecast tiles are dedicated top-level components too (forecast-*-tile).
-    if tab == "forecast":
+    # Dedicated top-level components (forecast-*-tile), shared by both tabs.
+    if tab in FORECAST_TABS:
         return layers, _forecast_legend_specs(forecast_viz, forecast_preview)
 
     if tab == "hazard" and sel_layer:
@@ -2389,7 +2701,7 @@ def update_selection_layer(ucode, tab, level):
     # group (a LayerGroup's children can't be flipped clientside). Drawing it
     # here too would double the highlight and leave a copy that the legend's
     # eye cannot switch off.
-    if tab in ("infrastructure", "analysis", "forecast"):
+    if tab in ("infrastructure", "analysis") or tab in FORECAST_TABS:
         return []
     if not ucode or not level:
         return []
@@ -2437,7 +2749,7 @@ def on_map_click(click_data, level, country_ucode, last_click, tab):
     if not click_data or not level or not country_ucode:
         return no_update, no_update, no_update, no_update
     if level == "adm0 (Country)" or tab not in ("analysis", "infrastructure",
-                                                "forecast"):
+                                                *FORECAST_TABS):
         return no_update, no_update, no_update, no_update
     latlng = click_data.get("latlng")
     if not latlng:
@@ -2566,7 +2878,8 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
             return no_update, no_update, no_update
         data = _apply_force_null(existing, ucode)
         return no_update, render_results(data, name, mhc, mhi,
-                                         data.get("_topics"), data.get("_overrides")), no_update
+                                         data.get("_topics"), data.get("_overrides"),
+                                         ucode=ucode), no_update
 
     # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
@@ -2585,14 +2898,20 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     # legend row — a toggle for a hazard with no local coverage is just noise.
     map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
                   and (result.get(t) or 0) > 0][:ANALYSIS_TOPIC_SLOTS]
+    no_data = is_no_data_ucode(ucode)
     viz = {
         "ucode": ucode, "level": level, "name": name,
-        "topics": map_topics,
+        # Where no hazard data exists, the region outline is the only honest
+        # thing to draw: an exposed-population raster would render a figure the
+        # results panel is explicitly declining to report.
+        "topics": [] if no_data else map_topics,
+        "no_data": no_data,
         # Sorted tuple-of-pairs: stable, hashable cache key for the tile helpers.
         "thr": sorted((h, v) for h, v in (overrides or {}).items()),
     }
     return (result,
-            render_results(result, name, mhc, mhi, sel_topics, overrides),
+            render_results(result, name, mhc, mhi, sel_topics, overrides,
+                           ucode=ucode),
             viz)
 
 
@@ -2623,11 +2942,14 @@ def update_analysis_layers(viz, tab):
         return "", "", no_update, {}
 
     thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
-    try:
-        url, _ = get_exposed_pop_tile_url(
-            viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
-    except Exception:
-        return "", "", no_update, {}
+    if viz.get("no_data"):
+        url = ""
+    else:
+        try:
+            url, _ = get_exposed_pop_tile_url(
+                viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
+        except Exception:
+            return "", "", no_update, {}
 
     # AOI outline — cached, so this is free on repeat Computes of the region.
     try:
@@ -2721,6 +3043,50 @@ def _hazard_label(name):
     return " ".join(words[:2])
 
 
+POP_BASIS = "WorldPop under-18 gridded population, 2025, 100 m"
+
+
+_ESTIMATE_CAVEAT = (
+    "Figures are the modelled child population in areas where the hazard "
+    "exceeds the stated threshold — indicative of relative exposure, not "
+    "observed impacts."
+)
+
+
+def _info_icon(hazard_name, scope="an"):
+    """Inline ⓘ opening the shared layer-info popover.
+
+    A distinct `type` from the Layers tab's buttons, and a `scope`-prefixed
+    index: that tab renders one button per hazard already, and the Analysis and
+    Infrastructure panels both persist in the layout at once, so an unprefixed
+    id would put duplicate component ids on the page for the same hazard.
+    """
+    return html.Button(
+        html.I(className="bi bi-info-circle"),
+        id={"type": "prov-info-btn", "index": f"{scope}:{hazard_name}"},
+        className="info-icon-btn", n_clicks=0,
+        title=_layer_label(hazard_name),
+    )
+
+
+def _provenance_block(extra_lines=None):
+    """Methodology section for a results panel.
+
+    Numbers get copied into slides and emails, so the basis travels with them.
+    Shared by Analysis and Infrastructure so the two panels can never state it
+    differently.
+    """
+    lines = [f"Population: {POP_BASIS}", *(extra_lines or [])]
+    return html.Div(className="ps", children=[
+        html.Div("Methodology", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(_ESTIMATE_CAVEAT, className="ps-caption"),
+        html.Div([html.Div(t) for t in lines],
+                 className="ps-caption", style={"lineHeight": "1.7",
+                                                "marginBottom": "0"}),
+    ])
+
+
 def _eff_threshold(h_name, overrides):
     """Effective threshold + unit label for a hazard, given the user overrides."""
     default = HAZARD_MAP.get(h_name, {}).get("threshold")
@@ -2732,7 +3098,29 @@ def _eff_threshold(h_name, overrides):
     return f"thr {thr_str}" + (f" {units}" if units else "")
 
 
-def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overrides=None):
+def _no_data_panel(region_name):
+    """Shown instead of figures where no hazard has usable data.
+
+    Deliberately reports nothing numeric — not even a population total. The
+    previous behaviour zeroed every field, which a reader cannot distinguish
+    from a measured "no children are exposed here".
+    """
+    return html.Div(className="ps", children=[
+        html.Div("Data not available", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(
+            f"Hazard and exposure data are not available for {region_name}, "
+            "so no figures are reported. This reflects a gap in the underlying "
+            "global datasets, not an absence of hazard or of children.",
+            className="ps-caption", style={"marginBottom": "0"},
+        ),
+    ])
+
+
+def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
+                   overrides=None, ucode=None):
+    if ucode and is_no_data_ucode(ucode):
+        return _no_data_panel(region_name)
     if not result:
         return html.Div("No data available.", className="ps-caption",
                         style={"padding": "14px 16px"})
@@ -2776,6 +3164,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0]) if hazards else None,
                     topic.upper(),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ]),
@@ -2797,7 +3186,9 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             thr_txt = _eff_threshold(h_name, overrides)
             rows.append(html.Div(className="info-row", children=[
                 html.Span([
-                    f"└ {_hazard_label(h_name)}",
+                    "└ ",
+                    _info_icon(h_name),
+                    _hazard_label(h_name),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ], className="info-lbl",
                     style={"paddingLeft": "22px", "color": "var(--lo)",
@@ -2918,6 +3309,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
                  for t in no_data_topics],
             ),
         ]) if no_data_topics else None,
+        _provenance_block([f"Region: {region_name}"]),
         html.Div(className="ps", children=[
             html.A(
                 "⬇  Download results (JSON)",
@@ -3863,6 +4255,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0], "infra") if hazards else None,
                     topic.upper(),
                 ]),
                 html.Span([
@@ -3886,7 +4279,9 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                 hc = int(round((per_sub or {}).get(h) or 0))
                 thr = _eff_threshold(h, overrides)
                 sub_rows.append(html.Div(className="info-row", children=[
-                    html.Span([f"└ {_hazard_label(h)}",
+                    html.Span(["└ ",
+                               _info_icon(h, "infra"),
+                               _hazard_label(h),
                                html.Span(f"  {thr}" if thr else "",
                                          style={"color": "var(--lo)",
                                                 "fontSize": "0.9em"})],
@@ -3934,6 +4329,10 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     if not adm2_ucode or not level or level == "adm0 (Country)":
         return (_infra_error("Select an adm2 region and click a district on the map "
                              "to bound the analysis."), *nu)
+    # Districts inherit their country's data availability: the adm2 ucode
+    # carries the same stem, so this catches them without a separate list.
+    if is_no_data_ucode(adm2_ucode):
+        return (_no_data_panel(region_name or "this region"), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
@@ -3977,7 +4376,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                "rows show exposed children · facilities whose site is in that "
                f"hazard. {thr_note}.")
 
-    panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
+    panel = html.Div([
+        _infra_panel("Facility exposure", cards, items, None, caption=caption),
+        _provenance_block([
+            f"Region: {region_name or adm2_ucode} · {level}",
+            "Facilities: as supplied by the selected infrastructure layer "
+            "(see the layer name for its source)",
+        ]),
+    ])
 
     # ── Map layers ──
     try:
@@ -4377,7 +4783,7 @@ def forecast_on_level(level):
     Input("store-tab",            "data"),
 )
 def forecast_badge(name, tab):
-    if tab != "forecast" or not name:
+    if tab not in FORECAST_TABS or not name:
         return None
     return html.Div(className="selected-badge", children=[
         html.Div("Selected region", className="selected-badge-tag"),
@@ -4392,7 +4798,8 @@ def forecast_badge(name, tab):
     Input("store-tab",                "data"),
 )
 def forecast_highlight_selection(ucode, level, tab):
-    if tab != "forecast" or not ucode or not level or level == "adm0 (Country)":
+    if (tab not in FORECAST_TABS or not ucode or not level
+            or level == "adm0 (Country)"):
         return ""
     try:
         return get_selected_feature_tile_url(level, ucode)
@@ -4533,75 +4940,53 @@ def forecast_dataset_params(dataset, asset):
 
 # ── Dataset segment switch + row list ────────────────────────────────────────
 
-_FC_SEGMENTS = {"fc-seg-forecast": "forecast",
-                "fc-seg-nrt":      "nrt",
-                "fc-seg-custom":   "custom"}
+def _fc_kind_for_tab(tab):
+    """Which dataset kind the active tab browses."""
+    return "nrt" if tab == "observed" else "forecast"
 
 
 @app.callback(
-    Output("store-forecast-segment", "data"),
-    Output("fc-seg-forecast",        "className"),
-    Output("fc-seg-nrt",             "className"),
-    Output("fc-seg-custom",          "className"),
-    Output("fc-seg-forecast",        "style"),
-    Output("fc-seg-nrt",             "style"),
-    Output("forecast-list-wrap",     "style"),
-    Output("forecast-custom-wrap",   "style"),
-    Output("fc-seg-blurb",           "children"),
-    Input("fc-seg-forecast",         "n_clicks"),
-    Input("fc-seg-nrt",              "n_clicks"),
-    Input("fc-seg-custom",           "n_clicks"),
-    # Tab entry re-reads the override table, so a kind emptied in GEE loses its
-    # button without a restart.
-    Input("store-tab",               "data"),
+    Output("fc-seg-forecast",      "className"),
+    Output("fc-seg-custom",        "className"),
+    Output("forecast-list-wrap",   "style"),
+    Output("forecast-custom-wrap", "style"),
+    Output("fc-seg-blurb",         "children"),
+    Input("fc-seg-forecast",       "n_clicks"),
+    Input("fc-seg-custom",         "n_clicks"),
+    Input("store-tab",             "data"),
 )
-def forecast_switch_segment(_f, _n, _c, _tab):
-    show = {"display": "block"}
-    hide = {"display": "none"}
-
-    # Which kinds have anything to show right now (honours the GEE overrides).
-    live = active_datasets_live()
-    has = {k: any(d["kind"] == k for d in live) for k in ("forecast", "nrt")}
-
-    seg = _FC_SEGMENTS.get(ctx.triggered_id, no_update)
-    if seg is no_update or ctx.triggered_id == "store-tab":
-        # Not a segment click: keep whatever is sensible rather than resetting.
-        seg = "forecast" if has["forecast"] else ("nrt" if has["nrt"] else "custom")
-    # A segment with no active datasets is not selectable — fall through to one
-    # that has content rather than showing an empty list.
-    if seg in ("forecast", "nrt") and not has[seg]:
-        seg = ("forecast" if has["forecast"]
-               else ("nrt" if has["nrt"] else "custom"))
-
-    cls = lambda s: ("analysis-sub-tab active" if seg == s
-                     else "analysis-sub-tab")
-    blurbs = {
-        "forecast": KIND_BLURBS["forecast"] + " — pick a layer to preview it.",
-        "nrt":      KIND_BLURBS["nrt"] + " — pick a layer to preview it.",
-        "custom":   "Paste any GEE Image or ImageCollection id to run the same "
-                    "exposure analysis.",
-    }
-    return (seg, cls("forecast"), cls("nrt"), cls("custom"),
-            # Hide a kind's button entirely when nothing in it is enabled.
-            show if has["forecast"] else hide,
-            show if has["nrt"] else hide,
-            hide if seg == "custom" else show,
-            show if seg == "custom" else hide,
-            blurbs[seg])
+def forecast_switch_segment(_catalog, _custom, tab):
+    show, hide = {"display": "block"}, {"display": "none"}
+    custom = ctx.triggered_id == "fc-seg-custom"
+    cls = lambda is_custom: ("analysis-sub-tab active" if custom == is_custom
+                             else "analysis-sub-tab")
+    blurb = ("Paste any GEE Image or ImageCollection id to run the same "
+             "exposure analysis." if custom
+             else KIND_BLURBS.get(_fc_kind_for_tab(tab), "")
+                  + " — pick a layer to preview it.")
+    return (cls(False), cls(True),
+            hide if custom else show,
+            show if custom else hide,
+            blurb)
 
 
 @app.callback(
     Output("forecast-dataset-list",  "children"),
-    Input("store-forecast-segment",  "data"),
+    Output("observed-dataset-list",  "children"),
     Input("forecast-dataset-select", "value"),
     Input("store-fc-expanded",       "data"),
     # Tab entry re-reads the runtime override table (TTL-cached), so a dataset
     # enabled in GEE shows up without restarting the server.
     Input("store-tab",               "data"),
 )
-def forecast_render_list(segment, selected, expanded, tab):
-    kind = segment if segment in ("forecast", "nrt") else "forecast"
-    return _forecast_rows_for(kind, selected, expanded)
+def forecast_render_list(selected, expanded, tab):
+    """Render both tabs' lists.
+
+    One callback rather than two so a single read of active_datasets_live()
+    serves both, and the selection highlight can never disagree between them.
+    """
+    return (_forecast_rows_for("forecast", selected, expanded),
+            _forecast_rows_for("nrt", selected, expanded))
 
 
 @app.callback(
@@ -4799,7 +5184,7 @@ def forecast_clamp_dates(start, end, dataset, asset):
     Input("store-tab",               "data"),
 )
 def forecast_toggle_compute(level, ucode, clicked, dataset, asset, tab):
-    if tab != "forecast":
+    if tab not in FORECAST_TABS:
         return no_update, no_update, no_update, no_update
     cfg = _forecast_cfg(dataset, asset)
     if not cfg:

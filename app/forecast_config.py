@@ -50,7 +50,7 @@ FORECAST_DATASETS = [
     # ── Rainfall / flood ────────────────────────────────────────────────────
     {
         "id": "NOAA/GFS0P25", "name": "gfs_precip",
-        "label": "Rainfall forecast (NOAA GFS)", "topic": "River Flood",
+        "label": "Rainfall forecast (NOAA GFS)", "topic": "Rainfall",
         "kind": "forecast", "band": "total_precipitation_surface",
         "reducers": ["sum", "max"], "max_span_days": 10, "default_span_days": 3,
         "lag_days": 0,
@@ -68,7 +68,7 @@ FORECAST_DATASETS = [
     },
     {
         "id": "NASA/GPM_L3/IMERG_V07", "name": "imerg_precip",
-        "label": "Observed rainfall (GPM IMERG)", "topic": "River Flood",
+        "label": "Observed rainfall (GPM IMERG)", "topic": "Rainfall",
         "kind": "nrt", "band": "precipitation",
         "reducers": ["sum", "max"], "max_span_days": 30, "default_span_days": 7,
         "lag_days": 3,
@@ -131,8 +131,26 @@ FORECAST_DATASETS = [
         # over Kenya = 5.5-48.1 °C). Without this the threshold is meaningless.
         "transform": "modis_lst_c",
         "note": "Daytime land-surface temperature (not air temperature) — runs "
-                "hotter than a 2 m reading. Clear-sky pixels only.",
+                "hotter than a 2 m reading. Clear-sky pixels only. For a "
+                "2 m air temperature, use the ERA5-Land layer instead.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD11A1",
+    },
+    {
+        "id": "ECMWF/ERA5_LAND/HOURLY", "name": "era5_air_temp",
+        "label": "Observed air temperature (ERA5-Land)", "topic": "Extreme Heat",
+        "kind": "nrt", "band": "temperature_2m",
+        "reducers": ["max", "mean"], "max_span_days": 30, "default_span_days": 8,
+        # Latency measured at ~6 days; a shorter lag returns an empty window.
+        "lag_days": 7,
+        "threshold": 35, "min": -30, "max": 55, "units": "°C",
+        "palette": ["#f8e593", "#f8cc14", "#F89800", "#F86800", "#F83000"],
+        "scale": 11132,
+        # Plain Kelvin — no scale factor, unlike MODIS LST.
+        "transform": "kelvin_to_c",
+        "note": "Reanalysis 2 m air temperature, the basis health heat "
+                "thresholds are defined on — unlike MODIS land-surface "
+                "temperature, and unaffected by cloud cover. ~6 day latency.",
+        "source_url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_HOURLY",
     },
 
     # ── Fire ────────────────────────────────────────────────────────────────
@@ -329,6 +347,12 @@ _META = {
     "modis_lst": dict(active=True, provider="NASA LP DAAC", temporal="Daily",
         description="Daytime temperature of the ground surface measured by MODIS. This runs "
                     "considerably hotter than air temperature and is observed, not forecast."),
+    "era5_air_temp": dict(active=True, provider="ECMWF / Copernicus", temporal="Hourly",
+        description="Observed air temperature 2 m above ground, from the ERA5-Land reanalysis. "
+                    "Health heat thresholds are defined on 2 m air temperature, so this is the "
+                    "comparable measure — MODIS land-surface temperature runs considerably "
+                    "hotter. Reanalysis fills cloudy days that satellite retrievals miss, at "
+                    "the cost of roughly six days' latency."),
     "firms_brightness": dict(active=True, provider="NASA FIRMS", temporal="Daily composite",
         description="Brightness temperature of pixels where a fire has already been detected. "
                     "FIRMS pixels are algorithm-confirmed detections, so this grades how intense "
@@ -409,7 +433,7 @@ def forecast_groups():
 
     Drives the dataset dropdown: grouping by KIND before topic is what stops a
     GFS forecast and an observed IMERG image sitting side by side under one
-    'River Flood' heading with nothing to tell them apart.
+    'Rainfall' heading with nothing to tell them apart.
     """
     groups = {}
     for kind in ("forecast", "nrt"):                 # forecast first, always
@@ -421,7 +445,7 @@ def forecast_groups():
 
 # Topic -> [dataset names], ordered to match config.HAZARD_TOPICS.
 # Retained for the catalog generator and docs; the dropdown groups by kind.
-_TOPIC_ORDER = ["River Flood", "Tropical Storm", "Extreme Heat", "Heatwave",
+_TOPIC_ORDER = ["Rainfall", "Tropical Storm", "Extreme Heat", "Heatwave",
                 "Fire", "Air Pollution", "Sand and Dust Storm"]
 
 FORECAST_TOPICS = {
@@ -453,8 +477,6 @@ def is_forecast_kind(name):
 # DROPPED — verified unavailable or misleading. Do not re-add without probing.
 #
 #   Weather Next (projects/gcp-public-data-weathernext/...)
-#       Both candidate asset paths return "does not exist or doesn't allow this
-#       operation" for the unicef-ccri service account. Restricted collection.
 #   CHIRPS-GEFS
 #       No such public GEE collection. UCSB-CHG/CHIRPS/DAILY is observational,
 #       ~19 days stale, and carries no future-dated imagery — not a forecast.

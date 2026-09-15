@@ -24,6 +24,7 @@ from config import (
     ADMIN_DATA, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     MHC_OPTIONS, MHI_OPTIONS, SUB_TOPIC_DETAIL,
     POP_ASSET_TMPL, POP_VIS,
+    is_hidden_ucode,
 )
 
 
@@ -279,15 +280,27 @@ _COUNTRY_NAME_TO_ASSET = {v: k for k, v in COUNTRY_NAME_OVERRIDES.items()}
 
 @lru_cache(maxsize=1)
 def get_country_names():
-    names = (
+    """Selectable country/territory names, in display form.
+
+    Fetches ucodes alongside names because the availability registry keys on
+    the ucode stem: the hidden areas include forms like xJK_V1 and EGY1_V1
+    whose stems are not ISO3 codes, so they cannot be filtered by name or by a
+    derived ISO3.
+    """
+    rows = (
         ee.FeatureCollection(ADMIN_DATA["adm0 (Country)"]["asset"])
         .filter(ee.Filter.And(
             ee.Filter.neq("type", "Antarctica"),
             ee.Filter.neq("type", "Sovereignty unsettled"),
         ))
-        .aggregate_array("name").getInfo()
+        .reduceColumns(ee.Reducer.toList(2), ["name", "ucode"])
+        .get("list").getInfo()
     )
-    return sorted(COUNTRY_NAME_OVERRIDES.get(n, n) for n in names)
+    return sorted(
+        COUNTRY_NAME_OVERRIDES.get(name, name)
+        for name, ucode in rows
+        if name and not is_hidden_ucode(ucode)
+    )
 
 
 @lru_cache(maxsize=512)
@@ -354,6 +367,7 @@ _SOURCE_LABELS = {
     "wpdx":        "WPdx",
     "mwater":      "mWater",
     "hdx":         "HDX",
+    "co":          "Country Office",
 }
 
 # Refreshed on this interval so assets uploaded while the server is running are
@@ -379,6 +393,12 @@ def _iso3_to_country_name():
     names = {}
     for iso3, name, ucode in rows:
         if not iso3 or not name:
+            continue
+        # Same registry as the Analysis/Forecast dropdowns. Without this the
+        # Infrastructure tab could still offer an area the others hide, since
+        # it builds its list from GEE asset discovery rather than from
+        # get_country_names().
+        if is_hidden_ucode(ucode):
             continue
         # adm0 splits some states into mainland + territories; the mainland's
         # ucode is '{ISO3}_V<n>' with no digit before the version (AUS_V1),

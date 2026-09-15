@@ -56,6 +56,12 @@ body {
   cursor: pointer; transition: opacity 0.15s;
 }
 .embargo-btn:hover { opacity: 0.84; }
+.embargo-check { margin: -16px 0 18px; }
+.embargo-check label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.76rem; color: var(--mid); cursor: pointer;
+}
+.embargo-check input[type="checkbox"] { cursor: pointer; accent-color: var(--cyan); }
 
 /* ── Main layout ── */
 #main-app {
@@ -227,7 +233,7 @@ body {
 
 /* ── Basemap toggle (bottom-left) ── */
 .basemap-toggle {
-  position: absolute; bottom: 26px; left: 14px; z-index: 600;
+  position: absolute; bottom: var(--map-ctrl-bottom); left: 14px; z-index: 600;
   display: flex; align-items: center; gap: 6px;
   background: rgba(255,255,255,0.95); color: var(--mid);
   border: 1px solid var(--border2); border-radius: 8px;
@@ -241,7 +247,10 @@ body {
 }
 
 /* ── Scalebar (bottom-right) ── */
-.leaflet-control-scale { margin-bottom: 22px !important; margin-right: 12px !important; }
+.leaflet-control-scale {
+  margin-bottom: var(--map-ctrl-bottom) !important;
+  margin-right: 12px !important;
+}
 .leaflet-control-scale-line {
   background: rgba(255,255,255,0.95);
   border: 1px solid var(--border2); border-top: none;
@@ -250,7 +259,10 @@ body {
   color: var(--mid); font-size: 0.62rem; font-weight: 600;
   font-family: 'Source Sans Pro', sans-serif;
   line-height: 1.2; padding: 2px 6px 1px; text-shadow: none;
+  margin-bottom: 0 !important;
 }
+
+.leaflet-bottom.leaflet-right .leaflet-control-scale { margin-top: 0 !important; }
 
 /* ── Map legend overlay (bottom-left, stacked above the basemap toggle) ──
    Bottom-anchored so the panel grows upward as rows are added: the Analysis
@@ -258,7 +270,8 @@ body {
    collide with the hazard info panel (fixed, left:397px, top:0 → 40vh).
    max-height keeps a tall legend inside the map, scrolling its body instead. */
 .map-legend {
-  position: absolute; bottom: 67px; left: 14px; z-index: 600;
+  position: absolute; bottom: calc(var(--map-ctrl-bottom) + 43px);
+  left: 14px; z-index: 600;
   background: rgba(255,255,255,0.95);
   border: 1px solid var(--border2); border-radius: 8px;
   padding: 10px 12px; width: 168px;
@@ -490,7 +503,6 @@ body {
 .analysis-sub-tab:hover { color: var(--mid); }
 .analysis-sub-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 
-
 /* ── Layer item row (hazard list) ── */
 .layer-item-row {
   display: flex; align-items: stretch;
@@ -605,7 +617,6 @@ body {
 #main-map { height: 100vh; width: 100%; }
 #map-container.map-clickable .leaflet-container { cursor: pointer !important; }
 
-
 /* ── AI processing indicator ── */
 .ai-processing {
   font-size: 0.76rem; color: var(--lo); font-style: italic;
@@ -653,3 +664,128 @@ body {
   border-radius: 50%; animation: map-spin 0.7s linear infinite;
 }
 @keyframes map-spin { to { transform: rotate(360deg); } }
+/* ── "Add your own facility data" (Infra tab) ── */
+.link-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.72rem; font-weight: 600; color: var(--cyan);
+}
+.link-btn:hover { text-decoration: underline; }
+
+#co-template-gate {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(17,24,39,0.9);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+}
+/* The card grows with the validation report, so cap it and scroll the body
+   rather than the whole card: the title and the Close button stay put instead
+   of being pushed off-screen by a long list of findings. */
+.co-template-card {
+  max-width: 520px;
+  max-height: 86vh;
+  display: flex; flex-direction: column;
+  padding-bottom: 24px;
+}
+.co-template-card .embargo-title { color: var(--hi); }
+.co-template-card .embargo-body {
+  overflow-y: auto; min-height: 0;
+  margin-bottom: 18px; padding-right: 6px;
+  scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
+}
+.co-template-card .embargo-body::-webkit-scrollbar { width: 6px; }
+.co-template-card .embargo-body::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.co-template-card .embargo-btn { flex-shrink: 0; }
+.co-template-links {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px;
+}
+.co-template-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 6px;
+  background: var(--cyan-lt); border: 1px solid var(--cyan);
+  color: var(--cyan); text-decoration: none;
+  font-size: 0.74rem; font-weight: 600;
+}
+.co-template-link:hover { background: var(--cyan); color: #fff; }
+
+.co-validate-drop {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 12px 0 8px; padding: 14px;
+  border: 2px dashed var(--border2); border-radius: 8px;
+  background: var(--panel-h); cursor: pointer;
+  font-size: 0.74rem; color: var(--mid);
+}
+.co-validate-drop:hover { border-color: var(--cyan); color: var(--cyan); }
+
+.co-validate-report { margin-bottom: 18px; }
+.co-validate-report:empty { display: none; }
+.co-v-err, .co-v-warn {
+  font-size: 0.72rem; line-height: 1.5;
+  padding: 6px 10px; margin-bottom: 4px; border-radius: 5px;
+}
+.co-v-err  { background: #fdecec; color: #9b1c1c; }
+.co-v-warn { background: #fff7e6; color: #8a5a00; }
+.co-v-err b, .co-v-warn b { font-weight: 700; margin-right: 4px; }
+.co-v-sum {
+  font-size: 0.74rem; font-weight: 600;
+  padding: 7px 10px; margin-top: 6px; border-radius: 5px;
+}
+.co-v-ok  { background: #eaf6ed; color: #1b5e20; }
+.co-v-bad { background: #fdecec; color: #9b1c1c; }
+
+/* ── Results panel: inline info icons ── */
+.info-icon-btn {
+  background: none; border: none; padding: 0; margin-right: 5px;
+  color: var(--lo); cursor: pointer; line-height: 1;
+  font-size: 0.72em; vertical-align: baseline;
+}
+.info-icon-btn:hover,
+.info-icon-btn.active { color: var(--cyan); }
+
+/* ── Persistent map disclaimer ── */
+:root {
+  --map-strip-row: 17px;
+  --map-strip: 34px;
+  --map-ctrl-bottom: calc(14px + var(--map-strip));
+}
+
+.map-disclaimer {
+  position: absolute; bottom: var(--map-strip-row); left: 0; right: 0;
+  z-index: 700; pointer-events: none;
+  height: var(--map-strip-row);
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0;
+  font-size: 0.56rem; line-height: 1.15; color: var(--mid);
+  white-space: nowrap; overflow: hidden;
+}
+
+.map-disclaimer-text {
+  background: rgba(255,255,255,0.94);
+  padding: 0 12px 0 8px;
+  line-height: var(--map-strip-row);
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+.leaflet-bottom.leaflet-right .leaflet-control-attribution {
+  margin-bottom: 0 !important;
+  background: rgba(255,255,255,0.94) !important;
+  font-size: 0.56rem !important;
+  padding: 0 12px 0 8px !important;
+  line-height: var(--map-strip-row) !important;
+  height: var(--map-strip-row);
+  position: relative; z-index: 701;
+}
+
+@media (max-width: 900px) {
+  :root { --map-strip-row: 15px; --map-strip: 44px; }
+  .map-disclaimer {
+    bottom: var(--map-strip-row); height: auto; min-height: var(--map-strip-row);
+    white-space: normal; font-size: 0.5rem; line-height: 1.2;
+    text-align: right;
+  }
+  .map-disclaimer-text { padding-top: 2px; padding-bottom: 2px; }
+}

@@ -133,10 +133,24 @@ This is load-bearing, not a convention: geeup turns each CSV's filename into the
 | Part | Values |
 |---|---|
 | `iso3` | lowercase ISO3, from adm0 |
-| `source` | `giga`, `healthsites`, `wpdx`, `mwater`, `hdx` |
+| `source` | `giga`, `healthsites`, `wpdx`, `mwater`, `hdx`, `co` |
 | `layer` | `schools`, `health_facilities`, `water_points` |
 
 Assets land in `projects/unicef-ccri/assets/infrastructure`. The app's `discover_infra_assets()` lists that folder (cached, 10-minute TTL) to build the Infrastructure tab's dropdowns.
+
+### Country-office submissions (`co`)
+
+`co` is data sent in by a country office rather than fetched from an API, so it
+has no `fetch_*.py` — the files arrive by email and are dropped straight into
+`app/data/infra/{iso3}/raw/` as `co_schools.csv`, `co_health.csv`,
+`co_water.csv`, then run through `prep_infra.py` like any other source.
+
+`scripts/templates/` holds the blank CSVs to send offices, and
+`scripts/templates/README.md` is the guide that goes with them (required
+columns, the coordinate rules that catch most bad submissions, and what not to
+include). Column matching for these jobs is case-insensitive and accepts the
+usual `lon`/`long`/`x` and `lat`/`y` spellings, since offices export from QGIS,
+Excel, KoBo and ODK.
 
 ---
 
