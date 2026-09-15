@@ -19,7 +19,7 @@ from config import (
     HAZARD_TOPICS, TOPIC_COLORS, ADMIN_DATA,
     HAZARDS, HAZARD_MAP, SUB_TOPIC_DETAIL, HAZARD_VIS_PALETTES,
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
-    FORCE_NULL_RULES, EXCLUDE_ISO3,
+    FORCE_NULL_RULES, EXCLUDE_ISO3, is_no_data_ucode,
     infra_layer_style,
     is_binary_hazard,
     POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
@@ -145,6 +145,68 @@ def _fmt(v):
 # Layout helpers
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Tab registry — the single source of truth for the nav rail.
+#
+# Order here IS the visual order of the sidebar. Everything that used to be
+# duplicated across four sites (the nav_btn calls, the #panel children, and
+# switch_tab's Output list + id->key dict) is now derived from this table, so
+# adding or reordering a tab is a one-line edit instead of a four-site edit
+# whose mistakes only show up at runtime as a tab that silently won't switch.
+#
+# `key`   - internal tab id held in store-tab. NOT the label: `hazard` in
+#           particular is load-bearing (store-tab's default, and several
+#           callbacks compare against it), so it stays put across renames.
+# `label` - rail text. CSS uppercases it (.nav-label), so casing here is free.
+# `title` / `desc` - the pane's own .ph header, rendered by tab_header().
+# ---------------------------------------------------------------------------
+
+TABS = [
+    {"key": "hazard",         "btn": "btn-hazard",   "pane": "tab-hazard",
+     "icon": "bi bi-layers",         "label": "hazard layers",
+     "title": "Hazard Layers",
+     "desc": "Select a layer to show the occurrence probability of each type of hazard"},
+    {"key": "mh",             "btn": "btn-mh",       "pane": "tab-mh",
+     "icon": "bi bi-stack",          "label": "Multi hazard",
+     "title": "Multi Hazard Indicators",
+     "desc": "Display areas exposed to multiple hazards"},
+    {"key": "exposure",       "btn": "btn-exposure", "pane": "tab-exposure",
+     "icon": "bi bi-people",         "label": "Pop Exposure",
+     "title": "Children's Exposure",
+     "desc": "Display child population exposed to each type of hazard at "
+             "different thresholds"},
+    {"key": "analysis",       "btn": "btn-analysis", "pane": "tab-analysis",
+     "icon": "bi bi-bar-chart-line", "label": "Pop Analysis",
+     "title": "Exposure Analysis",
+     "desc": "Compute number of children exposed by admin unit"},
+    {"key": "infrastructure", "btn": "btn-infra",    "pane": "tab-infrastructure",
+     "icon": "bi bi-buildings",      "label": "Infra Analysis",
+     "title": "Infrastructure Analysis",
+     "desc": "Compute number of facilities exposed, and number of children "
+             "affected by admin unit"},
+    {"key": "forecast",       "btn": "btn-forecast", "pane": "tab-forecast",
+     "icon": "bi bi-cloud-drizzle",  "label": "Forecast",
+     "title": "Forecast & Live Hazards",
+     "desc": "Children exposed to forecast and near-real-time conditions"},
+    {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
+     "icon": "bi bi-robot",          "label": "AI",
+     "title": "AI Assistant",
+     "desc": "Ask about hazard layers or child exposure"},
+]
+
+TAB_BY_KEY = {t["key"]: t for t in TABS}
+
+
+def tab_header(key):
+    """The .ph title/subtitle block for a pane, sourced from TABS so the rail
+    label and the pane header can never drift apart."""
+    t = TAB_BY_KEY[key]
+    return html.Div(className="ph", children=[
+        html.Div(t["title"], className="ph-title"),
+        html.Div(t["desc"],  className="ph-sub"),
+    ])
+
+
 def nav_btn(icon_cls, label, btn_id, active=False):
     return html.Button(
         [html.I(className=icon_cls), html.Span(label, className="nav-label")],
@@ -190,13 +252,8 @@ def sidebar():
             }
         ),
         html.Div(className="sb-nav", children=[
-            nav_btn("bi bi-layers",        "Layers",   "btn-hazard",   active=True),
-            nav_btn("bi bi-people",        "Exposure", "btn-exposure"),
-            nav_btn("bi bi-stack",         "Multi HZ", "btn-mh"),
-            nav_btn("bi bi-bar-chart-line","Analysis", "btn-analysis"),
-            nav_btn("bi bi-buildings",     "Infra",    "btn-infra"),
-            nav_btn("bi bi-cloud-drizzle", "Forecast", "btn-forecast"),
-            nav_btn("bi bi-robot",         "AI",       "btn-ai"),
+            nav_btn(t["icon"], t["label"], t["btn"], active=(i == 0))
+            for i, t in enumerate(TABS)
         ]),
     ])
 
@@ -290,10 +347,7 @@ def tab_hazard_layers():
                      for p in POPULATION_LAYERS if p["group"] == group)
 
     return html.Div(id="tab-hazard", children=[
-        html.Div(className="ph", children=[
-            html.Div("Hazard Layers", className="ph-title"),
-            html.Div("Select a layer to display on the map", className="ph-sub"),
-        ]),
+        tab_header("hazard"),
         html.Div(items, className="layer-list"),
     ])
 
@@ -340,10 +394,7 @@ def _exposure_inline_editor(topic):
 
 def tab_exposure():
     return html.Div(id="tab-exposure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Children's Exposure", className="ph-title"),
-            html.Div("Population exposed to each hazard topic", className="ph-sub"),
-        ]),
+        tab_header("exposure"),
         # Radio-selectable topic list; the selected row carries the inline
         # threshold editor. Rebuilt by render_exposure_topics on selection.
         html.Div(id="exposure-topic-list",
@@ -372,10 +423,7 @@ def tab_mh():
     # Colour ramps for these layers live in the floating map legend
     # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Multi Hazard Indicators", className="ph-title"),
-            html.Div("Combined hazard count & intensity", className="ph-sub"),
-        ]),
+        tab_header("mh"),
         html.Div(className="ps", children=[
             html.Div("Hazard Count (MHC)", className="ps-label"),
             html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
@@ -420,10 +468,7 @@ def tab_mh():
 
 def tab_analysis():
     return html.Div(id="tab-analysis", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Exposure Analysis", className="ph-title"),
-            html.Div("Compute children exposed by admin region", className="ph-sub"),
-        ]),
+        tab_header("analysis"),
         # ── Sub-tab switcher ──
         html.Div(className="analysis-sub-tabs", children=[
             html.Button("GeoRepo Boundaries", id="btn-georapo-tab",
@@ -642,11 +687,7 @@ def _infra_layer_options(country=None):
 
 def tab_infrastructure():
     return html.Div(id="tab-infrastructure", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Infrastructure Analysis", className="ph-title"),
-            html.Div("Correlate facilities with hazards & child population",
-                     className="ph-sub"),
-        ]),
+        tab_header("infrastructure"),
 
         # 1. Region — own selector that writes to the shared region stores.
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
@@ -869,11 +910,7 @@ def _forecast_kind_badge(cfg):
 
 def tab_forecast():
     return html.Div(id="tab-forecast", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("Forecast & Live Hazards", className="ph-title"),
-            html.Div("Children exposed to forecast and near-real-time conditions",
-                     className="ph-sub"),
-        ]),
+        tab_header("forecast"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
@@ -1068,10 +1105,7 @@ def tab_forecast():
 
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
-        html.Div(className="ph", children=[
-            html.Div("AI Assistant", className="ph-title"),
-            html.Div("Ask about hazard layers or child exposure", className="ph-sub"),
-        ]),
+        tab_header("ai"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
             html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
             html.P([
@@ -1159,6 +1193,15 @@ def map_component():
             id="basemap-toggle", className="basemap-toggle", n_clicks=0,
             title="Toggle satellite basemap",
         ),
+        # PLACEHOLDER COPY — pending comms/legal sign-off.
+        html.Div(id="map-disclaimer", className="map-disclaimer", children=[
+            html.Span(
+                "Modelled estimates, not observed impacts. Boundaries and names "
+                "shown do not imply endorsement or acceptance by the United "
+                "Nations.",
+                className="map-disclaimer-text",
+            ),
+        ]),
         dl.Map(
             id="main-map",
             center=[10, 20], zoom=3, zoomControl=False,
@@ -1367,7 +1410,7 @@ def _login_page():
 # ---------------------------------------------------------------------------
 app.layout = html.Div(id="app-root", children=[
     # ── Stores ──
-    dcc.Store(id="store-embargo",       storage_type="session", data=False),
+    dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
     dcc.Store(id="store-tab",           data="hazard"),
     dcc.Store(id="store-hazard-layer",  data=None),
     dcc.Store(id="store-exposure-topic",data=None),
@@ -1397,18 +1440,30 @@ app.layout = html.Div(id="app-root", children=[
     # badge watches this alongside the tile layers' n_loads.
     dcc.Store(id="store-map-busy",      data=None),
 
-    # ── Embargo gate ──
+    # ── Data-use gate ──────────────────────────────────────────────────────
+    # PLACEHOLDER COPY — pending comms/legal sign-off before public launch.
     html.Div(id="embargo-gate", children=[
         html.Div(className="embargo-card", children=[
-            html.Div("UNICEF CCRR — Data Access", className="embargo-tag"),
-            html.Div("Official Data Release Policy", className="embargo-title"),
+            html.Div("UNICEF — Data Use Notice", className="embargo-tag"),
+            html.Div("About this data", className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Results are ", html.Strong("not final"),
-                " and currently under review. External sharing is under ",
-                html.Strong("embargo"),
-                " until the Children Climate Risk Report (CCRR) global release.",
+                "Figures shown are ", html.Strong("modelled estimates"),
+                ", derived from global hazard datasets combined with WorldPop "
+                "gridded population. They indicate relative exposure — not "
+                "observed impacts — and carry uncertainty that increases at "
+                "finer administrative levels.",
+                html.Br(), html.Br(),
+                "The designations employed and the presentation of material on "
+                "this site do not imply the expression of any opinion on the "
+                "part of UNICEF concerning the legal status of any country or "
+                "territory, or the delimitation of its frontiers or boundaries.",
             ]),
-            html.Button("I Understand and Accept",
+            dcc.Checklist(
+                id="embargo-dismiss-forever",
+                options=[{"label": "Don't show this again", "value": "yes"}],
+                value=[], className="embargo-check",
+            ),
+            html.Button("I Understand",
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
         ]),
     ]),
@@ -1444,9 +1499,11 @@ app.layout = html.Div(id="app-root", children=[
                     "letterSpacing": "0.01em",
                 }
             ),
+            # Order mirrors TABS so the file reads in rail order; panes are
+            # display-toggled, so DOM order itself is not visually significant.
             tab_hazard_layers(),
-            tab_exposure(),
             tab_mh(),
+            tab_exposure(),
             tab_analysis(),
             tab_infrastructure(),
             tab_forecast(),
@@ -1464,72 +1521,60 @@ app.layout = html.Div(id="app-root", children=[
 # ── Embargo ──────────────────────────────────────────────────────────────────
 
 @app.callback(
-    Output("store-embargo", "data"),
-    Output("embargo-gate",  "style"),
-    Input("embargo-btn",    "n_clicks"),
-    State("store-embargo",  "data"),
+    Output("store-embargo-permanent", "data"),
+    Output("embargo-gate",            "style"),
+    Input("embargo-btn",              "n_clicks"),
+    State("embargo-dismiss-forever",  "value"),
     prevent_initial_call=True,
 )
-def accept_embargo(n, _accepted):
-    if n:
-        return True, {"display": "none"}
-    return no_update, no_update
+def accept_embargo(n, dismiss_forever):
+    """Dismiss the notice, persisting only if the box was ticked."""
+    if not n:
+        return no_update, no_update
+    return bool(dismiss_forever), {"display": "none"}
 
 
 @app.callback(
-    Output("embargo-gate", "style", allow_duplicate=True),
-    Input("store-embargo", "data"),
+    Output("embargo-gate",           "style", allow_duplicate=True),
+    Input("store-embargo-permanent", "data"),
     prevent_initial_call=True,
 )
-def restore_embargo_state(accepted):
-    return {"display": "none"} if accepted else no_update
+def restore_embargo_state(accepted_forever):
+    """Hide on load only for users who ticked 'don't show this again'."""
+    return {"display": "none"} if accepted_forever else no_update
 
 
 # ── Tab switching ─────────────────────────────────────────────────────────────
 
 @app.callback(
-    Output("store-tab",         "data"),
-    Output("btn-hazard",        "className"),
-    Output("btn-exposure",      "className"),
-    Output("btn-mh",            "className"),
-    Output("btn-analysis",      "className"),
-    Output("btn-infra",         "className"),
-    Output("btn-forecast",      "className"),
-    Output("btn-ai",            "className"),
-    Output("tab-hazard",        "style"),
-    Output("tab-exposure",      "style"),
-    Output("tab-mh",            "style"),
-    Output("tab-analysis",      "style"),
-    Output("tab-infrastructure","style"),
-    Output("tab-forecast",      "style"),
-    Output("tab-ai",            "style"),
+    Output("store-tab", "data"),
+    *[Output(t["btn"],  "className") for t in TABS],
+    *[Output(t["pane"], "style")     for t in TABS],
     Output("hazard-info-panel", "style", allow_duplicate=True),
-    Input("btn-hazard",    "n_clicks"),
-    Input("btn-exposure",  "n_clicks"),
-    Input("btn-mh",        "n_clicks"),
-    Input("btn-analysis",  "n_clicks"),
-    Input("btn-infra",     "n_clicks"),
-    Input("btn-forecast",  "n_clicks"),
-    Input("btn-ai",        "n_clicks"),
-    State("store-tab",     "data"),
+    *[Input(t["btn"], "n_clicks") for t in TABS],
+    State("store-tab", "data"),
     prevent_initial_call=True,
 )
-def switch_tab(n1, n2, n3, n4, n5, n6, n7, current):
-    tab = {"btn-hazard":"hazard","btn-exposure":"exposure",
-           "btn-mh":"mh","btn-analysis":"analysis",
-           "btn-infra":"infrastructure","btn-forecast":"forecast",
-           "btn-ai":"ai"}.get(ctx.triggered_id, current)
-    cls = lambda t: "nav-btn active" if tab == t else "nav-btn"
-    vis = lambda t: {"display": "block"} if tab == t else {"display": "none"}
-    # The popover serves both the Layers tab and the Forecast dataset ⓘ, so it
-    # must survive a switch to either.
-    info_panel = no_update if tab in ("hazard", "forecast") else {"display": "none"}
+def switch_tab(*args):
+    """Show one pane and highlight its rail button.
+
+    Outputs are generated from TABS, so the arity can never drift out of sync
+    with the rail the way a hand-maintained Output list could — a mismatch
+    there used to fail silently at click time rather than at import.
+    """
+    current = args[-1]
+    btn_to_key = {t["btn"]: t["key"] for t in TABS}
+    tab = btn_to_key.get(ctx.triggered_id, current)
+    cls = lambda k: "nav-btn active" if tab == k else "nav-btn"
+    vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
+    # The popover serves the Layers list and the Forecast dataset info
+    # button, so it must survive a switch to either.
+    info_panel = (no_update if tab in ("hazard", "forecast")
+                  else {"display": "none"})
     return (
         tab,
-        cls("hazard"), cls("exposure"), cls("mh"), cls("analysis"),
-        cls("infrastructure"), cls("forecast"), cls("ai"),
-        vis("hazard"), vis("exposure"), vis("mh"), vis("analysis"),
-        vis("infrastructure"), vis("forecast"), vis("ai"),
+        *[cls(t["key"]) for t in TABS],
+        *[vis(t["key"]) for t in TABS],
         info_panel,
     )
 
@@ -1542,13 +1587,15 @@ def switch_tab(n1, n2, n3, n4, n5, n6, n7, current):
     Output("hazard-info-panel-body",  "children"),
     Output("store-info-open",         "data"),
     Input({"type": "hazard-info-btn", "index": ALL}, "n_clicks"),
+    Input({"type": "prov-info-btn",   "index": ALL}, "n_clicks"),
     Input("hazard-info-close",       "n_clicks"),
     Input("store-hazard-layer",      "data"),
     Input("forecast-dataset-select", "value"),
     State("store-info-open",         "data"),
     prevent_initial_call=True,
 )
-def toggle_hazard_info(info_clicks, _close, layer_name, fc_dataset, open_for):
+def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name,
+                       fc_dataset, open_for):
     """Open the info popover for a layer. It closes on: a second click of the
     same button, the × button, selecting any layer on the map, or changing the
     forecast dataset.
@@ -1574,16 +1621,22 @@ def toggle_hazard_info(info_clicks, _close, layer_name, fc_dataset, open_for):
         if not open_for:
             return no_update, no_update, no_update, no_update
         return {"display": "none"}, no_update, no_update, None
-    if isinstance(triggered, dict) and triggered.get("type") == "hazard-info-btn":
-        # The forecast ⓘ buttons are created dynamically by
-        # forecast_render_list, and Dash re-fires an ALL pattern input when new
-        # matching components enter the layout — with triggered_id set to one of
-        # them. prevent_initial_call does not cover that, so without this guard
-        # the popover opens by itself on the first list render. A real click
-        # always leaves a non-zero n_clicks somewhere in the group.
-        if not any(c for c in (info_clicks or []) if c):
+    if (isinstance(triggered, dict)
+            and triggered.get("type") in ("hazard-info-btn", "prov-info-btn")):
+        # The results-panel ⓘ buttons are created when a result renders, and
+        # Dash re-fires an ALL pattern input when new matching components enter
+        # the layout — with triggered_id set to one of them. prevent_initial_call
+        # does not cover that, so without this guard the popover opens by itself
+        # as soon as results appear. A real click always leaves a non-zero
+        # n_clicks somewhere in the group.
+        if not any(c for c in ((info_clicks or []) + (_prov_clicks or [])) if c):
             return no_update, no_update, no_update, no_update
         name = triggered["index"]
+        # Results-panel icons carry a "<scope>:" prefix to keep their ids unique
+        # across the Analysis and Infrastructure panels; the popover is keyed on
+        # the hazard itself.
+        if triggered["type"] == "prov-info-btn":
+            name = name.split(":", 1)[1]
         if open_for == name:                      # same button → toggle closed
             return {"display": "none"}, no_update, no_update, None
         if name.startswith(FC_INFO_PREFIX):
@@ -1615,12 +1668,18 @@ app.clientside_callback(
         // otherwise collide, e.g. "fire_FRP..." inside another id).
         var exact = JSON.stringify({index: openFor, type: "hazard-info-btn"});
         var btn = document.getElementById(exact);
+        // Results-panel icons prefix their index with a scope ("an:", "infra:")
+        // to stay unique across panels, so match on the part after the colon.
         if (!btn) {
             btn = (Array.prototype.find.call(
-                document.querySelectorAll(".hazard-info-btn"),
+                document.querySelectorAll(".hazard-info-btn, .info-icon-btn"),
                 function(el){
-                    try { return JSON.parse(el.id).index === openFor; }
-                    catch (e) { return false; }
+                    try {
+                        var idx = JSON.parse(el.id).index;
+                        if (idx === openFor) { return true; }
+                        var c = idx.indexOf(":");
+                        return c >= 0 && idx.slice(c + 1) === openFor;
+                    } catch (e) { return false; }
                 }) || null);
         }
         if (!btn) { return [window.dash_clientside.no_update, classes]; }
@@ -1875,6 +1934,9 @@ def _analysis_legend_specs(viz):
     so the map stays readable (its tile is fetched only on first reveal)."""
     if not viz:
         return []
+    if viz.get("no_data"):
+        return [swatch_spec("Selected region", "#FFD700", shape="line",
+                            layer_id="analysis-selection", toggleable=True)]
     specs = [
         vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
                           layer_id="analysis-exposed", unit="+",
@@ -2566,7 +2628,8 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
             return no_update, no_update, no_update
         data = _apply_force_null(existing, ucode)
         return no_update, render_results(data, name, mhc, mhi,
-                                         data.get("_topics"), data.get("_overrides")), no_update
+                                         data.get("_topics"), data.get("_overrides"),
+                                         ucode=ucode), no_update
 
     # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
@@ -2585,14 +2648,20 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     # legend row — a toggle for a hazard with no local coverage is just noise.
     map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
                   and (result.get(t) or 0) > 0][:ANALYSIS_TOPIC_SLOTS]
+    no_data = is_no_data_ucode(ucode)
     viz = {
         "ucode": ucode, "level": level, "name": name,
-        "topics": map_topics,
+        # Where no hazard data exists, the region outline is the only honest
+        # thing to draw: an exposed-population raster would render a figure the
+        # results panel is explicitly declining to report.
+        "topics": [] if no_data else map_topics,
+        "no_data": no_data,
         # Sorted tuple-of-pairs: stable, hashable cache key for the tile helpers.
         "thr": sorted((h, v) for h, v in (overrides or {}).items()),
     }
     return (result,
-            render_results(result, name, mhc, mhi, sel_topics, overrides),
+            render_results(result, name, mhc, mhi, sel_topics, overrides,
+                           ucode=ucode),
             viz)
 
 
@@ -2623,11 +2692,14 @@ def update_analysis_layers(viz, tab):
         return "", "", no_update, {}
 
     thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
-    try:
-        url, _ = get_exposed_pop_tile_url(
-            viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
-    except Exception:
-        return "", "", no_update, {}
+    if viz.get("no_data"):
+        url = ""
+    else:
+        try:
+            url, _ = get_exposed_pop_tile_url(
+                viz["ucode"], viz["level"], tuple(viz.get("topics") or ()), thr_key)
+        except Exception:
+            return "", "", no_update, {}
 
     # AOI outline — cached, so this is free on repeat Computes of the region.
     try:
@@ -2721,6 +2793,50 @@ def _hazard_label(name):
     return " ".join(words[:2])
 
 
+POP_BASIS = "WorldPop under-18 gridded population, 2025, 100 m"
+
+
+_ESTIMATE_CAVEAT = (
+    "Figures are the modelled child population in areas where the hazard "
+    "exceeds the stated threshold — indicative of relative exposure, not "
+    "observed impacts."
+)
+
+
+def _info_icon(hazard_name, scope="an"):
+    """Inline ⓘ opening the shared layer-info popover.
+
+    A distinct `type` from the Layers tab's buttons, and a `scope`-prefixed
+    index: that tab renders one button per hazard already, and the Analysis and
+    Infrastructure panels both persist in the layout at once, so an unprefixed
+    id would put duplicate component ids on the page for the same hazard.
+    """
+    return html.Button(
+        html.I(className="bi bi-info-circle"),
+        id={"type": "prov-info-btn", "index": f"{scope}:{hazard_name}"},
+        className="info-icon-btn", n_clicks=0,
+        title=_layer_label(hazard_name),
+    )
+
+
+def _provenance_block(extra_lines=None):
+    """Methodology section for a results panel.
+
+    Numbers get copied into slides and emails, so the basis travels with them.
+    Shared by Analysis and Infrastructure so the two panels can never state it
+    differently.
+    """
+    lines = [f"Population: {POP_BASIS}", *(extra_lines or [])]
+    return html.Div(className="ps", children=[
+        html.Div("Methodology", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(_ESTIMATE_CAVEAT, className="ps-caption"),
+        html.Div([html.Div(t) for t in lines],
+                 className="ps-caption", style={"lineHeight": "1.7",
+                                                "marginBottom": "0"}),
+    ])
+
+
 def _eff_threshold(h_name, overrides):
     """Effective threshold + unit label for a hazard, given the user overrides."""
     default = HAZARD_MAP.get(h_name, {}).get("threshold")
@@ -2732,7 +2848,29 @@ def _eff_threshold(h_name, overrides):
     return f"thr {thr_str}" + (f" {units}" if units else "")
 
 
-def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overrides=None):
+def _no_data_panel(region_name):
+    """Shown instead of figures where no hazard has usable data.
+
+    Deliberately reports nothing numeric — not even a population total. The
+    previous behaviour zeroed every field, which a reader cannot distinguish
+    from a measured "no children are exposed here".
+    """
+    return html.Div(className="ps", children=[
+        html.Div("Data not available", className="hi-label",
+                 style={"marginBottom": "6px"}),
+        html.Div(
+            f"Hazard and exposure data are not available for {region_name}, "
+            "so no figures are reported. This reflects a gap in the underlying "
+            "global datasets, not an absence of hazard or of children.",
+            className="ps-caption", style={"marginBottom": "0"},
+        ),
+    ])
+
+
+def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
+                   overrides=None, ucode=None):
+    if ucode and is_no_data_ucode(ucode):
+        return _no_data_panel(region_name)
     if not result:
         return html.Div("No data available.", className="ps-caption",
                         style={"padding": "14px 16px"})
@@ -2776,6 +2914,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0]) if hazards else None,
                     topic.upper(),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ]),
@@ -2797,7 +2936,9 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
             thr_txt = _eff_threshold(h_name, overrides)
             rows.append(html.Div(className="info-row", children=[
                 html.Span([
-                    f"└ {_hazard_label(h_name)}",
+                    "└ ",
+                    _info_icon(h_name),
+                    _hazard_label(h_name),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ], className="info-lbl",
                     style={"paddingLeft": "22px", "color": "var(--lo)",
@@ -2918,6 +3059,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None, overr
                  for t in no_data_topics],
             ),
         ]) if no_data_topics else None,
+        _provenance_block([f"Region: {region_name}"]),
         html.Div(className="ps", children=[
             html.A(
                 "⬇  Download results (JSON)",
@@ -3863,6 +4005,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
+                    _info_icon(hazards[0], "infra") if hazards else None,
                     topic.upper(),
                 ]),
                 html.Span([
@@ -3886,7 +4029,9 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                 hc = int(round((per_sub or {}).get(h) or 0))
                 thr = _eff_threshold(h, overrides)
                 sub_rows.append(html.Div(className="info-row", children=[
-                    html.Span([f"└ {_hazard_label(h)}",
+                    html.Span(["└ ",
+                               _info_icon(h, "infra"),
+                               _hazard_label(h),
                                html.Span(f"  {thr}" if thr else "",
                                          style={"color": "var(--lo)",
                                                 "fontSize": "0.9em"})],
@@ -3934,6 +4079,10 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     if not adm2_ucode or not level or level == "adm0 (Country)":
         return (_infra_error("Select an adm2 region and click a district on the map "
                              "to bound the analysis."), *nu)
+    # Districts inherit their country's data availability: the adm2 ucode
+    # carries the same stem, so this catches them without a separate list.
+    if is_no_data_ucode(adm2_ucode):
+        return (_no_data_panel(region_name or "this region"), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
@@ -3977,7 +4126,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                "rows show exposed children · facilities whose site is in that "
                f"hazard. {thr_note}.")
 
-    panel = _infra_panel("Facility exposure", cards, items, None, caption=caption)
+    panel = html.Div([
+        _infra_panel("Facility exposure", cards, items, None, caption=caption),
+        _provenance_block([
+            f"Region: {region_name or adm2_ucode} · {level}",
+            "Facilities: as supplied by the selected infrastructure layer "
+            "(see the layer name for its source)",
+        ]),
+    ])
 
     # ── Map layers ──
     try:
