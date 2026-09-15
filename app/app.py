@@ -4731,9 +4731,12 @@ def _forecast_legend_specs(viz, preview=None):
             f"{viz.get('label','Forecast')} ({viz.get('units','')})".strip(),
             vis, layer_id="forecast-intensity", unit=viz.get("units", ""),
             toggleable=True, visible=False))
+    # Forecast exposure runs on the 1 km population grid, so the legend must
+    # not claim "per 100 m" — that is the Analysis tab's unit.
+    pop_unit = f"per {viz.get('pop_res', 100):,} m"
     specs.append(gradient_spec(
         "Children exposed", POP_VIS["palette"], POP_VIS["min"], POP_VIS["max"],
-        layer_id="forecast-exposed", unit="per 100 m", toggleable=True))
+        layer_id="forecast-exposed", unit=pop_unit, toggleable=True))
     specs.append(swatch_spec("Selected region", "#FFD700", shape="line",
                              layer_id="forecast-selection", toggleable=True))
     return specs
@@ -5248,6 +5251,7 @@ def forecast_compute(_n, dataset, asset, start, end, reducer, threshold,
             "region": region_name, "level": level,
             "n_images": result.get("_n_images", 0),
             "dataset": cfg["name"],
+            "pop_res": result.get("_pop_resolution_m", 100),
             "asset_id": cfg.get("custom_id"), "band": cfg.get("custom_band")}
 
     # Intensity tile is best-effort: a failed stretch must not lose the numbers.
@@ -5330,6 +5334,7 @@ def render_forecast_results(result, meta):
         "children_exposed": exposed, "total_children": total,
         "male": male, "female": fema,
         "pct_exposed": round(pct, 2),
+        "population_grid_m": meta["pop_res"],
         "computed_utc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
     safe = re.sub(r"[^a-zA-Z0-9]", "_", f"{meta['region']}_{meta.get('dataset')}")
@@ -5391,7 +5396,8 @@ def render_forecast_results(result, meta):
         ]),
         # Provenance — the window and image count travel with the number.
         html.Div(className="ps", children=[
-            html.Div("How this was computed", className="ps-label"),
+            html.Div("Methodology", className="hi-label",
+                     style={"marginBottom": "6px"}),
             html.Div([
                 html.Div(f"Dataset: {meta['label']}"),
                 html.Div(f"Window: {meta['start']} → {meta['end']} "
@@ -5399,7 +5405,19 @@ def render_forecast_results(result, meta):
                 html.Div(f"Aggregation: {REDUCERS.get(meta['reducer'], meta['reducer'])}"),
                 html.Div(f"Exposed where value > {thr_txt}"),
                 html.Div(f"Region: {meta['region']} · {meta['level']}"),
+                html.Div(f"Population: {POP_BASIS}, aggregated to "
+                         f"{meta['pop_res']:,} m"
+                         if meta["pop_res"] != 100
+                         else f"Population: {POP_BASIS}"),
             ], className="ps-caption", style={"lineHeight": "1.7"}),
+            (html.Div(
+                "Forecast layers are 11–44 km, so exposure is computed on a "
+                "1 km population grid rather than 100 m. Totals differ from the "
+                "Pop Analysis tab by well under 1%.",
+                className="ps-caption",
+                style={"marginTop": "6px", "marginBottom": "0",
+                       "color": "var(--lo)", "fontStyle": "italic"})
+             if meta["pop_res"] != 100 else None),
         ]),
         html.Div(className="ps", children=[
             html.A(
