@@ -166,11 +166,19 @@ def _t_kgm3_to_ugm3(img, cfg):
     return img.multiply(1e9)
 
 
+def _t_kelvin_to_c(img, cfg):
+    """ERA5-Land temperatures are plain Kelvin (no scale factor, unlike MODIS
+    LST) — verified against the live collection: temperature_2m returns ~290 K
+    for Malawi in July."""
+    return img.subtract(273.15)
+
+
 _POST_TRANSFORMS = {
     "mol_to_umol":  _t_mol_to_umol,
     "mol_to_mmol":  _t_mol_to_mmol,
     "modis_lst_c":  _t_modis_lst_c,
     "kgm3_to_ugm3": _t_kgm3_to_ugm3,
+    "kelvin_to_c":  _t_kelvin_to_c,
 }
 
 

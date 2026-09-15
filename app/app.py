@@ -184,10 +184,16 @@ TABS = [
      "title": "Infrastructure Analysis",
      "desc": "Compute number of facilities exposed, and number of children "
              "affected by admin unit"},
+    {"key": "observed",       "btn": "btn-observed", "pane": "tab-observed",
+     "icon": "bi bi-cloud-sun",      "label": "Observed",
+     "title": "Observed Hazards",
+     "desc": "Compute number of children recently experiencing each type of "
+             "hazard by admin region (under development)"},
     {"key": "forecast",       "btn": "btn-forecast", "pane": "tab-forecast",
      "icon": "bi bi-cloud-drizzle",  "label": "Forecast",
-     "title": "Forecast & Live Hazards",
-     "desc": "Children exposed to forecast and near-real-time conditions"},
+     "title": "Forecast Hazards",
+     "desc": "Compute number of children forecast to experience each type of "
+             "hazard by admin region (under development)"},
     {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
      "icon": "bi bi-robot",          "label": "AI",
      "title": "AI Assistant",
@@ -195,6 +201,10 @@ TABS = [
 ]
 
 TAB_BY_KEY = {t["key"]: t for t in TABS}
+
+# Observed and Forecast are two tabs over one shared control stack and one set
+# of map layers, so anything keyed on "the forecast tab" must accept either.
+FORECAST_TABS = ("forecast", "observed")
 
 
 def tab_header(key):
@@ -913,34 +923,53 @@ def _forecast_kind_badge(cfg):
     return html.Span(KIND_LABELS.get(kind, kind).upper(), className=cls)
 
 
+_FC_CAVEAT = (
+    "Both describe a specific time window, so these numbers are not comparable "
+    "with the Pop Analysis tab, whose hazards are fixed 100-year return periods."
+)
+
+
+def tab_observed():
+    """Recently observed (near-real-time) hazards.
+
+    Carries only its own dataset list. The window / region / threshold controls
+    and every store live once in tab_forecast() — Dash ids must be unique, so
+    they cannot be duplicated per pane — and are shared by both tabs, with the
+    active tab supplying the dataset `kind`.
+    """
+    return html.Div(id="tab-observed", style={"display": "none"}, children=[
+        tab_header("observed"),
+        html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
+                 children=[
+            html.P([
+                html.Strong("Observation"), " layers report what recently "
+                "happened, from near-real-time satellite and reanalysis data. ",
+                _FC_CAVEAT,
+            ], className="exposure-method-p", style={"marginBottom": "0"}),
+        ]),
+        html.Div(id="observed-list-wrap", children=[
+            html.Div(id="observed-dataset-list", className="layer-list"),
+        ]),
+        html.Div("Set the window, region and threshold on the Forecast tab — "
+                 "the controls are shared between both tabs.",
+                 className="ps-caption", style={"padding": "10px 16px"}),
+    ])
+
+
 def tab_forecast():
     return html.Div(id="tab-forecast", style={"display": "none"}, children=[
         tab_header("forecast"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
-                html.Strong("Forecast"), " layers predict conditions ahead; ",
-                html.Strong("Observation"), " layers report what recently "
-                "happened. Both describe a specific time window, so these "
-                "numbers are ", html.Strong("not comparable"), " with the ",
-                html.Strong("Analysis"), " tab, whose hazards are fixed "
-                "100-year return periods.",
+                html.Strong("Forecast"), " layers predict conditions ahead. ",
+                _FC_CAVEAT,
             ], className="exposure-method-p", style={"marginBottom": "0"}),
         ]),
 
-        # 1. Dataset — a segmented kind switch over a browsable row list,
-        # reusing the Layers tab's .layer-item pattern. A dropdown hid the
-        # catalog behind a click and gave no room for units or the ⓘ; the list
-        # shows every option, its topic and units at once, and clicking a row
-        # previews it on the map straight away.
-        # Segment visibility is resolved by forecast_switch_segment on tab
-        # entry: a kind with no active datasets loses its button entirely.
         html.Div(className="analysis-sub-tabs", children=[
-            html.Button("Forecast", id="fc-seg-forecast",
+            html.Button("Catalog", id="fc-seg-forecast",
                         className="analysis-sub-tab active", n_clicks=0,
-                        style={"display": "block"}),
-            html.Button("Observed", id="fc-seg-nrt",
-                        className="analysis-sub-tab", n_clicks=0,
                         style={"display": "block"}),
             html.Button("Custom", id="fc-seg-custom",
                         className="analysis-sub-tab", n_clicks=0),
@@ -948,7 +977,6 @@ def tab_forecast():
         html.Div(id="fc-seg-blurb", className="ps-caption",
                  style={"padding": "8px 16px 0"}),
 
-        # Catalog rows (Forecast / Observed segments)
         html.Div(id="forecast-list-wrap", children=[
             html.Div(id="forecast-dataset-list", className="layer-list"),
         ]),
@@ -1099,7 +1127,6 @@ def tab_forecast():
         dcc.Store(id="store-forecast-asset",   data=None),
         dcc.Store(id="store-forecast-result",  data=None),
         dcc.Store(id="store-forecast-viz",     data=None),
-        dcc.Store(id="store-forecast-segment", data="forecast"),
         # Topic groups currently unfolded. Empty = all collapsed, the default.
         dcc.Store(id="store-fc-expanded",      data=[]),
         # Previewed layer's vis + units, so the map legend can describe it
@@ -1575,6 +1602,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_exposure(),
             tab_analysis(),
             tab_infrastructure(),
+            tab_observed(),
             tab_forecast(),
             tab_ai(),
         ]),
@@ -1791,7 +1819,7 @@ def switch_tab(*args):
     vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
     # The popover serves the Layers list and the Forecast dataset info
     # button, so it must survive a switch to either.
-    info_panel = (no_update if tab in ("hazard", "forecast")
+    info_panel = (no_update if tab in ("hazard", *FORECAST_TABS)
                   else {"display": "none"})
     return (
         tab,
@@ -2209,8 +2237,8 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
     if tab == "analysis":
         return layers, _analysis_legend_specs(analysis_viz)
 
-    # Forecast tiles are dedicated top-level components too (forecast-*-tile).
-    if tab == "forecast":
+    # Dedicated top-level components (forecast-*-tile), shared by both tabs.
+    if tab in FORECAST_TABS:
         return layers, _forecast_legend_specs(forecast_viz, forecast_preview)
 
     if tab == "hazard" and sel_layer:
@@ -2673,7 +2701,7 @@ def update_selection_layer(ucode, tab, level):
     # group (a LayerGroup's children can't be flipped clientside). Drawing it
     # here too would double the highlight and leave a copy that the legend's
     # eye cannot switch off.
-    if tab in ("infrastructure", "analysis", "forecast"):
+    if tab in ("infrastructure", "analysis") or tab in FORECAST_TABS:
         return []
     if not ucode or not level:
         return []
@@ -2721,7 +2749,7 @@ def on_map_click(click_data, level, country_ucode, last_click, tab):
     if not click_data or not level or not country_ucode:
         return no_update, no_update, no_update, no_update
     if level == "adm0 (Country)" or tab not in ("analysis", "infrastructure",
-                                                "forecast"):
+                                                *FORECAST_TABS):
         return no_update, no_update, no_update, no_update
     latlng = click_data.get("latlng")
     if not latlng:
@@ -4755,7 +4783,7 @@ def forecast_on_level(level):
     Input("store-tab",            "data"),
 )
 def forecast_badge(name, tab):
-    if tab != "forecast" or not name:
+    if tab not in FORECAST_TABS or not name:
         return None
     return html.Div(className="selected-badge", children=[
         html.Div("Selected region", className="selected-badge-tag"),
@@ -4770,7 +4798,8 @@ def forecast_badge(name, tab):
     Input("store-tab",                "data"),
 )
 def forecast_highlight_selection(ucode, level, tab):
-    if tab != "forecast" or not ucode or not level or level == "adm0 (Country)":
+    if (tab not in FORECAST_TABS or not ucode or not level
+            or level == "adm0 (Country)"):
         return ""
     try:
         return get_selected_feature_tile_url(level, ucode)
@@ -4911,75 +4940,53 @@ def forecast_dataset_params(dataset, asset):
 
 # ── Dataset segment switch + row list ────────────────────────────────────────
 
-_FC_SEGMENTS = {"fc-seg-forecast": "forecast",
-                "fc-seg-nrt":      "nrt",
-                "fc-seg-custom":   "custom"}
+def _fc_kind_for_tab(tab):
+    """Which dataset kind the active tab browses."""
+    return "nrt" if tab == "observed" else "forecast"
 
 
 @app.callback(
-    Output("store-forecast-segment", "data"),
-    Output("fc-seg-forecast",        "className"),
-    Output("fc-seg-nrt",             "className"),
-    Output("fc-seg-custom",          "className"),
-    Output("fc-seg-forecast",        "style"),
-    Output("fc-seg-nrt",             "style"),
-    Output("forecast-list-wrap",     "style"),
-    Output("forecast-custom-wrap",   "style"),
-    Output("fc-seg-blurb",           "children"),
-    Input("fc-seg-forecast",         "n_clicks"),
-    Input("fc-seg-nrt",              "n_clicks"),
-    Input("fc-seg-custom",           "n_clicks"),
-    # Tab entry re-reads the override table, so a kind emptied in GEE loses its
-    # button without a restart.
-    Input("store-tab",               "data"),
+    Output("fc-seg-forecast",      "className"),
+    Output("fc-seg-custom",        "className"),
+    Output("forecast-list-wrap",   "style"),
+    Output("forecast-custom-wrap", "style"),
+    Output("fc-seg-blurb",         "children"),
+    Input("fc-seg-forecast",       "n_clicks"),
+    Input("fc-seg-custom",         "n_clicks"),
+    Input("store-tab",             "data"),
 )
-def forecast_switch_segment(_f, _n, _c, _tab):
-    show = {"display": "block"}
-    hide = {"display": "none"}
-
-    # Which kinds have anything to show right now (honours the GEE overrides).
-    live = active_datasets_live()
-    has = {k: any(d["kind"] == k for d in live) for k in ("forecast", "nrt")}
-
-    seg = _FC_SEGMENTS.get(ctx.triggered_id, no_update)
-    if seg is no_update or ctx.triggered_id == "store-tab":
-        # Not a segment click: keep whatever is sensible rather than resetting.
-        seg = "forecast" if has["forecast"] else ("nrt" if has["nrt"] else "custom")
-    # A segment with no active datasets is not selectable — fall through to one
-    # that has content rather than showing an empty list.
-    if seg in ("forecast", "nrt") and not has[seg]:
-        seg = ("forecast" if has["forecast"]
-               else ("nrt" if has["nrt"] else "custom"))
-
-    cls = lambda s: ("analysis-sub-tab active" if seg == s
-                     else "analysis-sub-tab")
-    blurbs = {
-        "forecast": KIND_BLURBS["forecast"] + " — pick a layer to preview it.",
-        "nrt":      KIND_BLURBS["nrt"] + " — pick a layer to preview it.",
-        "custom":   "Paste any GEE Image or ImageCollection id to run the same "
-                    "exposure analysis.",
-    }
-    return (seg, cls("forecast"), cls("nrt"), cls("custom"),
-            # Hide a kind's button entirely when nothing in it is enabled.
-            show if has["forecast"] else hide,
-            show if has["nrt"] else hide,
-            hide if seg == "custom" else show,
-            show if seg == "custom" else hide,
-            blurbs[seg])
+def forecast_switch_segment(_catalog, _custom, tab):
+    show, hide = {"display": "block"}, {"display": "none"}
+    custom = ctx.triggered_id == "fc-seg-custom"
+    cls = lambda is_custom: ("analysis-sub-tab active" if custom == is_custom
+                             else "analysis-sub-tab")
+    blurb = ("Paste any GEE Image or ImageCollection id to run the same "
+             "exposure analysis." if custom
+             else KIND_BLURBS.get(_fc_kind_for_tab(tab), "")
+                  + " — pick a layer to preview it.")
+    return (cls(False), cls(True),
+            hide if custom else show,
+            show if custom else hide,
+            blurb)
 
 
 @app.callback(
     Output("forecast-dataset-list",  "children"),
-    Input("store-forecast-segment",  "data"),
+    Output("observed-dataset-list",  "children"),
     Input("forecast-dataset-select", "value"),
     Input("store-fc-expanded",       "data"),
     # Tab entry re-reads the runtime override table (TTL-cached), so a dataset
     # enabled in GEE shows up without restarting the server.
     Input("store-tab",               "data"),
 )
-def forecast_render_list(segment, selected, expanded, tab):
-    kind = segment if segment in ("forecast", "nrt") else "forecast"
-    return _forecast_rows_for(kind, selected, expanded)
+def forecast_render_list(selected, expanded, tab):
+    """Render both tabs' lists.
+
+    One callback rather than two so a single read of active_datasets_live()
+    serves both, and the selection highlight can never disagree between them.
+    """
+    return (_forecast_rows_for("forecast", selected, expanded),
+            _forecast_rows_for("nrt", selected, expanded))
 
 
 @app.callback(
@@ -5177,7 +5184,7 @@ def forecast_clamp_dates(start, end, dataset, asset):
     Input("store-tab",               "data"),
 )
 def forecast_toggle_compute(level, ucode, clicked, dataset, asset, tab):
-    if tab != "forecast":
+    if tab not in FORECAST_TABS:
         return no_update, no_update, no_update, no_update
     cfg = _forecast_cfg(dataset, asset)
     if not cfg:

@@ -159,6 +159,9 @@ ALLOW_NEGATIVE = []  # TerraClimate droughts now use positive probability thresh
 
 TOPIC_COLORS = {
     "River Flood":         "#1f78b4",
+    # Forecast-catalog topic: those layers measure rainfall, not modelled
+    # flood extent (see forecast_config.py).
+    "Rainfall":            "#1f78b4",
     "Coastal Flood":       "#a6cee3",
     "Tropical Storm":      "#33a02c",
     "Drought":             "#ff7f00",

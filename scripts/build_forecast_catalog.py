@@ -77,7 +77,7 @@ ROWS = [
     # ── IMPLEMENTED ─────────────────────────────────────────────────────────
     dict(
         Status="Implemented", **{
-        "Hazard Topic": "River Flood",
+        "Hazard Topic": "Rainfall",
         "Layer Name": "Rainfall forecast (NOAA GFS)",
         "Layer ID (app)": "gfs_precip",
         "Type": "Numerical weather prediction",
@@ -111,7 +111,7 @@ ROWS = [
         "Verified On": V}),
 
     dict(Status="Implemented", **{
-        "Hazard Topic": "River Flood",
+        "Hazard Topic": "Rainfall",
         "Layer Name": "Observed rainfall (GPM IMERG)",
         "Layer ID (app)": "imerg_precip",
         "Type": "Satellite precipitation estimate",
@@ -246,6 +246,44 @@ ROWS = [
                          "days are masked, which biases windows during overcast heat events.",
         "Status Notes": "Situational awareness layer; not a warning trigger on its own.",
         "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD11A1",
+        "Verified On": V}),
+
+    dict(Status="Implemented", **{
+        "Hazard Topic": "Extreme Heat",
+        "Layer Name": "Observed air temperature (ERA5-Land)",
+        "Layer ID (app)": "era5_air_temp",
+        "Type": "Reanalysis",
+        "EW Role": "Monitoring (NRT)",
+        "GEE Asset ID": "ECMWF/ERA5_LAND/HOURLY",
+        "Band(s) Used": "temperature_2m",
+        "Native Resolution": "~11 km",
+        "Temporal Resolution": "Hourly",
+        "Forecast Horizon": "n/a (observed)",
+        "Data Latency": "~6 days",
+        "Update Cadence": "Daily",
+        "Actionable Lead Time": "Post-event / situational",
+        "Default Window (days)": 8, "Max Window (days)": 30,
+        "Aggregation Options": "max, mean", "Default Aggregation": "max",
+        "Units (app)": "degC", "App Default Threshold": 35,
+        "Slider Min": -30, "Slider Max": 55,
+        "Reference Threshold": "Health heat thresholds are defined on 2 m air temperature; "
+                               "35 degC matches the static extreme-heat layer",
+        "Reference Source": "WMO Extreme Heat topic; UNDRR HIPS MH0501",
+        "Threshold Basis": "Matches static catalog",
+        "Processing / Transform": "Plain Kelvin: raw - 273.15 -> degC (no scale factor, "
+                                  "unlike MODIS LST)",
+        "Collection Filters": "-",
+        "Observed Range (probe)": "8d max 27.6-29.5 degC (Malawi, Sep 2026); "
+                                  "208 hourly images in the default window",
+        "Coverage": "Global land", "Provider": "ECMWF / Copernicus",
+        "Licence / Access": "Open (Copernicus)",
+        "Known Caveats": "Reanalysis, not a station observation — it assimilates observations "
+                         "into a model, so local extremes are smoothed at ~11 km. Latency is "
+                         "~6 days, so lag_days is 7; a shorter window returns zero images. "
+                         "Dry-bulb only: no humidity, so no heat-index/WBGT effect.",
+        "Status Notes": "Complements MODIS LST: this is the 2 m air temperature health "
+                        "thresholds are written on, and is unaffected by cloud cover.",
+        "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_HOURLY",
         "Verified On": V}),
 
     dict(Status="Implemented", **{
