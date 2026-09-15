@@ -1280,6 +1280,11 @@ def map_component():
                                        "fillOpacity": 0.0, "opacity": 0.7}},
                 ),
                 dl.TileLayer(id="infra-points-tile", url="", opacity=0.9),
+                # Per-topic hazard slots for the Infrastructure tab, same
+                # pattern and slot count as Analysis below.
+                *[dl.TileLayer(id={"type": "infra-topic-tile", "index": i},
+                               url="", opacity=0)
+                  for i in range(ANALYSIS_TOPIC_SLOTS)],
                 # ── Analysis result layers: exposed-population raster plus a
                 # fixed pool of per-topic hazard slots. Declared at layout time
                 # (not inside a LayerGroup) so the clientside eye toggles bind
@@ -2162,20 +2167,33 @@ def _layer_legend_specs(sel):
 
 def _infra_legend_specs(viz):
     """Legend for the Infrastructure tab (population raster, facility points,
-    Voronoi catchments, selected subregion) — all toggleable."""
+    Voronoi catchments, hazard areas, selected subregion) — all toggleable.
+
+    Hazard rows start hidden and their tiles are fetched on first reveal, the
+    same as the Analysis tab: a district already carries a population raster,
+    points and catchments, so showing every hazard on top by default would
+    bury them.
+    """
     if not viz:
         return []
     pt_color = "#" + (viz.get("color") or "e67e22")
-    return [
+    specs = [
         vis_gradient_spec("Children (per 100 m)", INFRA_POP_VIS,
                           layer_id="infra-pop", unit="+", toggleable=True),
         swatch_spec("Facilities", pt_color,
                     layer_id="infra-points", toggleable=True),
         swatch_spec("Facility catchments", "#1CABE2", shape="line",
                     layer_id="infra-catchments", toggleable=True),
-        swatch_spec("Selected subregion", "#f1c40f", shape="line",
-                    layer_id="infra-selection", toggleable=True),
     ]
+    for i, topic in enumerate(viz.get("topics") or []):
+        if i >= ANALYSIS_TOPIC_SLOTS:
+            break
+        specs.append(swatch_spec(
+            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
+            layer_id=f"infra-topic-{i}", toggleable=True, visible=False))
+    specs.append(swatch_spec("Selected subregion", "#f1c40f", shape="line",
+                             layer_id="infra-selection", toggleable=True))
+    return specs
 
 
 def _analysis_legend_specs(viz):
@@ -3005,6 +3023,51 @@ def reveal_analysis_topic(_eye_clicks, existing_urls, viz):
         url, _ = get_topic_tile_url_clipped(
             topic, TOPIC_COLORS.get(topic, "#888888"),
             viz["ucode"], viz["level"], thr_key)
+    except Exception:
+        raise dash.exceptions.PreventUpdate
+
+    out = list(existing_urls)
+    out[slot] = url
+    return out
+
+
+@app.callback(
+    Output({"type": "infra-topic-tile", "index": ALL}, "url"),
+    Input({"type": "legend-eye", "index": ALL}, "n_clicks"),
+    State({"type": "infra-topic-tile", "index": ALL}, "url"),
+    State("store-infra-viz", "data"),
+    prevent_initial_call=True,
+)
+def reveal_infra_topic(_eye_clicks, existing_urls, viz):
+    """Infrastructure-tab twin of reveal_analysis_topic: fetch a topic's clipped
+    hazard tile the first time its legend eye is switched on, then never again.
+    """
+    triggered = ctx.triggered_id
+    if not viz or not isinstance(triggered, dict):
+        raise dash.exceptions.PreventUpdate
+
+    # The legend eyes are shared across tabs; only infra rows matter here.
+    layer_id = str(triggered.get("index", ""))
+    if not layer_id.startswith("infra-topic-"):
+        raise dash.exceptions.PreventUpdate
+    try:
+        slot = int(layer_id.rsplit("-", 1)[1])
+    except ValueError:
+        raise dash.exceptions.PreventUpdate
+
+    topics = viz.get("topics") or []
+    if slot >= len(topics) or slot >= len(existing_urls):
+        raise dash.exceptions.PreventUpdate
+    if existing_urls[slot]:
+        raise dash.exceptions.PreventUpdate      # already fetched
+
+    topic   = topics[slot]
+    thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
+    try:
+        url, _ = get_topic_tile_url_clipped(
+            topic, TOPIC_COLORS.get(topic, "#888888"),
+            viz["ucode"], viz.get("level") or "adm2 (Districts/Counties)",
+            thr_key)
     except Exception:
         raise dash.exceptions.PreventUpdate
 
@@ -4308,6 +4371,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
     Output("store-infra-viz",     "data"),
     Output("store-infra-pending", "data"),
     Output("infra-download-wrap", "children"),
+    Output("main-map",            "viewport", allow_duplicate=True),
     Input("infra-compute-btn",    "n_clicks"),
     State("store-infra-asset",    "data"),
     State("store-clicked-ucode",  "data"),
@@ -4323,7 +4387,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     """Single combined analysis: exposed population (Voronoi catchments) +
     exposed facilities (site hazard). Renders panel + map; per-facility CSV in
     phase 2."""
-    nu = (no_update,) * 6
+    nu = (no_update,) * 7
     if not asset:
         return (_infra_error("Select or load a facility layer first."), *nu)
     if not adm2_ucode or not level or level == "adm0 (Country)":
@@ -4396,13 +4460,28 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
         pt_url = no_update
     cells = r.get("voronoi_geojson") or no_update
 
-    viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color}
+    # Only topics with exposure here get a legend row — a toggle for a hazard
+    # with no local coverage is noise (same rule as the Analysis tab).
+    map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
+                  and (r.get("per_topic_exposed") or {}).get(t)][:ANALYSIS_TOPIC_SLOTS]
+    viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color,
+           "level": level, "topics": map_topics,
+           "thr": sorted((h, v) for h, v in (overrides or {}).items())}
     pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
                "overrides": overrides or None}
     placeholder = html.Div("Preparing per-facility download…",
                            className="ps-caption", style={"padding": "4px 0"})
 
-    return (panel, pop_url, pt_url, cells, viz, pending, placeholder)
+    # Fit the map to the district once its layers are built — same treatment as
+    # the Analysis tab. Best-effort: a failed bounds lookup must not cost the
+    # user the result they just computed.
+    try:
+        viewport = {"bounds": get_feature_bounds(level, adm2_ucode),
+                    "transition": "flyToBounds"}
+    except Exception:
+        viewport = no_update
+
+    return (panel, pop_url, pt_url, cells, viz, pending, placeholder, viewport)
 
 
 @app.callback(
@@ -4601,7 +4680,7 @@ app.clientside_callback(
 # layer_id. Purely clientside: showing/hiding a layer never hits the server.
 app.clientside_callback(
     """
-    function(clicks, ids, topicOpacities) {
+    function(clicks, ids, topicOpacities, infraTopicOpacities) {
         // Even clicks = visible, odd = hidden. Rows render with n_clicks=1
         // when they start hidden, so the same parity rule covers both.
         var vis = function(n){ return ((n || 0) % 2 === 0); };
@@ -4619,6 +4698,10 @@ app.clientside_callback(
             var key = "analysis-topic-" + i;
             return (key in state) ? (state[key] ? 0.7 : 0) : 0;
         });
+        var infraTopics = (infraTopicOpacities || []).map(function(_, i){
+            var key = "infra-topic-" + i;
+            return (key in state) ? (state[key] ? 0.7 : 0) : 0;
+        });
 
         var cellStyle = {color:"#1CABE2", weight:1, fillOpacity:0.0,
                          opacity: (("infra-catchments" in state)
@@ -4634,7 +4717,7 @@ app.clientside_callback(
         // click turns it on under the same parity rule as every other row.
         return [
             on("infra-pop", 0.8), on("infra-points", 0.9),
-            on("infra-selection", 0.75), {style: cellStyle},
+            on("infra-selection", 0.75), {style: cellStyle}, infraTopics,
             on("analysis-exposed", 0.85), on("analysis-selection", 0.75),
             topics,
             on("forecast-intensity", 0.75), on("forecast-exposed", 0.85),
@@ -4647,6 +4730,7 @@ app.clientside_callback(
     Output("infra-points-tile",     "opacity"),
     Output("infra-selection-tile",  "opacity"),
     Output("infra-voronoi-geojson", "options"),
+    Output({"type": "infra-topic-tile", "index": ALL}, "opacity"),
     Output("analysis-exposed-tile", "opacity"),
     Output("analysis-selection-tile", "opacity"),
     Output({"type": "analysis-topic-tile", "index": ALL}, "opacity"),
@@ -4657,6 +4741,7 @@ app.clientside_callback(
     Input({"type": "legend-eye", "index": ALL},  "n_clicks"),
     State({"type": "legend-eye", "index": ALL},  "id"),
     State({"type": "analysis-topic-tile", "index": ALL}, "opacity"),
+    State({"type": "infra-topic-tile", "index": ALL}, "opacity"),
     prevent_initial_call=True,
 )
 
