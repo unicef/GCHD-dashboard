@@ -21,7 +21,7 @@ a column ever disagreeing with the asset it lives in.
 
 Asset ids the outputs are destined for:
     projects/unicef-ccri/assets/infrastructure/{iso3}_{source}_{layer}
-    source in {giga, healthsites, wpdx, mwater, hdx}
+    source in {giga, healthsites, wpdx, mwater, hdx, co}
     layer  in {schools, health_facilities, water_points}
 
 Usage:
@@ -46,7 +46,8 @@ from _common import (adm0_countries, country_name, raw_dir, out_dir,
 SCHEMA = ["facility_id", "name", "longitude", "latitude"]
 
 # Valid components of an asset stem — upload_infra.py validates against these.
-SOURCES = ["giga", "healthsites", "wpdx", "mwater", "hdx"]
+# "co" is country-office submitted data (see templates/README.md).
+SOURCES = ["giga", "healthsites", "wpdx", "mwater", "hdx", "co"]
 LAYERS   = [LAYER_SCHOOLS, LAYER_HEALTH, LAYER_WATER]
 
 
@@ -98,14 +99,53 @@ JOBS = [
         "lon": ["longitude"], "lat": ["latitude"],
         "extras": {"subtype": ["subtype"]},
     },
+    # ── Country-office submissions ──────────────────────────────────────────
+    # Filled in from the template in scripts/templates/. The alias lists are
+    # deliberately generous: offices export from QGIS, Excel, KoBo and ODK,
+    # which each spell the coordinate columns differently, and every alias
+    # handled here is one less file to hand-correct.
+    {
+        "source": "co", "layer": LAYER_SCHOOLS, "file": "co_schools.csv",
+        "id":   ["facility_id", "id", "code", "school_id"],
+        "name": ["name", "facility_name", "school_name"],
+        "lon":  ["longitude", "lon", "long", "x"],
+        "lat":  ["latitude", "lat", "y"],
+        "extras": {"subtype": ["subtype", "type", "category"],
+                   "education_level": ["education_level", "level"]},
+    },
+    {
+        "source": "co", "layer": LAYER_HEALTH, "file": "co_health.csv",
+        "id":   ["facility_id", "id", "code", "facility_code"],
+        "name": ["name", "facility_name"],
+        "lon":  ["longitude", "lon", "long", "x"],
+        "lat":  ["latitude", "lat", "y"],
+        "extras": {"subtype": ["subtype", "type", "category", "amenity"]},
+    },
+    {
+        "source": "co", "layer": LAYER_WATER, "file": "co_water.csv",
+        "id":   ["facility_id", "id", "code", "wpdx_id"],
+        "name": ["name", "facility_name", "water_source"],
+        "lon":  ["longitude", "lon", "long", "x"],
+        "lat":  ["latitude", "lat", "y"],
+        "extras": {"subtype": ["subtype", "type", "water_source", "category"],
+                   "status": ["status", "functionality", "status_clean"]},
+    },
 ]
 
 
 def _first(df, candidates):
-    """First candidate column actually present, else None."""
-    for c in candidates or []:
+    """First candidate column actually present, else None.
+    """
+    if not candidates:
+        return None
+    for c in candidates:
         if c in df.columns:
             return c
+    lowered = {str(col).lower(): col for col in df.columns}
+    for c in candidates:
+        hit = lowered.get(str(c).lower())
+        if hit is not None:
+            return hit
     return None
 
 
