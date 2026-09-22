@@ -133,10 +133,24 @@ This is load-bearing, not a convention: geeup turns each CSV's filename into the
 | Part | Values |
 |---|---|
 | `iso3` | lowercase ISO3, from adm0 |
-| `source` | `giga`, `healthsites`, `wpdx`, `mwater`, `hdx` |
+| `source` | `giga`, `healthsites`, `wpdx`, `mwater`, `hdx`, `co` |
 | `layer` | `schools`, `health_facilities`, `water_points` |
 
 Assets land in `projects/unicef-ccri/assets/infrastructure`. The app's `discover_infra_assets()` lists that folder (cached, 10-minute TTL) to build the Infrastructure tab's dropdowns.
+
+### Country-office submissions (`co`)
+
+`co` is data sent in by a country office rather than fetched from an API, so it
+has no `fetch_*.py` — the files arrive by email and are dropped straight into
+`app/data/infra/{iso3}/raw/` as `co_schools.csv`, `co_health.csv`,
+`co_water.csv`, then run through `prep_infra.py` like any other source.
+
+`scripts/templates/` holds the blank CSVs to send offices, and
+`scripts/templates/README.md` is the guide that goes with them (required
+columns, the coordinate rules that catch most bad submissions, and what not to
+include). Column matching for these jobs is case-insensitive and accepts the
+usual `lon`/`long`/`x` and `lat`/`y` spellings, since offices export from QGIS,
+Excel, KoBo and ODK.
 
 ---
 
@@ -165,3 +179,35 @@ Things learned the hard way, all currently guarded by tests:
 ### Adding a source
 
 Add one entry to `JOBS` in `prep_infra.py` (which file, which layer, where to find id/name/coordinates/extras) and, if it needs one, a label in `_SOURCE_LABELS` in `app/gee_core.py`. A test checks every source has a label. No new code path.
+
+---
+
+# Forecast dataset flags — `forecast_flags.py`
+
+**Unrelated to the infrastructure pipeline above**, but the same idea: state that lives in GEE so the running app can change behaviour without a redeploy.
+
+The Forecast tab's datasets are defined in `app/forecast_config.py`, each with an `active` flag. A small GEE table can override those flags at runtime, so a dataset can be switched on or off **without a code change, a redeploy, or even a restart**.
+
+```bash
+python forecast_flags.py list                   # effective state: config vs table
+python forecast_flags.py disable s5p_no2 s5p_co
+python forecast_flags.py enable  s5p_no2
+python forecast_flags.py sync                   # write current config defaults
+python forecast_flags.py delete                 # drop the table, back to config
+python forecast_flags.py csv                    # regenerate forecast_datasets.csv
+```
+
+`forecast_datasets.csv` in this folder is a seed file for creating the table by hand through the Code Editor's CSV import (it has no lat/lon columns — import it as a geometry-less table). `sync` does the same job over the API and is usually easier.
+
+The table lives at `projects/unicef-ccri/assets/config/forecast_datasets`. It carries one row per dataset with `name` and `active`; `label`, `kind` and `topic` are written alongside purely so the table reads clearly in the Code Editor. It can also be edited directly there instead of via this script.
+
+The app re-reads it on a **10-minute TTL** (`forecast_core.fetch_active_overrides`), so a change lands within ten minutes on the running server — no restart.
+
+### Design rules
+
+- **Rows carry a dummy point geometry.** `Export.table.toAsset` refuses null-geometry features outright (*"Unable to export features with null geometry"*), even though a manual CSV upload of the same rows is accepted. Each row therefore gets a throwaway `Point([0, 0])`; the app reads properties only and never looks at geometry.
+- **Writes go via a staging asset, then a rename.** An earlier version deleted the live table before starting the export — when the export failed, the table was gone. Nothing is destroyed until the replacement has been written successfully, so a failed write leaves the current table untouched.
+- **The table is optional.** With no asset present the app uses the `active` flags in `forecast_config.py`. That is a fully supported configuration, which is why a missing asset logs a line rather than raising.
+- **A read failure falls back to config**, so an unreachable, deleted or malformed asset degrades to "what the code says" instead of an empty Forecast tab.
+- **Only names already in `FORECAST_DATASETS` are honoured.** Unknown names are ignored with a warning: the table can flip a known dataset either way, but can never surface one that has no verified code path behind it.
+- **`active` accepts `1/0`, `true/false` or `yes/no`**, because how the column is typed depends on whether the row was written by this script or by hand in the Code Editor.

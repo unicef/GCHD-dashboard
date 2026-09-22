@@ -503,7 +503,6 @@ body {
 .analysis-sub-tab:hover { color: var(--mid); }
 .analysis-sub-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 
-
 /* ── Layer item row (hazard list) ── */
 .layer-item-row {
   display: flex; align-items: stretch;
@@ -618,7 +617,6 @@ body {
 #main-map { height: 100vh; width: 100%; }
 #map-container.map-clickable .leaflet-container { cursor: pointer !important; }
 
-
 /* ── AI processing indicator ── */
 .ai-processing {
   font-size: 0.76rem; color: var(--lo); font-style: italic;
@@ -632,6 +630,112 @@ body {
 #ai-confirm-line {
   font-size: 0.76rem; color: var(--lo); font-style: italic;
 }
+
+/* ── Forecast tab: kind badge ──────────────────────────────────────────────
+   Distinguishes a prediction from a measurement at a glance. The dropdown
+   groups by kind, but the badge keeps that fact visible after selection. */
+.fc-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 3px;
+  font-size: 0.55rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fc-badge-forecast { background: var(--cyan-lt, #e3f4fb); color: #0b6d8f; }
+.fc-badge-obs      { background: #fff4e0;                 color: #9a6700; }
+
+/* ── Map loading badge ─────────────────────────────────────────────────────
+   Top-centre pill shown while tiles are being fetched AND painted. Driven by
+   the clientside callback watching tile urls + n_loads, so it clears only when
+   the imagery is actually on screen. pointer-events:none keeps the map fully
+   interactive underneath. */
+.map-loading {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 660; pointer-events: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 20px;
+  background: var(--panel); border: 1px solid var(--border2);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+}
+.map-loading-text {
+  font-size: 0.7rem; color: var(--mid); font-weight: 500; white-space: nowrap;
+}
+.map-loading-spinner {
+  width: 13px; height: 13px; flex-shrink: 0;
+  border: 2px solid var(--border2); border-top-color: var(--cyan);
+  border-radius: 50%; animation: map-spin 0.7s linear infinite;
+}
+@keyframes map-spin { to { transform: rotate(360deg); } }
+/* ── "Add your own facility data" (Infra tab) ── */
+.link-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.72rem; font-weight: 600; color: var(--cyan);
+}
+.link-btn:hover { text-decoration: underline; }
+
+#co-template-gate {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(17,24,39,0.9);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+}
+/* The card grows with the validation report, so cap it and scroll the body
+   rather than the whole card: the title and the Close button stay put instead
+   of being pushed off-screen by a long list of findings. */
+.co-template-card {
+  max-width: 520px;
+  max-height: 86vh;
+  display: flex; flex-direction: column;
+  padding-bottom: 24px;
+}
+.co-template-card .embargo-title { color: var(--hi); }
+.co-template-card .embargo-body {
+  overflow-y: auto; min-height: 0;
+  margin-bottom: 18px; padding-right: 6px;
+  scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
+}
+.co-template-card .embargo-body::-webkit-scrollbar { width: 6px; }
+.co-template-card .embargo-body::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.co-template-card .embargo-btn { flex-shrink: 0; }
+.co-template-links {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px;
+}
+.co-template-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 6px;
+  background: var(--cyan-lt); border: 1px solid var(--cyan);
+  color: var(--cyan); text-decoration: none;
+  font-size: 0.74rem; font-weight: 600;
+}
+.co-template-link:hover { background: var(--cyan); color: #fff; }
+
+.co-validate-drop {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 12px 0 8px; padding: 14px;
+  border: 2px dashed var(--border2); border-radius: 8px;
+  background: var(--panel-h); cursor: pointer;
+  font-size: 0.74rem; color: var(--mid);
+}
+.co-validate-drop:hover { border-color: var(--cyan); color: var(--cyan); }
+
+.co-validate-report { margin-bottom: 18px; }
+.co-validate-report:empty { display: none; }
+.co-v-err, .co-v-warn {
+  font-size: 0.72rem; line-height: 1.5;
+  padding: 6px 10px; margin-bottom: 4px; border-radius: 5px;
+}
+.co-v-err  { background: #fdecec; color: #9b1c1c; }
+.co-v-warn { background: #fff7e6; color: #8a5a00; }
+.co-v-err b, .co-v-warn b { font-weight: 700; margin-right: 4px; }
+.co-v-sum {
+  font-size: 0.74rem; font-weight: 600;
+  padding: 7px 10px; margin-top: 6px; border-radius: 5px;
+}
+.co-v-ok  { background: #eaf6ed; color: #1b5e20; }
+.co-v-bad { background: #fdecec; color: #9b1c1c; }
 
 /* ── Results panel: inline info icons ── */
 .info-icon-btn {

@@ -1,0 +1,16 @@
+name,active,label,kind,topic
+gfs_precip,1,Rainfall forecast (NOAA GFS),forecast,River Flood
+imerg_precip,1,Observed rainfall (GPM IMERG),nrt,River Flood
+gfs_wind,1,Wind speed forecast (NOAA GFS),forecast,Tropical Storm
+gfs_temp,1,Air temperature forecast (NOAA GFS),forecast,Extreme Heat
+modis_lst,1,Land surface temperature (MODIS),nrt,Heatwave
+firms_brightness,1,Active fire brightness (FIRMS),nrt,Fire
+firms_fire_days,1,Active fire days (FIRMS),nrt,Fire
+cams_pm25,1,PM2.5 forecast (CAMS),forecast,Air Pollution
+cams_pm10,1,PM10 forecast (CAMS),forecast,Air Pollution
+cams_dust_aod,1,Dust forecast (CAMS),forecast,Sand and Dust Storm
+s5p_no2,0,Nitrogen dioxide (Sentinel-5P),nrt,Air Pollution
+s5p_so2,0,Sulphur dioxide (Sentinel-5P),nrt,Air Pollution
+s5p_co,0,Carbon monoxide (Sentinel-5P),nrt,Air Pollution
+s5p_o3,0,Ozone column (Sentinel-5P),nrt,Air Pollution
+s5p_aer_ai,1,Absorbing aerosol index (Sentinel-5P),nrt,Sand and Dust Storm

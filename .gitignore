@@ -3,9 +3,13 @@ app/data/
 
 # Secrets — never commit
 scripts/.env
+app/credentials
 app/credentials/
 
 # Generated / local
 __pycache__/
 *.pyc
 scripts/iso3_mwater_review.csv
+
+# Excel lock files (created when a workbook is open)
+~$*.xlsx

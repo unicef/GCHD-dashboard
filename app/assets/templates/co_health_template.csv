@@ -1,0 +1,3 @@
+facility_id,name,longitude,latitude,subtype
+HF-001,Example District Hospital,33.7701,-13.9712,hospital
+HF-002,Example Health Post,33.8125,-13.9339,clinic
