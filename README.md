@@ -12,8 +12,6 @@ A web application for visualising global child exposure to climate and geophysic
 | **Children's Exposure** | View population of children (under 18) exposed to each hazard topic |
 | **Multi Hazard** | Multi Hazard Count (MHC) and Multi Hazard Intensity (MHI) combined indicators |
 | **Exposure Analysis** | Compute child exposure by country, province, or district; supports custom GeoJSON upload and GEE asset paths |
-| **Infrastructure** | Correlate schools, health facilities and water points with hazard footprints and child population |
-| **Forecast & Live** | Child exposure to forecast and near-real-time conditions (NOAA GFS, GPM IMERG, FIRMS, Sentinel-5P, MODIS LST) over a user-selected date window; also accepts any pasted GEE Image/ImageCollection id |
 | **AI Assistant** | Gemini-powered assistant for natural language hazard queries (under development) |
 
 ### Hazard topics covered
@@ -29,8 +27,6 @@ hazard_database_app/
 │   ├── app.py              # Main Dash application, layout, callbacks, auth routes
 │   ├── config.py           # Hazard definitions, topics, colors, admin levels
 │   ├── gee_core.py         # Google Earth Engine integration (tile URLs, exposure computation)
-│   ├── forecast_config.py  # Forecast / near-real-time dataset catalog (verified GEE ids)
-│   ├── forecast_core.py    # Date-windowed GEE loading, temporal reduction, forecast exposure
 │   ├── ai_core.py          # Google Gemini AI integration
 │   ├── auth.py             # Email OTP authentication logic
 │   ├── requirements.txt    # Python dependencies
@@ -41,14 +37,8 @@ hazard_database_app/
 │       ├── smtp_user.txt
 │       ├── smtp_pass.txt
 │       └── flask_secret.txt  ← auto-generated on first run
-├── docs/                   # Reference catalogs — documentation, never read at runtime
-│   ├── Global Hazard Data catalog.xlsx    # The 20 static hazard layers
-│   └── Forecast Data catalog.xlsx         # Forecast/NRT layers + rejected candidates
-├── scripts/                # Offline tooling — not needed to deploy the app
 └── nginx-pixel-aid.conf    # Nginx config reference (not used in current Cloudflare Tunnel setup)
 ```
-
-`app/` holds only what the running server needs: code, static assets and credentials. Reference spreadsheets live in `docs/`, and anything that is run by hand lives in `scripts/`.
 
 ---
 

@@ -23,7 +23,6 @@ import csv
 import io
 import json
 import os
-import shutil
 import sys
 import tempfile
 import unittest
@@ -234,18 +233,6 @@ class TestOutputContract(unittest.TestCase):
         out = self._prep([{"facility_id": "1", "name": "A",
                            "longitude": "34.5", "latitude": "-13.25"}])
         self.assertEqual(out["longitude"].iloc[0], 34.5)
-
-    def test_column_aliases_are_case_insensitive(self):
-        """Country-office exports come out of QGIS/Excel/KoBo/ODK with varying
-        capitalisation; an unmatched coordinate column skips the whole file."""
-        job = {"lon": ["longitude", "lon"], "lat": ["latitude", "lat"]}
-        out = self._prep([{"facility_id": "1", "name": "A",
-                           "Lon": 34.5, "LAT": -13.25}],
-                         job_overrides=job)
-        self.assertEqual(out["longitude"].iloc[0], 34.5)
-        self.assertEqual(out["latitude"].iloc[0], -13.25)
-
-
         self.assertEqual(out["latitude"].iloc[0], -13.25)
 
     def test_facility_id_falls_back_to_row_index(self):
@@ -267,37 +254,6 @@ class TestOutputContract(unittest.TestCase):
                    "id": ["id"], "name": ["name"],
                    "lon": ["longitude"], "lat": ["latitude"]}
             self.assertIsNone(prep_infra.prep_one(job, d))
-
-
-class TestCountryOfficeSource(unittest.TestCase):
-    """The `co` source carries country-office submissions (templates/README.md)."""
-
-    def test_co_is_a_registered_source(self):
-        self.assertIn("co", prep_infra.SOURCES)
-
-    def test_co_has_a_job_for_every_layer(self):
-        layers = {j["layer"] for j in prep_infra.JOBS if j["source"] == "co"}
-        self.assertEqual(layers, set(prep_infra.LAYERS))
-
-    def test_templates_match_the_output_contract(self):
-        """Each shipped template must actually survive prep_one — a template
-        whose headers the pipeline cannot read is worse than none."""
-        # Templates live under app/assets/ because Dash serves that folder
-        # statically — the Infra tab links to them for download, so there is
-        # one copy rather than a scripts/ duplicate that could drift.
-        here = os.path.dirname(os.path.abspath(__file__))
-        tpl_dir = os.path.join(here, os.pardir, "app", "assets", "templates")
-        for job in (j for j in prep_infra.JOBS if j["source"] == "co"):
-            tpl = os.path.join(tpl_dir,
-                               job["file"].replace(".csv", "_template.csv"))
-            with self.subTest(template=os.path.basename(tpl)):
-                self.assertTrue(os.path.exists(tpl), f"missing template: {tpl}")
-                with tempfile.TemporaryDirectory() as d:
-                    shutil.copy(tpl, os.path.join(d, job["file"]))
-                    out = prep_infra.prep_one(job, d)
-                self.assertIsNotNone(out, "template produced no rows")
-                self.assertEqual(list(out.columns)[:4], prep_infra.SCHEMA)
-                self.assertTrue(out[["longitude", "latitude"]].notna().all().all())
 
 
 class TestGeeCsvSafety(unittest.TestCase):

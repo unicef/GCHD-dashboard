@@ -367,7 +367,6 @@ _SOURCE_LABELS = {
     "wpdx":        "WPdx",
     "mwater":      "mWater",
     "hdx":         "HDX",
-    "co":          "Country Office",
 }
 
 # Refreshed on this interval so assets uploaded while the server is running are

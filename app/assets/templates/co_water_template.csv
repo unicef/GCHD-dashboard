@@ -1,3 +1,0 @@
-facility_id,name,longitude,latitude,subtype,status
-WP-001,Example Borehole,33.7655,-13.9801,borehole,functional
-WP-002,Example Piped Standpipe,33.8203,-13.9275,standpipe,non-functional
