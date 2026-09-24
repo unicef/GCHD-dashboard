@@ -89,6 +89,13 @@ with open(os.path.join(os.path.dirname(__file__), "credentials", "carto_api_key.
 CARTO_FALLBACK = f"https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_API_KEY}"
 ESRI_SAT       = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 GEE_ATTR       = "Google Earth Engine / UNICEF"
+
+# The map's opening view, and the view every section returns to when the user
+# leaves it. Defined once so the initial render and the reset cannot drift.
+GLOBAL_CENTER  = [10, 20]
+GLOBAL_ZOOM    = 3
+GLOBAL_VIEWPORT = {"center": GLOBAL_CENTER, "zoom": GLOBAL_ZOOM,
+                   "transition": "flyTo"}
 UN_ATTR        = "© United Nations Geospatial"
 CARTO_ATTR     = "© OpenStreetMap contributors © CARTO"
 ESRI_ATTR      = "© Esri, Maxar, Earthstar Geographics"
@@ -1448,7 +1455,7 @@ def map_component():
         ]),
         dl.Map(
             id="main-map",
-            center=[10, 20], zoom=3, zoomControl=False,
+            center=GLOBAL_CENTER, zoom=GLOBAL_ZOOM, zoomControl=False,
             minZoom=3,
             maxBounds=[[-60, -190], [80, 190]],
             maxBoundsViscosity=1.0,
@@ -1725,6 +1732,30 @@ app.layout = html.Div(id="app-root", children=[
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
         ]),
     ]),
+
+    # ── Leave-section confirmation ─────────────────────────────────────────
+    # Each section owns its map layers and result panel, and switching wipes
+    # both. Results here cost a GEE reduction that can take tens of seconds, so
+    # losing one to a stray click is expensive — hence a confirm step, but ONLY
+    # when something is actually on the map (see elnino_leave_guard).
+    html.Div(id="leave-gate", style={"display": "none"}, children=[
+        html.Div(className="embargo-card leave-card", children=[
+            html.Div("Leave this section?", className="embargo-title"),
+            html.Div(id="leave-gate-body", className="embargo-body"),
+            html.Div(className="leave-btns", children=[
+                html.Button("Stay here", id="leave-cancel-btn",
+                            className="leave-btn-ghost", n_clicks=0),
+                html.Button("Leave and clear", id="leave-confirm-btn",
+                            className="embargo-btn leave-btn-go", n_clicks=0),
+            ]),
+        ]),
+    ]),
+    # Two stores, deliberately not one. store-leave-dest only REMEMBERS where
+    # the open dialog would go; store-pending-tab is what actually triggers the
+    # switch. Merging them would mean writing the destination when the dialog
+    # opens, which is exactly the moment the switch must NOT happen.
+    dcc.Store(id="store-leave-dest",  data=None),
+    dcc.Store(id="store-pending-tab", data=None),
 
     # ── Add-your-own-data dialog (Infra tab) ───────────────────────────────
     html.Div(id="co-template-gate", style={"display": "none"}, children=[
@@ -2028,20 +2059,25 @@ def restore_embargo_state(accepted_forever):
     *[Output(t["btn"],  "className") for t in TABS],
     *[Output(t["pane"], "style")     for t in TABS],
     Output("hazard-info-panel", "style", allow_duplicate=True),
-    *[Input(t["btn"], "n_clicks") for t in TABS],
+    Input("store-pending-tab", "data"),
     State("store-tab", "data"),
     prevent_initial_call=True,
 )
-def switch_tab(*args):
+def switch_tab(tab, current):
     """Show one pane and highlight its rail button.
 
     Outputs are generated from TABS, so the arity can never drift out of sync
     with the rail the way a hand-maintained Output list could — a mismatch
     there used to fail silently at click time rather than at import.
+
+    The rail buttons no longer reach here directly: leave_guard owns every
+    switch and writes the destination to store-pending-tab, straight through on
+    a plain click or after confirmation when results would be lost. One writer
+    is what stops the pane changing behind an open dialog.
     """
-    current = args[-1]
-    btn_to_key = {t["btn"]: t["key"] for t in TABS}
-    tab = btn_to_key.get(ctx.triggered_id, current)
+    if not tab:
+        raise dash.exceptions.PreventUpdate
+
     cls = lambda k: "nav-btn active" if tab == k else "nav-btn"
     vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
     # The popover serves the Layers list and the Forecast dataset info
@@ -2053,6 +2089,173 @@ def switch_tab(*args):
         *[cls(t["key"]) for t in TABS],
         *[vis(t["key"]) for t in TABS],
         info_panel,
+    )
+
+
+# ── Leaving a section with live results ──────────────────────────────────────
+#
+# Each section owns its map layers and results panel, and a switch wipes both.
+# A computed result costs a GEE reduction of tens of seconds, so losing one to a
+# stray rail click is expensive — but a confirmation on EVERY switch would be
+# nagging. The dialog therefore appears only when the section being left has
+# something on the map.
+#
+# What counts as "something on the map", per section:
+_RESULT_STORES = {
+    "hazard":         ("store-hazard-layer",   "a hazard layer"),
+    "exposure":       ("store-exposure-topic", "an exposure layer"),
+    "analysis":       ("store-analysis-viz",   "exposure results"),
+    "infrastructure": ("store-infra-viz",      "infrastructure results"),
+    "observed":       ("store-forecast-viz",   "observed-hazard results"),
+    "forecast":       ("store-forecast-viz",   "forecast results"),
+    "elnino":         ("store-elnino-viz",     "El Niño results"),
+}
+
+
+@app.callback(
+    Output("store-pending-tab",  "data"),
+    Output("store-leave-dest",   "data"),
+    Output("leave-gate",         "style"),
+    Output("leave-gate-body",    "children"),
+    *[Input(t["btn"], "n_clicks") for t in TABS],
+    Input("leave-confirm-btn",   "n_clicks"),
+    Input("leave-cancel-btn",    "n_clicks"),
+    State("store-tab",           "data"),
+    State("store-hazard-layer",  "data"),
+    State("store-exposure-topic", "data"),
+    State("store-analysis-viz",  "data"),
+    State("store-infra-viz",     "data"),
+    State("store-forecast-viz",  "data"),
+    State("store-elnino-viz",    "data"),
+    State("store-leave-dest",    "data"),
+    prevent_initial_call=True,
+)
+def leave_guard(*args):
+    """Decide every tab switch: straight through, or via a confirmation.
+
+    The single writer of store-pending-tab, which switch_tab listens to. That
+    one-writer rule is what stops the pane changing behind an open dialog.
+    """
+    # Read States by name rather than position: the nav Inputs are generated
+    # from TABS, so positional indices would silently shift the moment a tab is
+    # added — exactly the drift the TABS-driven outputs exist to prevent.
+    st        = ctx.states
+    current   = st.get("store-tab.data")
+    held      = st.get("store-leave-dest.data")
+    live      = {
+        "hazard":         st.get("store-hazard-layer.data"),
+        "exposure":       st.get("store-exposure-topic.data"),
+        "analysis":       st.get("store-analysis-viz.data"),
+        "infrastructure": st.get("store-infra-viz.data"),
+        "forecast":       st.get("store-forecast-viz.data"),
+        "elnino":         st.get("store-elnino-viz.data"),
+    }
+    trig      = ctx.triggered_id
+    hidden    = {"display": "none"}
+
+    if trig == "leave-cancel-btn":
+        return no_update, None, hidden, no_update
+    if trig == "leave-confirm-btn":
+        # Release the held destination into store-pending-tab, which is what
+        # switch_tab listens to; clear_on_leave then wipes the old layers.
+        if not held:
+            raise dash.exceptions.PreventUpdate
+        return held, None, hidden, no_update
+
+    dest = {t["btn"]: t["key"] for t in TABS}.get(trig)
+    if not dest or dest == current:
+        raise dash.exceptions.PreventUpdate
+
+    # Observed and Forecast share one control stack and one set of layers, so
+    # moving between them loses nothing and needs no confirmation.
+    if {dest, current} <= set(FORECAST_TABS):
+        return dest, None, hidden, no_update
+
+    entry = _RESULT_STORES.get(current)
+    key = {"observed": "forecast"}.get(current, current)
+    if not entry or not live.get(key):
+        return dest, None, hidden, no_update      # nothing to lose
+
+    # Hold the destination WITHOUT writing store-pending-tab: writing it here
+    # would switch the pane behind the dialog, which is the whole thing the
+    # confirmation exists to prevent.
+    _, what = entry
+    dest_label = TAB_BY_KEY[dest]["label"]
+    body = [
+        "This section is showing ", html.Strong(what),
+        f". Moving to {dest_label} clears the map layers and the results "
+        f"panel, and the calculation would have to be run again.",
+    ]
+    return no_update, dest, {"display": "flex"}, body
+
+
+@app.callback(
+    Output("elnino-layer-tile",       "url", allow_duplicate=True),
+    Output("elnino-pop-tile",         "url", allow_duplicate=True),
+    Output("elnino-exposed-tile",     "url", allow_duplicate=True),
+    Output("forecast-intensity-tile", "url", allow_duplicate=True),
+    Output("forecast-exposed-tile",   "url", allow_duplicate=True),
+    Output("infra-pop-tile",          "url", allow_duplicate=True),
+    Output("infra-selection-tile",    "url", allow_duplicate=True),
+    Output("analysis-exposed-tile",   "url", allow_duplicate=True),
+    Output("store-elnino-viz",        "data", allow_duplicate=True),
+    Output("store-elnino-preview",    "data", allow_duplicate=True),
+    Output("store-forecast-viz",      "data", allow_duplicate=True),
+    Output("store-forecast-preview",  "data", allow_duplicate=True),
+    Output("store-infra-viz",         "data", allow_duplicate=True),
+    Output("store-analysis-viz",      "data", allow_duplicate=True),
+    # Region state. Clearing these removes the admin boundary and the yellow
+    # selection highlight, which are both derived from them rather than being
+    # set directly — see update_map_view / update_selection_layer.
+    Output("store-ucode",             "data", allow_duplicate=True),
+    Output("store-bounds",            "data", allow_duplicate=True),
+    Output("store-country",           "data", allow_duplicate=True),
+    Output("store-clicked-ucode",     "data", allow_duplicate=True),
+    Output("store-clicked-name",      "data", allow_duplicate=True),
+    Output("infra-selection-tile",    "url", allow_duplicate=True),
+    Output("analysis-selection-tile", "url", allow_duplicate=True),
+    Output("forecast-selection-tile", "url", allow_duplicate=True),
+    Output("main-map",                "viewport", allow_duplicate=True),
+    # The per-section country pickers, so a cleared region does not leave a
+    # country name sitting in a dropdown with no boundary drawn for it.
+    Output("elnino-country",          "value", allow_duplicate=True),
+    Output("forecast-country-select", "value", allow_duplicate=True),
+    Input("store-tab",                "data"),
+    prevent_initial_call=True,
+)
+def clear_on_leave(tab):
+    """Blank the OTHER sections' map layers and result stores on a tab change.
+
+    Never touches the section being entered. Both this and that section's own
+    preview callback fire on store-tab, so clearing the incoming tab's layers
+    is a race: this callback would write "" over a URL the preview had just
+    set, leaving a blank map beside a legend that says a layer is showing.
+
+    Everything else is cleared unconditionally — that is what stops a previous
+    section's raster lingering under the new one, and emptying the viz stores
+    clears the legend, which is driven from them.
+    """
+    keep_elnino   = tab == "elnino"
+    keep_forecast = tab in FORECAST_TABS
+    keep_infra    = tab == "infrastructure"
+    keep_analysis = tab == "analysis"
+    blank = lambda keep: no_update if keep else ""
+    none_ = lambda keep: no_update if keep else None
+    return (
+        blank(keep_elnino), blank(keep_elnino), blank(keep_elnino),
+        blank(keep_forecast), blank(keep_forecast),
+        blank(keep_infra), blank(keep_infra),
+        blank(keep_analysis),
+        none_(keep_elnino), none_(keep_elnino),
+        none_(keep_forecast), none_(keep_forecast),
+        none_(keep_infra), none_(keep_analysis),
+        # Region state and the selection highlights are shared, so they reset
+        # on every switch regardless of destination: the new section starts
+        # from no region, as it would on a fresh load.
+        None, None, None, None, None,
+        "", "", "",
+        GLOBAL_VIEWPORT,
+        None, None,
     )
 
 

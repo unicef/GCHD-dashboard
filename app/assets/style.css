@@ -864,3 +864,30 @@ body {
   position: absolute; left: 0; right: 0; height: 0;
   border-top: 2px dashed #e31a1c; pointer-events: none;
 }
+
+/* ── Leave-section confirmation ────────────────────────────────────────────
+   Reuses .embargo-card for the panel; only the overlay, the button row and
+   the softer title are specific to it. Centred over the map, per the same
+   pattern as the data-use notice. */
+#leave-gate {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(17,24,39,0.72);
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
+}
+.leave-card { max-width: 400px; padding: 30px 30px 24px; }
+/* Not an error — leaving is a normal action, so this reads as a question
+   rather than borrowing the red of the data-use warning. */
+.leave-card .embargo-title { color: var(--hi); font-size: 1rem; }
+.leave-card .embargo-body  { margin-bottom: 22px; }
+.leave-btns { display: flex; gap: 10px; }
+.leave-btn-ghost {
+  flex: 1; padding: 12px;
+  background: transparent; color: var(--mid);
+  border: 1px solid var(--border2); border-radius: 8px;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.84rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.leave-btn-ghost:hover { background: var(--panel-h); color: var(--hi); }
+.leave-btn-go { flex: 1; width: auto; padding: 12px; font-size: 0.84rem; }
