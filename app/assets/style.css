@@ -789,3 +789,78 @@ body {
   }
   .map-disclaimer-text { padding-top: 2px; padding-bottom: 2px; }
 }
+
+/* ── El Niño seasonal outlook ──────────────────────────────────────────────
+   Scoped to .en-* so nothing here can reach the Forecast or Analysis panes,
+   which share the .ps / .metric primitives these sit beside. */
+
+.en-radio-inline { display: flex; gap: 14px; flex-wrap: wrap; }
+.en-radio-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.76rem; color: var(--hi); cursor: pointer;
+}
+.en-radio-input { accent-color: #1CABE2; cursor: pointer; }
+.en-check label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.76rem; color: var(--hi); cursor: pointer;
+}
+.en-check input { accent-color: #1CABE2; cursor: pointer; }
+
+/* Methodology — numbered steps */
+.en-method { display: flex; flex-direction: column; gap: 10px; }
+.en-method-step { display: flex; gap: 9px; align-items: flex-start; }
+.en-method-num {
+  flex: 0 0 18px; height: 18px; border-radius: 50%;
+  background: #1CABE2; color: #fff;
+  font-size: 0.65rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.en-method-title {
+  font-size: 0.74rem; font-weight: 600; color: var(--hi); margin-bottom: 2px;
+}
+.en-method-body {
+  font-size: 0.72rem; color: var(--mid); line-height: 1.55;
+}
+
+.en-caveats {
+  margin: 4px 0 0; padding-left: 16px;
+  font-size: 0.72rem; color: var(--mid); line-height: 1.55;
+}
+.en-caveats li { margin-bottom: 5px; }
+
+/* Threshold sensitivity — the headline figure beside its neighbours */
+.en-sens { display: flex; gap: 6px; }
+.en-sens-cell {
+  flex: 1; text-align: center; padding: 8px 4px;
+  border: 1px solid var(--border2); border-radius: 6px;
+  background: var(--panel-h);
+}
+.en-sens-cell.active {
+  border-color: #1CABE2; background: rgba(28, 171, 226, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(28, 171, 226, 0.35);
+}
+.en-sens-thr {
+  font-size: 0.65rem; color: var(--lo); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-bottom: 3px;
+}
+.en-sens-val { font-size: 0.86rem; font-weight: 700; color: var(--hi); }
+.en-sens-pct { font-size: 0.66rem; color: var(--mid); margin-top: 1px; }
+
+/* Historical context — 24 hindcast years, with this forecast marked */
+.en-hist {
+  position: relative; height: 62px; margin-top: 6px;
+  border-bottom: 1px solid var(--border2);
+}
+.en-hist-bars {
+  display: flex; align-items: flex-end; gap: 2px; height: 100%;
+}
+.en-hist-bar {
+  flex: 1; background: var(--border2); border-radius: 1px 1px 0 0;
+  min-height: 1px; transition: background 0.15s;
+}
+.en-hist-bar:hover { background: var(--mid); }
+.en-hist-now {
+  position: absolute; left: 0; right: 0; height: 0;
+  border-top: 2px dashed #e31a1c; pointer-events: none;
+}

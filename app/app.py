@@ -57,6 +57,20 @@ from forecast_core import (
     get_forecast_preview_tile,
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
+from elnino_config import (
+    PERIODS, PERIOD_MAP, DEFAULT_PERIOD, period_label,
+    SIGNALS, SIGNAL_MAP, DEFAULT_SIGNAL,
+    EXPLORE_LAYERS, EXPLORE_MAP, DEFAULT_EXPLORE,
+    PROB_MIN, PROB_MAX, PROB_DEFAULT, PROB_STEP, PROB_MARKS,
+    SENSITIVITY_THRESHOLDS, CHANCE_LEVEL,
+    METHOD_STEPS, CAVEATS, SOURCE_URL,
+    INIT_LABEL, HINDCAST, SYSTEM as ELNINO_SYSTEM,
+)
+from elnino_core import (
+    ElNinoError, compute_elnino_exposure, hindcast_area_share,
+    get_elnino_preview_tile, get_elnino_layer_tile, get_elnino_exposed_tile,
+    get_elnino_pop_tile, forecast_area_share, elnino_available,
+)
 
 # ---------------------------------------------------------------------------
 # GEE init (once at server start)
@@ -194,6 +208,11 @@ TABS = [
      "title": "Forecast Hazards",
      "desc": "Compute number of children forecast to experience each type of "
              "hazard by admin region (under development)"},
+    {"key": "elnino",         "btn": "btn-elnino",   "pane": "tab-elnino",
+     "icon": "bi bi-thermometer-sun", "label": "El Niño",
+     "title": "El Niño Seasonal Outlook",
+     "desc": "Explore the seasonal rainfall outlook and compute the number of "
+             "children in areas with a dry or wet signal"},
     {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
      "icon": "bi bi-robot",          "label": "AI",
      "title": "AI Assistant",
@@ -1135,6 +1154,200 @@ def tab_forecast():
     ])
 
 
+# ── El Niño tab ──────────────────────────────────────────────────────────────
+
+def _elnino_radio(id_, options, value, inline=True):
+    """Small labelled radio group matching the .ps control styling."""
+    return dcc.RadioItems(
+        id=id_, options=options, value=value,
+        className="en-radio" + (" en-radio-inline" if inline else ""),
+        inputClassName="en-radio-input", labelClassName="en-radio-label",
+    )
+
+
+def _elnino_method_block():
+    """How the numbers are produced, and what they do not mean.
+
+    Spelled out in the tab rather than buried in a tooltip: every step here is
+    a defensible-but-arguable choice, and a user who cannot see them has no way
+    to judge whether the figure suits their purpose.
+    """
+    return html.Div(className="ps", children=[
+        html.Div("Methodology", className="ps-label"),
+        html.Div(className="en-method", children=[
+            html.Div(className="en-method-step", children=[
+                html.Div(f"{i}", className="en-method-num"),
+                html.Div([
+                    html.Div(title, className="en-method-title"),
+                    html.Div(body, className="en-method-body"),
+                ]),
+            ]) for i, (title, body) in enumerate(METHOD_STEPS, 1)
+        ]),
+        html.Div("Read this before quoting a number", className="ps-label",
+                 style={"marginTop": "14px"}),
+        html.Ul(className="en-caveats",
+                children=[html.Li(c) for c in CAVEATS]),
+        html.Div(className="ps-caption", style={"marginTop": "8px"}, children=[
+            html.Span("Source: "),
+            html.A("Copernicus CDS — seasonal-monthly-single-levels",
+                   href=SOURCE_URL, target="_blank", className="hi-link"),
+            html.Span(f" · ECMWF SEAS5 system {ELNINO_SYSTEM} · "
+                      f"initialised {INIT_LABEL} · hindcast {HINDCAST}"),
+        ]),
+    ])
+
+
+def tab_elnino():
+    return html.Div(id="tab-elnino", style={"display": "none"}, children=[
+        tab_header("elnino"),
+
+        html.Div(className="exposure-method-note",
+                 style={"margin": "12px 10px 0"}, children=[
+            html.P([
+                html.Strong("Seasonal outlook"), " — one ECMWF SEAS5 forecast "
+                f"issued {INIT_LABEL}, not a live feed. It shows where the "
+                "season is likely to fall in the driest or wettest third of "
+                "what this model normally predicts. ",
+                html.Strong("A signal is a reason to look closer, not a "
+                            "forecast of drought or flooding."),
+            ], className="exposure-method-p", style={"marginBottom": "0"}),
+        ]),
+
+        # Availability banner — one clear sentence when the assets are missing.
+        html.Div(id="elnino-status", style={"margin": "10px"}),
+
+        html.Div(id="elnino-controls", children=[
+            # 1. Period
+            html.Div(className="ps", children=[
+                html.Div("1. Period", className="ps-label"),
+                dcc.Dropdown(
+                    id="elnino-period", className="ps-select",
+                    options=[{"label": p["label"], "value": p["period"]}
+                             for p in PERIODS],
+                    value=DEFAULT_PERIOD, clearable=False, searchable=False,
+                ),
+                html.Div(id="elnino-period-note", className="ps-caption"),
+            ]),
+
+            # 2. Signal
+            html.Div(className="ps", children=[
+                html.Div("2. Signal", className="ps-label"),
+                _elnino_radio(
+                    "elnino-signal",
+                    [{"label": s["label"], "value": s["name"]} for s in SIGNALS],
+                    DEFAULT_SIGNAL),
+                html.Div(id="elnino-signal-note", className="ps-caption"),
+            ]),
+
+            # 3. Threshold
+            html.Div(className="ps", children=[
+                html.Div("3. Probability threshold", className="ps-label"),
+                html.Div(className="analysis-threshold-row", children=[
+                    html.Div(className="athr-row-head", children=[
+                        html.Span("Signal where probability ≥",
+                                  className="athr-label"),
+                        dcc.Input(id="elnino-threshold", type="number",
+                                  min=PROB_MIN, max=PROB_MAX, step=PROB_STEP,
+                                  value=PROB_DEFAULT, debounce=True,
+                                  className="athr-input"),
+                        html.Span("%", className="athr-units"),
+                    ]),
+                    dcc.Slider(
+                        id="elnino-threshold-slider",
+                        min=PROB_MIN, max=PROB_MAX, step=PROB_STEP,
+                        value=PROB_DEFAULT, updatemode="mouseup",
+                        className="athr-slider",
+                        marks={m: {"label": f"{m}%"} for m in PROB_MARKS},
+                        tooltip={"placement": "bottom", "always_visible": False},
+                    ),
+                ]),
+                html.Div(id="elnino-threshold-note", className="ps-caption"),
+            ]),
+
+            # 4. Dry mask
+            html.Div(className="ps", children=[
+                html.Div("4. Arid-area handling", className="ps-label"),
+                dcc.Checklist(
+                    id="elnino-dry-mask",
+                    options=[{"label": " Exclude areas too dry to interpret",
+                              "value": "on"}],
+                    value=["on"], className="en-check",
+                ),
+                html.Div("Recommended. Where normal rainfall is a fraction of "
+                         "a millimetre, a “wettest third” is rounding noise at "
+                         "any threshold — without this, desert children are "
+                         "counted as flood-exposed.",
+                         className="ps-caption"),
+            ]),
+
+            # 5. Layer to display
+            html.Div(className="ps", children=[
+                html.Div("5. Map layer", className="ps-label"),
+                dcc.Dropdown(
+                    id="elnino-layer", className="ps-select",
+                    options=[{"label": l["label"], "value": l["name"]}
+                             for l in EXPLORE_LAYERS],
+                    value=DEFAULT_EXPLORE, clearable=False, searchable=False,
+                ),
+                html.Div(id="elnino-layer-note", className="ps-caption"),
+            ]),
+
+            # 6. Country
+            html.Div(className="ps", children=[
+                html.Div("6. Select country / territory", className="ps-label"),
+                dcc.Dropdown(
+                    id="elnino-country", className="ps-select",
+                    options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
+                    value=None, placeholder="Search country / territory…",
+                    clearable=False, searchable=True,
+                ),
+            ]),
+
+            # 7. Level
+            html.Div(id="elnino-level-section", style={"display": "none"},
+                     children=[
+                html.Div(className="ps", children=[
+                    html.Div("7. Analysis level", className="ps-label"),
+                    dcc.Dropdown(
+                        id="elnino-level", className="ps-select",
+                        options=[{"label": l, "value": l}
+                                 for l in ADMIN_DATA.keys()],
+                        value=None, placeholder="— select level —",
+                        clearable=False, searchable=False,
+                    ),
+                    html.Div("For ADM1/ADM2, click the region on the map.",
+                             className="ps-caption"),
+                ]),
+            ]),
+
+            html.Div(id="elnino-compute-wrap", style={"display": "none"},
+                     children=[
+                html.Div(className="ps", children=[
+                    html.Button("▶  Compute exposure", id="elnino-compute-btn",
+                                className="ps-btn", n_clicks=0, disabled=True),
+                    html.Div("Select a region, then Compute.",
+                             id="elnino-compute-hint", className="ps-caption",
+                             style={"marginTop": "6px"}),
+                ]),
+            ]),
+
+            dcc.Loading(
+                id="elnino-results-loading", type="circle", color="#1CABE2",
+                children=html.Div(id="elnino-results-panel"),
+            ),
+
+            _elnino_method_block(),
+        ]),
+
+        # — Stores —
+        dcc.Store(id="store-elnino-result",  data=None),
+        dcc.Store(id="store-elnino-viz",     data=None),
+        # Previewed layer + its vis, so the legend can describe the global map
+        # that is on screen before any region has been computed.
+        dcc.Store(id="store-elnino-preview", data=None),
+    ])
+
+
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
         tab_header("ai"),
@@ -1299,6 +1512,15 @@ def map_component():
                 dl.TileLayer(id="forecast-selection-tile", url="", opacity=0.75),
                 dl.TileLayer(id="forecast-intensity-tile", url="", opacity=0),
                 dl.TileLayer(id="forecast-exposed-tile", url="", opacity=0.85),
+                # ── El Niño: its own pair rather than reusing the forecast
+                # tiles, so switching tabs does not blank the other tab's map
+                # state (both stacks stay addressable independently). ──
+                dl.TileLayer(id="elnino-layer-tile", url="", opacity=0.8),
+                # Total child population sits UNDER the exposed layer so the
+                # exposed subset reads as a highlight on the whole, not as a
+                # separate map. It starts hidden to keep the default readable.
+                dl.TileLayer(id="elnino-pop-tile", url="", opacity=0),
+                dl.TileLayer(id="elnino-exposed-tile", url="", opacity=0.85),
             ],
             style={"height": "100vh", "width": "100%"},
         ),
@@ -1609,6 +1831,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_infrastructure(),
             tab_observed(),
             tab_forecast(),
+            tab_elnino(),
             tab_ai(),
         ]),
         map_component(),
@@ -2221,6 +2444,54 @@ def _analysis_legend_specs(viz):
     return specs
 
 
+def _elnino_legend_specs(viz, preview):
+    """Legend for the El Niño tab.
+
+    Two states, and the preview one matters: this tab has a default period and
+    layer selected the moment it opens, so a global map is on screen before any
+    Compute. Without a row for it the legend would be empty while the map was
+    clearly showing something — the one case where the overlay and the map
+    disagree.
+
+    After a Compute there are three rows, deliberately in draw order: the
+    outlook layer, total children (hidden by default), and the exposed subset.
+    """
+    # Computed result — the full three-layer stack.
+    if viz:
+        layer_cfg = EXPLORE_MAP.get(viz.get("layer")) or {}
+        sig = SIGNAL_MAP.get(viz.get("signal")) or {}
+        vis = viz.get("layer_vis")
+        label = layer_cfg.get("label", "Outlook")
+        units = layer_cfg.get("units")
+        specs = []
+        if vis:
+            specs.append(vis_gradient_spec(
+                f"{label}" + (f" ({units})" if units else ""), vis,
+                layer_id="elnino-layer", toggleable=True))
+        specs += [
+            vis_gradient_spec("All children (per 1 km)", POP_VIS,
+                              layer_id="elnino-pop", unit="+",
+                              toggleable=True, visible=False),
+            vis_gradient_spec(
+                f"Children in {sig.get('label', 'signal').lower()} area",
+                POP_VIS, layer_id="elnino-exposed", unit="+",
+                toggleable=True),
+        ]
+        return specs
+
+    # Preview only — one row describing what is already on the map.
+    if preview:
+        layer_cfg = EXPLORE_MAP.get(preview.get("layer")) or {}
+        vis = preview.get("vis")
+        if not vis:
+            return []
+        units = layer_cfg.get("units")
+        return [vis_gradient_spec(
+            layer_cfg.get("label", "Outlook") + (f" ({units})" if units else ""),
+            vis, layer_id="elnino-layer", toggleable=True)]
+    return []
+
+
 # ── Map data layers ───────────────────────────────────────────────────────────
 
 @app.callback(
@@ -2236,9 +2507,12 @@ def _analysis_legend_specs(viz):
     Input("store-analysis-viz",   "data"),
     Input("store-forecast-viz",   "data"),
     Input("store-forecast-preview", "data"),
+    Input("store-elnino-viz",     "data"),
+    Input("store-elnino-preview", "data"),
 )
 def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
-                       infra_viz, analysis_viz, forecast_viz, forecast_preview):
+                       infra_viz, analysis_viz, forecast_viz, forecast_preview,
+                       elnino_viz, elnino_preview):
     """Build this tab's map tiles and the legend specs that describe them.
 
     Single source of truth for the legend: whichever tab is active writes its
@@ -2258,6 +2532,10 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
     # Dedicated top-level components (forecast-*-tile), shared by both tabs.
     if tab in FORECAST_TABS:
         return layers, _forecast_legend_specs(forecast_viz, forecast_preview)
+
+    # Dedicated top-level components (elnino-*-tile).
+    if tab == "elnino":
+        return layers, _elnino_legend_specs(elnino_viz, elnino_preview)
 
     if tab == "hazard" and sel_layer:
         if sel_layer == "Multi Hazard Count":
@@ -4722,6 +5000,8 @@ app.clientside_callback(
             topics,
             on("forecast-intensity", 0.75), on("forecast-exposed", 0.85),
             on("forecast-selection", 0.75),
+            on("elnino-layer", 0.8), on("elnino-pop", 0.85),
+            on("elnino-exposed", 0.85),
             icons
         ];
     }
@@ -4737,6 +5017,9 @@ app.clientside_callback(
     Output("forecast-intensity-tile", "opacity"),
     Output("forecast-exposed-tile",   "opacity"),
     Output("forecast-selection-tile", "opacity"),
+    Output("elnino-layer-tile",       "opacity"),
+    Output("elnino-pop-tile",         "opacity"),
+    Output("elnino-exposed-tile",     "opacity"),
     Output({"type": "legend-eye", "index": ALL}, "className"),
     Input({"type": "legend-eye", "index": ALL},  "n_clicks"),
     State({"type": "legend-eye", "index": ALL},  "id"),
@@ -5510,6 +5793,543 @@ def render_forecast_results(result, meta):
                 href="data:application/json;charset=utf-8,"
                      + _json.dumps(export, indent=2),
                 download=f"gchd_forecast_{safe}.json",
+                className="ps-btn-ghost",
+                style={"display": "block", "textAlign": "center",
+                       "textDecoration": "none", "padding": "9px 16px"},
+            ),
+        ]),
+    ])
+
+
+# =============================================================================
+# El Niño seasonal outlook
+# =============================================================================
+
+def _elnino_error(msg):
+    return html.Div(className="ps", children=[
+        html.Div(msg, style={"fontSize": "0.78rem", "color": "var(--red)",
+                             "lineHeight": "1.5"}),
+    ])
+
+
+@app.callback(
+    Output("elnino-status",   "children"),
+    Output("elnino-controls", "style"),
+    Input("store-tab",        "data"),
+)
+def elnino_status(tab):
+    """Check the assets once the tab is opened, not at import.
+
+    A missing or unshared collection is the expected first-run state, so it
+    gets one plain sentence instead of an exception inside every callback.
+    """
+    if tab != "elnino":
+        return no_update, no_update
+    try:
+        ok, msg = elnino_available()
+    except Exception as e:
+        ok, msg = False, str(e)[:200]
+    if ok:
+        return None, {"display": "block"}
+    return html.Div(className="ps", children=[
+        html.Div("Outlook unavailable", className="ps-label"),
+        html.Div(msg, className="ps-caption", style={"color": "var(--red)"}),
+    ]), {"display": "none"}
+
+
+@app.callback(
+    Output("elnino-period-note",    "children"),
+    Output("elnino-signal-note",    "children"),
+    Output("elnino-layer-note",     "children"),
+    Input("elnino-period",          "value"),
+    Input("elnino-signal",          "value"),
+    Input("elnino-layer",           "value"),
+)
+def elnino_notes(period, signal, layer):
+    p = PERIOD_MAP.get(period) or {}
+    s = SIGNAL_MAP.get(signal) or {}
+    l = EXPLORE_MAP.get(layer) or {}
+    p_note = p.get("note") or (
+        f"Dry-area cutoff for this period: {p.get('dry_mask_mm', '—')} mm.")
+    return p_note, s.get("blurb", ""), l.get("desc", "")
+
+
+@app.callback(
+    Output("elnino-threshold",        "value"),
+    Output("elnino-threshold-slider", "value"),
+    Output("elnino-threshold-note",   "children"),
+    Input("elnino-threshold",         "value"),
+    Input("elnino-threshold-slider",  "value"),
+)
+def elnino_sync_threshold(box, slider):
+    """Keep the number box and slider in step, and say what the value means.
+
+    The note is not decoration: 33% is the no-information baseline for terciles,
+    and a user dragging towards it needs to know the signal is dissolving into
+    chance rather than getting more inclusive.
+    """
+    src = ctx.triggered_id
+    val = box if src == "elnino-threshold" else slider
+    try:
+        val = float(val)
+    except (TypeError, ValueError):
+        val = PROB_DEFAULT
+    # Already a percentage — no scaling here. The single 0-100 -> 0-1 step
+    # happens in elnino_core._signal_mask via to_fraction().
+    val = int(round(max(PROB_MIN, min(PROB_MAX, val))))
+
+    margin = val - CHANCE_LEVEL
+    if val <= 36:
+        note = (f"{val}% is barely above the {CHANCE_LEVEL:.0f}% "
+                f"no-information baseline — almost every cell will qualify.")
+    elif val >= 65:
+        note = (f"{val}% demands strong ensemble agreement; expect few "
+                f"cells and a conservative count.")
+    else:
+        note = (f"{val}% of the 51 members — {margin:+.0f} points above the "
+                f"{CHANCE_LEVEL:.0f}% baseline. ECMWF's own charts shade from "
+                f"about 40%.")
+    return val, val, note
+
+
+@app.callback(
+    Output("store-country",         "data", allow_duplicate=True),
+    Output("store-ucode",           "data", allow_duplicate=True),
+    Output("store-bounds",          "data", allow_duplicate=True),
+    Output("store-level",           "data", allow_duplicate=True),
+    Output("store-clicked-ucode",   "data", allow_duplicate=True),
+    Output("store-clicked-name",    "data", allow_duplicate=True),
+    Output("elnino-level-section",  "style"),
+    Output("elnino-level",          "value"),
+    Input("elnino-country",         "value"),
+    prevent_initial_call=True,
+)
+def elnino_on_country(country):
+    """Write the SHARED region stores, exactly as forecast_on_country does.
+
+    The compute gate reads store-ucode / store-clicked-ucode, which every other
+    tab populates through these stores. A tab-local dropdown that only toggled
+    its own section would leave those empty and the Compute button would never
+    appear — which is precisely what happened.
+
+    Defaulting the level to adm0 also means a country selection alone is enough
+    to run, rather than requiring a second pick that adds nothing at adm0.
+    """
+    if not country:
+        return None, None, None, None, None, None, {"display": "none"}, None
+    ucode  = get_country_ucode(country)
+    bounds = get_country_bounds(ucode)
+    return (country, ucode, bounds, "adm0 (Country)", None, None,
+            {"display": "block"}, "adm0 (Country)")
+
+
+@app.callback(
+    Output("store-level",         "data", allow_duplicate=True),
+    Output("store-clicked-ucode", "data", allow_duplicate=True),
+    Output("store-clicked-name",  "data", allow_duplicate=True),
+    Input("elnino-level",         "value"),
+    prevent_initial_call=True,
+)
+def elnino_on_level(level):
+    """Adopt the level and clear any region clicked at the previous one."""
+    if not level:
+        return no_update, None, None
+    return level, None, None
+
+
+@app.callback(
+    Output("elnino-compute-wrap", "style"),
+    Output("elnino-compute-btn",  "disabled"),
+    Output("elnino-compute-hint", "children"),
+    Input("elnino-level",         "value"),
+    Input("store-ucode",          "data"),
+    Input("store-clicked-ucode",  "data"),
+    State("store-tab",            "data"),
+)
+def elnino_toggle_compute(level, ucode, clicked, tab):
+    if not level:
+        return {"display": "none"}, True, no_update
+    if level == "adm0 (Country)":
+        ready = bool(ucode)
+        hint = "Ready." if ready else "Select a country first."
+    else:
+        ready = bool(clicked)
+        hint = "Ready." if ready else "Click the region on the map."
+    return {"display": "block"}, (not ready), hint
+
+
+@app.callback(
+    Output("store-elnino-result", "data"),
+    Output("elnino-results-panel", "children"),
+    Output("store-elnino-viz",    "data"),
+    Input("elnino-compute-btn",   "n_clicks"),
+    State("elnino-period",        "value"),
+    State("elnino-signal",        "value"),
+    State("elnino-threshold",     "value"),
+    State("elnino-layer",         "value"),
+    State("elnino-dry-mask",      "value"),
+    State("store-level",          "data"),
+    State("store-ucode",          "data"),
+    State("store-clicked-ucode",  "data"),
+    State("store-clicked-name",   "data"),
+    State("elnino-country",       "value"),
+    State("elnino-level",         "value"),
+    prevent_initial_call=True,
+)
+def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
+                   level_store, ucode, clicked, clicked_name, country,
+                   level_sel):
+    level = level_sel or level_store
+    if not level:
+        return no_update, no_update, no_update
+    target = ucode if level == "adm0 (Country)" else clicked
+    if not target:
+        return no_update, no_update, no_update
+    region_name = country if level == "adm0 (Country)" else (clicked_name
+                                                             or target)
+    apply_mask = "on" in (dry_mask or [])
+    try:
+        thr = float(threshold)
+    except (TypeError, ValueError):
+        thr = PROB_DEFAULT
+
+    try:
+        result = compute_elnino_exposure(period, signal, thr, target, level,
+                                         apply_mask)
+    except ElNinoError as ex:
+        return None, _elnino_error(str(ex)), None
+    except Exception as ex:
+        return None, _elnino_error(f"Computation failed: {str(ex)[:200]}"), None
+
+    # Historical context is best-effort — the numbers stand without it.
+    # Both sides must be AREA shares: the panel's headline percentage is a
+    # share of children, which is not comparable with the hindcast rows.
+    try:
+        history = hindcast_area_share(period, signal, thr, target, level)
+    except Exception:
+        history = []
+    try:
+        this_area = forecast_area_share(period, signal, thr, target, level)
+    except Exception:
+        this_area = None
+
+    meta = {"period": period, "signal": signal, "threshold": thr,
+            "region": region_name, "level": level, "ucode": target,
+            "layer": layer, "dry_mask": apply_mask,
+            "pop_res": result.get("_pop_resolution_m", 1000)}
+
+    # The outlook layer's vis travels with the result so the legend's gradient
+    # matches what was actually rendered rather than a re-derived guess.
+    try:
+        _, meta["layer_vis"] = get_elnino_layer_tile(
+            period=period, layer=layer, signal=signal, threshold=thr,
+            feature_ucode=target, admin_level=level,
+            apply_dry_mask=apply_mask)
+    except Exception:
+        meta["layer_vis"] = None
+
+    meta["area_share"] = this_area
+    return result, render_elnino_results(result, meta, history), meta
+
+
+@app.callback(
+    Output("elnino-layer-tile",   "url"),
+    Output("elnino-pop-tile",     "url"),
+    Output("elnino-exposed-tile", "url"),
+    Output("main-map",            "viewport", allow_duplicate=True),
+    Input("store-elnino-viz",     "data"),
+    prevent_initial_call=True,
+)
+def elnino_update_layers(viz):
+    """The three result layers: the outlook, all children, and the subset.
+
+    Each is best-effort and independent — a failure in one must not blank the
+    other two, because the numbers in the panel are already computed and the
+    map is the only way to see where they came from.
+    """
+    if not viz:
+        return "", "", "", no_update
+    kw = dict(period=viz["period"], signal=viz["signal"],
+              threshold=viz["threshold"], apply_dry_mask=viz["dry_mask"])
+    try:
+        l_url, _ = get_elnino_layer_tile(
+            layer=viz["layer"], feature_ucode=viz["ucode"],
+            admin_level=viz["level"], **kw)
+    except Exception:
+        l_url = ""
+    try:
+        p_url, _ = get_elnino_pop_tile(viz["ucode"], viz["level"])
+    except Exception:
+        p_url = ""
+    try:
+        e_url, _ = get_elnino_exposed_tile(
+            feature_ucode=viz["ucode"], admin_level=viz["level"], **kw)
+    except Exception:
+        e_url = ""
+    try:
+        viewport = {"bounds": get_feature_bounds(viz["level"], viz["ucode"]),
+                    "transition": "flyTo"}
+    except Exception:
+        viewport = no_update
+    return l_url, p_url, e_url, viewport
+
+
+@app.callback(
+    Output("elnino-layer-tile",   "url", allow_duplicate=True),
+    Output("store-elnino-preview", "data"),
+    Input("store-tab",            "data"),
+    Input("elnino-period",        "value"),
+    Input("elnino-layer",         "value"),
+    Input("elnino-signal",        "value"),
+    Input("elnino-threshold",     "value"),
+    Input("elnino-dry-mask",      "value"),
+    prevent_initial_call=True,
+)
+def elnino_preview(tab, period, layer, signal, threshold, dry_mask):
+    """Global preview, so a layer can be inspected before choosing a region.
+
+    Driven by store-tab as well as the controls, so opening the tab renders the
+    default period immediately: the controls already carry a default selection,
+    and a blank map beside a filled-in form reads as broken rather than as
+    "nothing chosen yet".
+
+    This is also what makes the tab explorable rather than a form — the map
+    responds to the threshold slider at once, which is the clearest possible
+    demonstration of how much the signal depends on where that line is drawn.
+    """
+    if tab != "elnino":
+        return no_update, no_update
+    try:
+        thr = float(threshold)
+    except (TypeError, ValueError):
+        thr = PROB_DEFAULT
+    try:
+        url, vis = get_elnino_preview_tile(period, layer, signal, thr,
+                                           "on" in (dry_mask or []))
+    except Exception:
+        return no_update, no_update
+    return url, {"layer": layer, "signal": signal, "period": period, "vis": vis}
+
+
+def _elnino_history_block(history, area_share):
+    """Where this year's signal sits against the 24 hindcast years.
+
+    Answers the question the forecast alone cannot: is this unusual, or an
+    ordinary year?
+
+    BOTH sides are shares of interpretable AREA. The panel's headline figure is
+    a share of CHILDREN and must never be substituted here — for Colombia they
+    are 94% and 67%, because children cluster in the Andean highlands while the
+    signal is measured across the whole territory. Mixing them compares two
+    different denominators and overstates how unusual the year looks.
+
+    Area rather than population on the hindcast side is deliberate: the
+    population grid is 2025, and applying it to 1993 would imply a precision
+    that does not exist.
+    """
+    if not history or area_share is None:
+        return None
+    shares = [h["share"] for h in history]
+    mean_share = sum(shares) / len(shares)
+    # Rank among all 25 seasons (24 hindcast + this forecast), 1 = least area.
+    rank = sum(1 for s in shares if s < area_share) + 1
+    hi = max(max(shares), area_share, 1)
+    bars = [html.Div(className="en-hist-bar",
+                     title=f"{h['year']}: {h['share']}% of area",
+                     style={"height": f"{100 * h['share'] / hi:.1f}%"})
+            for h in history]
+    return html.Div(className="ps", children=[
+        html.Div("Historical context", className="ps-label"),
+        html.Div(className="en-hist", children=[
+            html.Div(className="en-hist-bars", children=bars),
+            html.Div(className="en-hist-now",
+                     style={"bottom": f"{100 * area_share / hi:.1f}%"},
+                     title=f"This forecast: {area_share:.1f}% of area"),
+        ]),
+        html.Div([
+            html.Strong(f"{area_share:.0f}% of this region's interpretable "
+                        f"area"),
+            f" falls under the signal in this forecast. Across the "
+            f"{len(history)} hindcast seasons the average was "
+            f"{mean_share:.0f}% (range {min(shares):.0f}–{max(shares):.0f}%), "
+            f"ranking this season {rank} of {len(history) + 1} — ",
+            html.Strong(f"{'more' if rank > len(history) / 2 else 'less'} "
+                        f"widespread than usual."),
+        ], className="ps-caption", style={"marginTop": "8px"}),
+        html.Div("Each bar is one hindcast season (1993–2016); the dashed line "
+                 "is this forecast. This is a share of AREA — the children "
+                 "figure above is a share of POPULATION and is usually "
+                 "different, because children are not spread evenly across a "
+                 "country.",
+                 className="ps-caption", style={"marginTop": "6px"}),
+        html.Div("From the model's own hindcast — not a record of observed "
+                 "past droughts or floods.",
+                 className="ps-caption",
+                 style={"color": "var(--lo)", "fontStyle": "italic"}),
+    ])
+
+
+def render_elnino_results(result, meta, history=None):
+    """Exposure, the threshold sensitivity, and the caveats that must travel.
+
+    The sensitivity row is the important part. With 51 members, probability
+    moves in steps of about 2 points, so a single figure implies a precision the
+    ensemble does not have — showing 40/50/60% alongside it is what keeps the
+    headline number honest.
+    """
+    if not result:
+        return _elnino_error("No result.")
+
+    exposed = int(round(result.get("exposed", 0) or 0))
+    total   = int(round(result.get("total_population", 0) or 0))
+    male    = int(round(result.get("total_population_male", 0) or 0))
+    fema    = int(round(result.get("total_population_female", 0) or 0))
+    masked  = int(round(result.get("masked_population", 0) or 0))
+    pct     = (exposed / total * 100) if total else 0
+
+    sig = SIGNAL_MAP.get(meta["signal"], {})
+    colour = sig.get("color", "#e31a1c")
+    sens = result.get("_sensitivity") or {}
+
+    export = {
+        "product": "ECMWF SEAS5 seasonal precipitation outlook",
+        "init": INIT_LABEL, "system": ELNINO_SYSTEM, "hindcast": HINDCAST,
+        "period": meta["period"], "period_label": period_label(meta["period"]),
+        "signal": meta["signal"], "signal_label": sig.get("label"),
+        "probability_threshold": meta["threshold"],
+        "dry_mask_applied": meta["dry_mask"],
+        "region": meta["region"], "admin_level": meta["level"],
+        "children_exposed": exposed, "total_children": total,
+        "male": male, "female": fema,
+        # Two different denominators, both reported so neither is mistaken for
+        # the other: children under the signal vs interpretable area under it.
+        "pct_children_exposed": round(pct, 2),
+        "pct_interpretable_area_under_signal": meta.get("area_share"),
+        "children_in_excluded_arid_areas": masked,
+        "probability_threshold_units": "percent",
+        "sensitivity_children_exposed_by_threshold_pct": {
+            k: int(round(v))
+            for k, v in sorted(sens.items(), key=lambda kv: float(kv[0]))},
+        "population_grid_m": meta["pop_res"],
+        "computed_utc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "caveats": CAVEATS,
+    }
+    safe = re.sub(r"[^a-zA-Z0-9]", "_",
+                  f"{meta['region']}_{meta['period']}_{meta['signal']}")
+
+    # The history chart is AREA-based on both sides. `pct` above is a share of
+    # CHILDREN and is NOT interchangeable with it — see forecast_area_share.
+    area_share = meta.get("area_share")
+
+    return html.Div([
+        html.Div(className="metrics", children=[
+            html.Div(className="metric", children=[
+                html.Div(_fmt(exposed), className="metric-val",
+                         style={"color": colour}),
+                html.Div("Children in signal area", className="metric-lbl"),
+            ]),
+            html.Div(className="metric", children=[
+                html.Div(_fmt(total), className="metric-val"),
+                html.Div("Total children", className="metric-lbl"),
+            ]),
+            html.Div(className="metric", children=[
+                html.Div(f"{pct:.1f}%", className="metric-val",
+                         style={"color": colour}),
+                html.Div("Share", className="metric-lbl"),
+            ]),
+            html.Div(className="metric", children=[
+                html.Div(f"{int(meta['threshold'])}%", className="metric-val"),
+                html.Div("Threshold", className="metric-lbl"),
+            ]),
+        ]),
+
+        html.Div(className="ps", children=[
+            html.Div(f"{sig.get('label', '')} — {period_label(meta['period'])}",
+                     className="ps-label"),
+            html.Div(className="info-row", children=[
+                html.Span(className="info-lbl", children=[
+                    html.Span(className="topic-swatch",
+                              style={"background": colour}),
+                    (meta["region"] or "").upper(),
+                ]),
+                html.Span([
+                    html.Span(f"{exposed:,}", className="info-val"),
+                    html.Span(f" ({pct:.1f}%)", className="info-pct"),
+                ]),
+            ]),
+            html.Div(className="bar-track", children=[
+                html.Div(className="bar-fill",
+                         style={"width": f"{min(100, pct)}%",
+                                "background": colour}),
+            ]),
+            html.Div(className="info-row", children=[
+                html.Span("└ Boys", className="info-lbl",
+                          style={"paddingLeft": "22px", "color": "var(--lo)",
+                                 "fontWeight": "400", "fontSize": "0.85em"}),
+                html.Span(f"{male:,}", className="info-val",
+                          style={"fontSize": "0.85em"}),
+            ]),
+            html.Div(className="info-row", children=[
+                html.Span("└ Girls", className="info-lbl",
+                          style={"paddingLeft": "22px", "color": "var(--lo)",
+                                 "fontWeight": "400", "fontSize": "0.85em"}),
+                html.Span(f"{fema:,}", className="info-val",
+                          style={"fontSize": "0.85em"}),
+            ]),
+        ]),
+
+        # Sensitivity — the honest framing of a single number.
+        html.Div(className="ps", children=[
+            html.Div("How much does the threshold matter?",
+                     className="ps-label"),
+            html.Div(className="en-sens", children=[
+                html.Div(className=("en-sens-cell active"
+                                    if abs(float(k) - meta["threshold"]) < 1e-9
+                                    else "en-sens-cell"),
+                         children=[
+                    html.Div(f"{int(float(k))}%", className="en-sens-thr"),
+                    html.Div(_fmt(int(round(v))), className="en-sens-val"),
+                    html.Div(f"{(v / total * 100) if total else 0:.0f}%",
+                             className="en-sens-pct"),
+                ]) for k, v in sorted(sens.items(), key=lambda kv: float(kv[0]))
+            ]),
+            html.Div("With 51 ensemble members, probability moves in steps of "
+                     "about 2 points, so cells near the cutoff flip on "
+                     "arbitrary grounds. Quote the range, not one figure.",
+                     className="ps-caption", style={"marginTop": "8px"}),
+        ]),
+
+        _elnino_history_block(history, area_share),
+
+        # What was excluded, so a small total is never mistaken for no signal.
+        (html.Div(className="ps", children=[
+            html.Div("Excluded from the count", className="ps-label"),
+            html.Div([
+                html.Span(f"{masked:,}", className="info-val"),
+                html.Span(" children live in areas too dry for a tercile to "
+                          "mean anything, and are not counted above.",
+                          className="ps-caption"),
+            ]),
+        ]) if masked else None),
+
+        html.Div(className="ps", children=[
+            html.Div([
+                f"ECMWF SEAS5 system {ELNINO_SYSTEM}, initialised "
+                f"{INIT_LABEL}, hindcast {HINDCAST}. ",
+                f"Population grid: {meta['pop_res']} m. ",
+                html.Br(),
+                html.Strong("A tercile signal is relative to this model's own "
+                            "climatology — it is not a forecast of drought or "
+                            "flooding."),
+            ], className="ps-caption", style={"lineHeight": "1.7"}),
+        ]),
+
+        html.Div(className="ps", children=[
+            html.A(
+                "⬇  Download result (JSON)",
+                href="data:application/json;charset=utf-8,"
+                     + _json.dumps(export, indent=2),
+                download=f"gchd_elnino_{safe}.json",
                 className="ps-btn-ghost",
                 style={"display": "block", "textAlign": "center",
                        "textDecoration": "none", "padding": "9px 16px"},

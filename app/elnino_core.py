@@ -23,7 +23,7 @@ from elnino_config import (
     TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION,
     TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD,
     SIGNAL_MAP, EXPLORE_MAP,
-    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, INIT_TAG,
+    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, INIT_TAG, to_fraction,
 )
 from gee_core import _admin_region
 from forecast_core import _forecast_pop
@@ -91,10 +91,14 @@ def _tercile_image(period):
 # ---------------------------------------------------------------------------
 
 def _signal_mask(img, signal, threshold, apply_dry_mask=True):
-    """Boolean image: 1 where `signal` holds at `threshold`.
+    """Boolean image: 1 where `signal` holds at `threshold` PERCENT.
+
+    `threshold` is a percentage (0-100), as everything user-facing is; the
+    probability bands are 0-1 fractions. This is the one place the two meet, so
+    the conversion lives here and nowhere else.
 
     Deliberately re-derived from the raw probability bands rather than read from
-    the stored `cat` band, which is frozen at 0.5. That is the whole reason the
+    the stored `cat` band, which is frozen at 50%. That is the whole reason the
     upload ships p_below/p_above unmasked: the threshold stays tunable here.
 
     A cell qualifies when its probability reaches the threshold AND exceeds the
@@ -106,19 +110,26 @@ def _signal_mask(img, signal, threshold, apply_dry_mask=True):
         raise ElNinoError(f"Unknown signal '{signal}'.")
     p    = img.select(cfg["band"])
     other = img.select(cfg["other"])
-    mask = p.gte(float(threshold)).And(p.gt(other))
+    mask = p.gte(to_fraction(threshold)).And(p.gt(other))
     if apply_dry_mask:
         mask = mask.And(img.select("dry_mask").eq(1))
     return mask.rename("signal")
 
 
 def _d_signal_prob(img, ctx):
-    return img.select(SIGNAL_MAP[ctx["signal"]]["band"]).rename("value")
+    """Selected signal's probability, scaled to 0-100 to match the UI."""
+    return img.select(SIGNAL_MAP[ctx["signal"]]["band"]) \
+              .multiply(100).rename("value")
 
 
 def _d_signal_strength(img, ctx):
-    """p_above - p_below: one signed layer instead of two probabilities."""
-    return img.select("p_above").subtract(img.select("p_below")).rename("value")
+    """p_above - p_below as percentage points: one signed layer instead of two.
+
+    Scaled like every other probability shown, so -100..+100 reads on the same
+    scale as the individual probabilities rather than a separate -1..1 one.
+    """
+    return img.select("p_above").subtract(img.select("p_below")) \
+              .multiply(100).rename("value")
 
 
 def _d_anom_pct(img, ctx):
@@ -236,7 +247,9 @@ def compute_elnino_exposure(period, signal, threshold, feature_ucode,
     main = _exposure_stats(period, signal, thr, feature_ucode, admin_level,
                            apply_dry_mask)
 
-    extras = {f"{t:.2f}": _exposure_stats(
+    # Keys are the integer percentage, so the UI can compare them to the
+    # selected threshold without re-parsing a formatted float.
+    extras = {str(int(t)): _exposure_stats(
                   period, signal, t, feature_ucode, admin_level, apply_dry_mask
               ).get("exposed")
               for t in SENSITIVITY_THRESHOLDS}
@@ -267,6 +280,34 @@ def pop_resolution():
 # Historical context — how unusual is this year?
 # ---------------------------------------------------------------------------
 
+@_ttl_cached(cache=TTLCache(maxsize=64, ttl=_RESULT_TTL), lock=_lock)
+def forecast_area_share(period, signal, threshold, feature_ucode, admin_level):
+    """Share of the region's INTERPRETABLE AREA under the signal, 0-100.
+
+    The forecast-side counterpart of hindcast_area_share, and the only figure
+    comparable with it. The results panel's headline percentage is a share of
+    CHILDREN, which is a different quantity entirely — for Colombia the two are
+    94% and 67%, because children cluster in the Andes while the signal is
+    measured over the whole territory including the Amazon. Comparing the
+    population share against the hindcast's area distribution silently
+    overstates how unusual a year looks.
+    """
+    img    = _tercile_image(period)
+    mask   = _signal_mask(img, signal, threshold, True)
+    usable = img.select("dry_mask").eq(1)
+    region = _admin_region(admin_level, feature_ucode)
+    try:
+        val = mask.updateMask(usable).rename("m").reduceRegion(
+            reducer=ee.Reducer.mean(), geometry=region,
+            scale=100000, bestEffort=True, maxPixels=1e9,
+        ).get("m").getInfo()
+    except Exception as e:
+        print(f"[elnino] forecast area share unavailable: {str(e)[:160]}",
+              flush=True)
+        return None
+    return None if val is None else round(float(val) * 100, 1)
+
+
 @_ttl_cached(cache=TTLCache(maxsize=16, ttl=_RESULT_TTL), lock=_lock)
 def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     """Share of the region's usable area under the signal in each hindcast year.
@@ -287,31 +328,54 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
         raise ElNinoError(f"Unknown signal '{signal}'.")
 
     region = _admin_region(admin_level, feature_ucode)
-    coll = ee.ImageCollection(RAW_HINDCAST_COLLECTION)
     fc_img = _tercile_image(period)
-    lo = fc_img.select("clim_mean_mm")          # usable-area definition
+    clim   = fc_img.select("clim_mean_mm")      # Sep-Dec total, mm
     usable = fc_img.select("dry_mask").eq(1)
 
-    # Tercile thresholds from the same climatology the forecast used.
-    p_lo = fc_img.select("clim_mean_mm").multiply(0)  # placeholder, see below
+    # A hindcast image is 100 bands, L{lead}_m{member}, each a MONTHLY total.
+    # The season total for one member is the sum of its four lead bands, so the
+    # ensemble-mean season total is the sum over leads of the per-lead means.
+    # Averaging all 100 bands directly would give a MONTHLY mean and compare a
+    # one-month figure against a four-month climatology.
+    HC_LEADS, HC_MEMBERS = 4, 25
+
+    # Hindcast images carry b1..b100 too, so they need the same rename as the
+    # terciles before any L{lead}_m{member} pattern can match. The names are
+    # identical across the 24 images, so read them once.
+    hc_names = _band_names(f"{RAW_HINDCAST_COLLECTION}/hc_1993{INIT_TAG[4:]}")
+
+    def season_mean(img):
+        img = ee.Image(img).rename(hc_names)
+        per_lead = [
+            img.select([f"L{l}_m{m:02d}" for m in range(HC_MEMBERS)])
+               .reduce(ee.Reducer.mean())
+            for l in range(1, HC_LEADS + 1)
+        ]
+        total = per_lead[0]
+        for extra in per_lead[1:]:
+            total = total.add(extra)
+        return total.rename("m")
 
     def year_share(img):
-        # Each hindcast image is 4 leads x 25 members; the season total per
-        # member is the sum across leads, so compare the member mean against
-        # the stored climatology as a simple wetter/drier count.
-        total = ee.Image(img).reduce(ee.Reducer.mean()).rename("m")
-        diff = total.subtract(lo)
-        hit = diff.lt(0) if cfg["name"] == "dry" else diff.gt(0)
-        share = hit.updateMask(usable).reduceRegion(
+        total = season_mean(img)
+        diff  = total.subtract(clim)
+        hit   = diff.lt(0) if cfg["name"] == "dry" else diff.gt(0)
+        share = hit.updateMask(usable).rename("m").reduceRegion(
             reducer=ee.Reducer.mean(), geometry=region,
             scale=100000, bestEffort=True, maxPixels=1e9,
         ).get("m")
         return ee.Feature(None, {"year": ee.Image(img).get("year"),
                                  "share": share})
 
+    coll = ee.ImageCollection(RAW_HINDCAST_COLLECTION)
+
     try:
         rows = ee.FeatureCollection(coll.map(year_share)).getInfo()
-    except Exception:
+    except Exception as e:
+        # Context is optional — the panel renders without it — but a silent
+        # empty list once hid a real band-naming bug, so say so in the log.
+        print(f"[elnino] hindcast context unavailable: {str(e)[:160]}",
+              flush=True)
         return []
 
     out = []
@@ -371,6 +435,20 @@ def get_elnino_exposed_tile(period, signal, threshold, feature_ucode,
     region = _admin_region(admin_level, feature_ucode)
     masked = pop["childpop"].updateMask(mask).clip(region).selfMask()
     return masked.getMapId(POP_VIS)["tile_fetcher"].url_format, POP_VIS
+
+
+@_ttl_cached(cache=TTLCache(maxsize=32, ttl=_TILE_TTL), lock=_lock)
+def get_elnino_pop_tile(feature_ucode, admin_level):
+    """All children in the AOI, signal or not — the exposure denominator.
+
+    Rendered with the same POP_VIS ramp as the exposed layer on purpose: the
+    two are only comparable by eye if identical counts take identical colours,
+    so the difference a viewer sees is coverage, not shading.
+    """
+    pop = _forecast_pop()
+    region = _admin_region(admin_level, feature_ucode)
+    clipped = pop["childpop"].clip(region).selfMask()
+    return clipped.getMapId(POP_VIS)["tile_fetcher"].url_format, POP_VIS
 
 
 # ---------------------------------------------------------------------------

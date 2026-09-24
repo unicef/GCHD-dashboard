@@ -91,22 +91,37 @@ SIGNAL_MAP = {s["name"]: s for s in SIGNALS}
 DEFAULT_SIGNAL = "dry"
 
 # ── Threshold contract ──────────────────────────────────────────────────────
-# The probability slider. 1/3 is the no-information baseline: with terciles, a
-# forecast carrying no signal puts ~33% of members in each third.
+# Everything user-facing is a PERCENTAGE (0-100). The GEE bands are raw
+# fractions (0-1), because that is what an ensemble count is, so exactly one
+# conversion happens — at the boundary, in elnino_core, via to_fraction().
+# Keeping the split at that single point is what stops a 0.5-vs-50 mix-up
+# silently producing a threshold 100x too small.
 #
-# 51 ensemble members means probabilities move in steps of 1/51 ≈ 0.0196, so
-# cells near any cutoff flip on essentially arbitrary grounds. That is why the
-# UI offers a sensitivity readout at several thresholds rather than one number.
-PROB_MIN     = 0.34
-PROB_MAX     = 0.80
-PROB_DEFAULT = 0.50
-PROB_STEP    = 0.01
-PROB_MARKS   = [0.34, 0.40, 0.50, 0.60, 0.70, 0.80]
+# 1/3 is the no-information baseline: with terciles, a forecast carrying no
+# signal puts ~33% of members in each third.
+#
+# 51 ensemble members means probability moves in steps of 1/51 ~ 2 percentage
+# points, so cells near any cutoff flip on essentially arbitrary grounds. That
+# is why the UI reports a sensitivity spread rather than one number.
+PROB_MIN     = 34      # %
+PROB_MAX     = 80      # %
+PROB_DEFAULT = 50      # %
+PROB_STEP    = 1       # percentage points
+PROB_MARKS   = [34, 40, 50, 60, 70, 80]
 
-# Thresholds reported side by side with the headline figure.
-SENSITIVITY_THRESHOLDS = [0.40, 0.50, 0.60]
+# Thresholds reported side by side with the headline figure, in %.
+SENSITIVITY_THRESHOLDS = [40, 50, 60]
 
-CHANCE_LEVEL = 1.0 / 3.0
+CHANCE_LEVEL = 100.0 / 3.0      # 33.3 %
+
+
+def to_fraction(pct):
+    """Percentage (0-100) -> the 0-1 fraction the GEE bands hold.
+
+    The single conversion point between what the UI shows and what the imagery
+    stores. Anything crossing into elnino_core goes through here.
+    """
+    return float(pct) / 100.0
 
 # ── Explore layers ──────────────────────────────────────────────────────────
 # Every band is visualisable, because the probabilities alone say how LIKELY a
@@ -119,7 +134,9 @@ CHANCE_LEVEL = 1.0 / 3.0
 EXPLORE_LAYERS = [
     {"name": "signal_prob", "label": "Signal probability",
      "band": None, "derived": "signal_prob",
-     "min": 0.0, "max": 1.0, "units": "probability",
+     # Rendered 0-100 by _d_signal_prob, so the legend reads in the same units
+     # as the threshold slider rather than 0-1 beside a "50%" control.
+     "min": 0, "max": 100, "units": "%",
      "palette": ["#f7f7f7", "#d9e8f5", "#92c5de", "#2166ac", "#0b2c56"],
      "desc": "Probability that the selected signal occurs — the fraction of "
              "the 51 ensemble members falling in that tercile. Follows the "
@@ -140,7 +157,7 @@ EXPLORE_LAYERS = [
              "This is the magnitude the probabilities do not carry: a cell can "
              "be 90% likely to be wetter while only 3 mm above normal.",
      "default": False},
-    {"name": "anom_pct", "label": "Rainfall anomaly (% of normal)",
+    {"name": "anom_pct", "label": "Rainfall anomaly vs normal",
      "band": None, "derived": "anom_pct",
      "min": -60, "max": 60, "units": "%", "diverging": True,
      "palette": ["#8c510a", "#dfc27d", "#f5f5f5", "#80cdc1", "#01665e"],
@@ -150,7 +167,8 @@ EXPLORE_LAYERS = [
      "default": False},
     {"name": "signal_strength", "label": "Signal strength (wet − dry)",
      "band": None, "derived": "signal_strength",
-     "min": -1, "max": 1, "units": "", "diverging": True,
+     # Percentage points, on the same 0-100 scale as the probabilities above.
+     "min": -100, "max": 100, "units": "pp", "diverging": True,
      "palette": ["#d2913c", "#e8d3a9", "#f5f5f5", "#8fcbff", "#1d7bff"],
      "desc": "p_above − p_below as one signed layer: brown where a dry signal "
              "dominates, blue where a wet one does, pale where the ensemble is "
