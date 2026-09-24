@@ -26,6 +26,7 @@ HAZARDS = [
     {"id": "projects/unicef-ccri/assets/hazards/LS_RF_Mean_1980-2018_COG",             "threshold": 0.1,        "min": 0,   "max": 1.46,  "name": "landslide_rainfall_worldbank_1980-2018"},
     {"id": "projects/unicef-ccri/assets/hazards/earthquake_v2023_1_pga_475_rock_3min", "threshold": 0.09,       "min": 0,   "max": 1.73,  "name": "earthquake_pga_gem_2023"},
     {"id": "projects/unicef-ccri/assets/hazards/hol_volcanoes_buffer_100km",            "threshold": 0,          "min": 0,   "max": 100000,     "name": "volcanoes_gvp_1800-2025"},          
+    {"id": "projects/unicef-ccri/assets/conflict/conflict_grid_0p01",                  "threshold": 0,          "min": 0,   "max": 10,    "name": "complex_emergencies_acled"},   # index 0-10; high values are rare (p98 ~0.65), so a coarse-scale reduction understates the top of the range
     {"id": "projects/unicef-ccri/assets/hazards/MHI_climate",                          "threshold": 6.516479,   "min": 0,   "max": 10,    "name": "Pixel Based Hazard Score"},
 ]
 
@@ -51,9 +52,10 @@ HAZARD_TOPICS = {
     "Landslide":          ["landslide_rainfall_worldbank_1980-2018"],
     "Earthquake":         ["earthquake_pga_gem_2023"],
     "Volcanoes":          ["volcanoes_gvp_1800-2025"],
+    "Complex Emergencies":["complex_emergencies_acled"],
 }
 
-EXPOSURE_ONLY_TOPICS = ["Landslide", "Earthquake", "Volcanoes"]
+EXPOSURE_ONLY_TOPICS = ["Landslide", "Earthquake", "Volcanoes", "Complex Emergencies"]
 
 # CCRR data quality rules: topics to suppress per country (ISO3)
 FORCE_NULL_RULES = {
@@ -150,7 +152,8 @@ def is_no_data_ucode(ucode):
     return ucode_stem(ucode).upper() in {c.upper() for c in NO_DATA_ISO3}
 
 # Topics excluded from Multi Hazard Count: climate-related (not climate) + geophysical
-MHC_EXCLUDED_TOPICS = ["Air Pollution", "Malaria", "Landslide", "Earthquake", "Volcanoes"]
+MHC_EXCLUDED_TOPICS = ["Air Pollution", "Malaria", "Landslide", "Earthquake", "Volcanoes",
+                       "Complex Emergencies"]
 
 # Topics that show sub-hazard breakdown in the results panel
 SUB_TOPIC_DETAIL = ["Malaria", "Heatwave", "Fire", "Drought"]
@@ -176,6 +179,7 @@ TOPIC_COLORS = {
     "Landslide":           "#8c510a",
     "Earthquake":          "#d62728",
     "Volcanoes":           "#7f2704",
+    "Complex Emergencies": "#c9184a",
 }
 
 # Vis palettes per individual hazard (for map display)
@@ -199,6 +203,9 @@ HAZARD_VIS_PALETTES = {
     "landslide_rainfall_worldbank_1980-2018": ["#f6e8c3", "#dfc27d", "#bf812d", "#8c510a", "#543005"],
     "earthquake_pga_gem_2023":               ["#fee5d9", "#fcbba1", "#fc6e4a", "#de2d26", "#a50f15"],
     "volcanoes_gvp_1800-2025":               ["#feedde", "#fdbe85", "#fd8d3c", "#e6550d", "#a63603"],
+    # Crimson rather than the orange-red Reds ramp used by earthquake, so the
+    # two stay tellable apart when both are drawn.
+    "complex_emergencies_acled":             ["#fde0dd", "#fa9fb5", "#f76575", "#c9184a", "#800f2f"],
 }
 
 # Hazards that need selfMask (0 = transparent)
@@ -211,6 +218,9 @@ SELF_MASK_HAZARDS = [
     "landslide_rainfall_worldbank_1980-2018",
     "earthquake_pga_gem_2023",
     "volcanoes_gvp_1800-2025",
+    # ~9% of covered pixels are exactly 0 (no recorded events) — mask them out
+    # so the map shows conflict, not a grey wash over every land pixel.
+    "complex_emergencies_acled",
 ]
 
 # =============================================================================
@@ -478,6 +488,14 @@ HAZARD_INFO = {
         "availability": "1800–2025",
         "source": "Smithsonian Institution / GVP",
         "source_url": "https://volcano.si.edu/",
+    },
+    "complex_emergencies_acled": {
+        "description": "The conflict index is a 0–10 hazard intensity layer derived from ACLED event records, specifically battles, remote violence, and explosions." 
+        "It captures both the frequency of conflict events and their fatalities, spatially aggregated to a 0.1° grid using 5 km buffers around each event point.",
+        "units": "Index",
+        "availability": "ACLED (2021-2025)",
+        "source": "ACLED",
+        "source_url": "https://acleddata.com/",
     },
     "Multi Hazard Count": {
         "description": "Combined count of climate hazard types exceeding their respective thresholds at each pixel. Includes 8 climate topics: River Flood, Coastal Flood, Tropical Storm, Drought, Heatwave, Extreme Heat, Fire, and Sand and Dust Storm. Climate-related topics (Air Pollution, Malaria) and geophysical hazards (Landslide, Earthquake, Volcanoes) are excluded.",

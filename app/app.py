@@ -1442,8 +1442,7 @@ def map_component():
         html.Div(id="map-disclaimer", className="map-disclaimer", children=[
             html.Span(
                 "Modelled estimates, not observed impacts. Boundaries and names "
-                "shown do not imply endorsement or acceptance by the United "
-                "Nations.",
+                "shown do not imply endorsement or acceptance by the UNICEF",
                 className="map-disclaimer-text",
             ),
         ]),
