@@ -21,7 +21,7 @@ from cachetools import TTLCache, cached as _ttl_cached
 from config import ADMIN_DATA, POP_VIS
 from elnino_config import (
     TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION,
-    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD,
+    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, WINDOW_PERIOD,
     SIGNAL_MAP, EXPLORE_MAP,
     PROB_DEFAULT, SENSITIVITY_THRESHOLDS, INIT_TAG, to_fraction,
 )
@@ -316,11 +316,11 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     an ordinary year? Runs on AREA rather than population — the population grid
     is 2025 and applying it to 1993 would imply a precision that does not exist.
 
-    Only defined for the whole-season window: a hindcast image holds all four
-    lead months as bands, so a per-month variant would need a different band
+    Only defined for the aggregate season window: a hindcast image holds every
+    lead month as bands, so a per-month variant would need a different band
     selection and is left out rather than guessed at.
     """
-    if period != "window_L1_L4":
+    if period != WINDOW_PERIOD:
         return []
 
     cfg = SIGNAL_MAP.get(signal)
@@ -329,28 +329,32 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
 
     region = _admin_region(admin_level, feature_ucode)
     fc_img = _tercile_image(period)
-    clim   = fc_img.select("clim_mean_mm")      # Sep-Dec total, mm
+    clim   = fc_img.select("clim_mean_mm")      # season total, mm
     usable = fc_img.select("dry_mask").eq(1)
 
-    # A hindcast image is 100 bands, L{lead}_m{member}, each a MONTHLY total.
-    # The season total for one member is the sum of its four lead bands, so the
-    # ensemble-mean season total is the sum over leads of the per-lead means.
-    # Averaging all 100 bands directly would give a MONTHLY mean and compare a
-    # one-month figure against a four-month climatology.
-    HC_LEADS, HC_MEMBERS = 4, 25
-
-    # Hindcast images carry b1..b100 too, so they need the same rename as the
+    # Hindcast images carry b1..bN, so they need the same rename as the
     # terciles before any L{lead}_m{member} pattern can match. The names are
-    # identical across the 24 images, so read them once.
+    # identical across the 24 images, so read them once — and DERIVE the leads
+    # and members from them rather than hardcoding: this collection was 4x25
+    # when the season was Sep-Dec and is 3x25 now, and a stale constant would
+    # select a lead that no longer exists.
     hc_names = _band_names(f"{RAW_HINDCAST_COLLECTION}/hc_1993{INIT_TAG[4:]}")
+    by_lead = {}
+    for nm in hc_names:
+        by_lead.setdefault(nm.split("_")[0], []).append(nm)
+    lead_keys = sorted(by_lead, key=lambda k: int(k[1:]))
+    if not lead_keys:
+        print(f"[elnino] hindcast bands unrecognised: {hc_names[:4]}", flush=True)
+        return []
 
+    # Each band is a MONTHLY total, so the season total for one member is the
+    # sum across its lead bands; the ensemble-mean season total is therefore the
+    # sum over leads of the per-lead means. Averaging every band at once would
+    # give a MONTHLY mean, comparing one month against a multi-month climatology.
     def season_mean(img):
         img = ee.Image(img).rename(hc_names)
-        per_lead = [
-            img.select([f"L{l}_m{m:02d}" for m in range(HC_MEMBERS)])
-               .reduce(ee.Reducer.mean())
-            for l in range(1, HC_LEADS + 1)
-        ]
+        per_lead = [img.select(by_lead[k]).reduce(ee.Reducer.mean())
+                    for k in lead_keys]
         total = per_lead[0]
         for extra in per_lead[1:]:
             total = total.add(extra)

@@ -45,15 +45,14 @@ TERCILE_BANDS = [
 # `lead` is numeric across the whole collection (0 = the aggregate window):
 # Earth Engine requires one type per property, and a string "window" alongside
 # integer months makes ingestion of the odd one out fail.
+#
+# September (lead 1) is deliberately absent. It is the initialisation month,
+# partly determined by conditions already observed at launch, so it behaves
+# unlike a true forecast month; the team's season is OND.
 PERIODS = [
-    {"period": "window_L1_L4", "lead": 0, "label": "Sep–Dec 2026 (whole season)",
-     "short": "Sep–Dec", "dry_mask_mm": 50, "default": True,
-     "note": "The four-month total. The team's reference period."},
-    {"period": "L1_Sep", "lead": 1, "label": "September 2026", "short": "Sep",
-     "dry_mask_mm": 10, "default": False,
-     "note": "The initialisation month — partly determined by conditions "
-             "already observed when the forecast was issued, so it behaves "
-             "differently from the later lead months."},
+    {"period": "window_L2_L4", "lead": 0, "label": "Oct–Dec 2026 (OND season)",
+     "short": "OND", "dry_mask_mm": 50, "default": True,
+     "note": "The three-month total — the team's reference season."},
     {"period": "L2_Oct", "lead": 2, "label": "October 2026", "short": "Oct",
      "dry_mask_mm": 10, "default": False, "note": ""},
     {"period": "L3_Nov", "lead": 3, "label": "November 2026", "short": "Nov",
@@ -64,6 +63,10 @@ PERIODS = [
 
 PERIOD_MAP = {p["period"]: p for p in PERIODS}
 DEFAULT_PERIOD = next(p["period"] for p in PERIODS if p.get("default"))
+
+# The aggregate season, identified by lead 0 rather than by name: the name
+# encodes the leads (window_L2_L4) and changes whenever the season does.
+WINDOW_PERIOD = next(p["period"] for p in PERIODS if p["lead"] == 0)
 
 
 def period_label(period):
@@ -206,8 +209,10 @@ DEFAULT_EXPLORE = next(l["name"] for l in EXPLORE_LAYERS if l.get("default"))
 METHOD_STEPS = [
     ("The forecast",
      f"ECMWF SEAS5 (system {SYSTEM}), initialised {INIT_LABEL}, 51 ensemble "
-     f"members, lead months 1–4. Each member is one plausible version of the "
-     f"season; their spread is the uncertainty."),
+     f"members, lead months 2–4 (Oct, Nov, Dec). Each member is one plausible "
+     f"version of the season; their spread is the uncertainty. September, the "
+     f"initialisation month, is excluded: it is partly fixed by conditions "
+     f"already present at launch, so it behaves unlike a forecast month."),
     ("The baseline",
      f"The same model re-run over {HINDCAST} — 24 years × 25 members = 600 "
      f"values per grid cell. Terciles are cut from THIS, the model's own "

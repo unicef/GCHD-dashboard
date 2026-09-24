@@ -2,7 +2,8 @@
 """
 download_ecmwf_prec.py — SEAS5 precipitation tercile forecast -> GeoTIFFs -> GEE.
 
-Init Sep 2026, lead months 1-4 (Sep-Dec). Hindcast 1993-2016, same init month.
+Init Sep 2026, lead months 2-4 (Oct-Nov-Dec). Hindcast 1993-2016, same init
+month and the same leads, so forecast and baseline are compared like for like.
 Terciles come from the model's own hindcast climatology, so model bias cancels.
 
 Upload path: geeup (https://github.com/samapriya/geeup), the same tool
@@ -23,9 +24,9 @@ Keep BAND ORDER STABLE. Reordering the bands of an existing collection silently
 mislabels every consumer that already renamed by position.
 
 Outputs (all uploaded):
-  raw_forecast  1 image,   204 bands (4 leads x 51 members), mm/month
-  raw_hindcast  24 images, 100 bands each (4 leads x 25 members), mm/month
-  terciles      5 images (one per lead month + the full Sep-Dec window), bands
+  raw_forecast  1 image,   153 bands (3 leads x 51 members), mm/month
+  raw_hindcast  24 images, 75 bands each (3 leads x 25 members), mm/month
+  terciles      4 images (one per lead month + the full OND window), bands
                 p_below, p_normal, p_above, cat, fc_mean_mm, clim_mean_mm,
                 anom_mm, dry_mask
 
@@ -102,14 +103,29 @@ from _common import load_env                  # noqa: E402
 
 # ---------------- CONFIG ----------------
 INIT_YEAR, INIT_MONTH = 2026, 9
-LEADS = [1, 2, 3, 4]                     # 1 = init month (Sep) ... 4 = Dec
+# Lead = months after the INIT month, so lead 1 is always September here and
+# October is always lead 2 — leads cannot be renumbered by dropping one.
+# [2, 3, 4] = Oct-Nov-Dec (OND), the season the team asked for. September (lead
+# 1) is excluded deliberately: it is the initialisation month, partly
+# determined by conditions already present at launch, so it behaves unlike a
+# true forecast month and dilutes the seasonal signal.
+#
+# A sharper OND becomes available once the October initialisation publishes
+# (~5 Oct): set INIT_MONTH = 10 and LEADS = [1, 2, 3]. That needs a fresh
+# download — new initial conditions AND an October-initialised hindcast — and
+# lands under a separate 202610 asset tag, so it will not collide with this.
+LEADS = [2, 3, 4]
 HC_YEARS = list(range(1993, 2017))       # 1993-2016 (range stops before 2017)
 SYSTEM = "51"                            # current ECMWF system in the CDS form
 # Both of these only LABEL pixels (cat, dry_mask); neither drops data. Change
 # them freely without invalidating the probability bands.
 PROB_THR = 0.5                           # cat's dry/wet cutoff, nothing else
 DRY_MASK_MM_MONTH = 10                   # dry_mask=0 below this clim (one month)
-DRY_MASK_MM_WINDOW = 50                  # same, for the full Sep-Dec total
+# Kept at 50 mm for the 3-month OND total rather than scaled down from the old
+# 4-month window: it is a round "too arid to interpret" floor, not a figure
+# derived from the window length, and holding it steady keeps this comparable
+# with what has already been shown.
+DRY_MASK_MM_WINDOW = 50
 NODATA = -9999.0
 
 GEE_PROJECT = "unicef-ccri"
@@ -181,6 +197,18 @@ def load(path):
         backend_kwargs={"time_dims": ("forecastMonth", "time"), "indexpath": ""},
     )
     da = ds["tprate"]  # mean precipitation rate, m/s
+    # Keep only the configured leads. A cached GRIB may hold leads that LEADS
+    # no longer lists — the file was downloaded when the window was Sep-Dec and
+    # still carries lead 1 — and without this the raw images would ship a month
+    # the terciles deliberately exclude.
+    have = [int(l) for l in da.forecastMonth.values]
+    want = [l for l in LEADS if l in have]
+    missing = [l for l in LEADS if l not in have]
+    if missing:
+        sys.exit(f"ERROR: {path.name} has leads {have}, but LEADS wants "
+                 f"{LEADS} (missing {missing}).\n"
+                 f"       Delete the file and re-run to re-download it.")
+    da = da.sel(forecastMonth=want)
     # 0..360 -> -180..180, so the GeoTIFF is a normal global raster
     da = da.assign_coords(longitude=((da.longitude + 180) % 360) - 180)
     da = da.sortby("longitude")
@@ -300,7 +328,7 @@ def build(out, only=None):
                 {**common, "kind": "hindcast", "year": yr},
                 iso(yr, INIT_MONTH))
 
-    # terciles — each lead month, plus the full Sep-Dec window
+    # terciles — each lead month, plus the full OND window
     if not only or "terciles" in only:
         periods = {lead_label(l): (fc.sel(forecastMonth=l),
                                    hc.sel(forecastMonth=l),
@@ -328,7 +356,7 @@ def build(out, only=None):
                  # value, and Python reads 1993_2016 as the integer 19932016.
                  "hindcast": f"{HC_YEARS[0]}-{HC_YEARS[-1]}",
                  "cat_legend": "1=dry,3=wet,0=no_signal",
-                 "lead_legend": "1-4=lead month, 0=Sep-Dec window"},
+                 "lead_legend": "2=Oct,3=Nov,4=Dec, 0=OND window"},
                 init_iso)
 
     return images
