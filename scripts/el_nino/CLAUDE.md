@@ -2,7 +2,8 @@
 
 ## Goal
 Estimate, per country (land only), how many children live in areas with a forecast
-**dry** or **wet** precipitation signal for **Sep–Dec 2026**, using the ECMWF SEAS5 seasonal forecast.
+**dry** or **wet** precipitation signal for **Oct–Dec 2026 (OND)**, using the ECMWF SEAS5
+seasonal forecast.
 Keep it simple: precipitation only, no temperature, no flood/drought models.
 "Wet signal" = elevated flood risk proxy, not flooding. "Dry signal" = drought risk proxy.
 
@@ -11,7 +12,10 @@ Reference product from the team: ECMWF chart `seasonal_system5_standard_rain`, s
 
 ## Data (all from Copernicus CDS, dataset `seasonal-monthly-single-levels`)
 - originating_centre `ecmwf`, system `51` (SEAS5), variable `total_precipitation`,
-  product_type `monthly_mean` (all ensemble members), init month `09`, leadtime_month 1–4 (Sep–Dec).
+  product_type `monthly_mean` (all ensemble members), init month `09`, leadtime_month **2–4**
+  (Oct, Nov, Dec). Lead is months-after-init, so October is always lead 2 — dropping September
+  does NOT renumber the rest. Lead 1 (September) is excluded: it is the init month, partly fixed
+  by conditions already present at launch, so it behaves unlike a forecast month.
 - Forecast: year 2026, 51 members.
 - Hindcast: years 1993–2016 (same request, only years change), 25 members/year.
 - Grid 1°, global (181 × 360). Variable `tprate` = mean rate in m/s.
@@ -24,37 +28,56 @@ Reference product from the team: ECMWF chart `seasonal_system5_standard_rain`, s
    33rd / 67th percentiles = tercile thresholds (model's own climatology, removes bias).
 4. Forecast probabilities = fraction of the 51 members below / above those thresholds.
 5. `cat`: 1 = dry (p_below ≥ 0.5 and > p_above), 3 = wet (mirror), 0 = no clear signal.
-6. Mask `cat` where hindcast mean < 10 mm/month (single month) or < 50 mm (Sep–Dec window).
-7. Periods: each lead month (Sep, Oct, Nov, Dec) + full Sep–Dec total.
+6. `dry_mask` band = 0 where hindcast mean < 10 mm/month (single month) or < 50 mm (OND window).
+   Shipped as a band, NOT applied — `cat` and the probabilities stay unmasked so downstream work
+   can choose its own cutoff. Apply it by default when counting exposure.
+7. Periods: each lead month (Oct, Nov, Dec) + full OND total.
 
-## Current code
-`seas5_precip_terciles_to_gee.py` — download (cdsapi) → load (cfgrib, `time_dims=("forecastMonth","time")`)
-→ terciles → GeoTIFFs (rioxarray, nodata −9999) → upload to GCS → GEE ingestion via `ee.data.startIngestion`.
-Not yet run; expect to debug cfgrib dimension names on first run.
+## Current code — RUN AND UPLOADED
+`download_ecmwf_prec.py` — download (cdsapi) → load (cfgrib,
+`time_dims=("forecastMonth","time")`) → terciles → GeoTIFFs (rioxarray, nodata −9999) →
+upload via **geeup**. No GCS bucket: this project has none, so geeup stages internally,
+matching `scripts/upload_infra.py`.
 
-GEE layout under `projects/<project>/assets/seas5_202609/`:
-- `raw_forecast`: 1 image, 204 bands `L{lead}_m{member:02d}`, mm/month
-- `raw_hindcast`: 24 images (one per year), 100 bands, same naming
-- `terciles`: 5 images (per lead month + window), bands
-  `p_below, p_normal, p_above, cat, fc_mean_mm, clim_mean_mm, anom_mm`
-- Image properties: system, init, type, year, lead, period, prob_threshold, dry_mask_mm, hindcast.
+Own virtualenv: `scripts/el_nino/.venv`, pinned in `requirements.txt`. Run it with that
+interpreter directly (no activate). The GRIBs are cached — `download()` skips files that exist,
+so a re-run after a config change costs minutes, not a re-download.
 
-## Next step: exposure script (to write)
-- Signal: `terciles` image, band `cat` (start with the Sep–Dec window).
-- Children: `WorldPop/GP/100m/pop_age_sex_cons_unadj`, year 2020, sum of
-  M/F_0, _1, _5, _10 + 0.6 × (M/F_15) ≈ under-18. Swap for GCHD's standard child layer if preferred.
-- Boundaries: `FAO/GAUL/2015/level0` (or GCHD boundaries for consistency).
-- Outputs per country: children_dry, children_wet, children_total, and shares.
-- `reduceRegions` with `Reducer.sum()` at `scale=100` (coarser scale samples instead of summing
-  → undercounts). Run as batch `Export.table.toDrive` (global, heavy).
+GEE layout under `projects/unicef-ccri/assets/el_nino/`:
+- `raw_forecast`: 1 image, 153 bands `L{lead}_m{member:02d}`, mm/month
+- `raw_hindcast`: 24 images (one per year), 75 bands, same naming
+- `terciles`: 4 images (Oct, Nov, Dec + OND window), 8 bands
+  `p_below, p_normal, p_above, cat, fc_mean_mm, clim_mean_mm, anom_mm, dry_mask`
+- Image properties: system, init, init_ym, kind, year, lead, period, prob_threshold,
+  dry_mask_mm, hindcast, cat_legend, lead_legend, **band_names**.
+
+**geeup drops band names** — every asset arrives as `b1..bN`. Band ORDER is the contract; the
+names live in the `band_names` property. Always `.rename()` before selecting by name, hindcast
+images included. See the geeup memory note for the other two traps.
+
+## Exposure — DONE, in the dashboard
+Built as an app section, not a batch script: `app/elnino_config.py` + `app/elnino_core.py`,
+wired into `app/app.py` as the El Niño tab. Uses the project's own under-18 grid via
+`forecast_core._forecast_pop` (1 km) so figures reconcile with the other tabs — not WorldPop
+direct — and GCHD adm0/1/2 boundaries rather than GAUL.
+
+Exposure is re-derived from `p_below`/`p_above` at a user-set threshold, never from the stored
+`cat` band (which is frozen at 50%). `dry_mask` is applied by default.
 
 ## Open items
-- Confirm with team which window their chart shows (3-month period, e.g. OND) — may want an OND
-  variant (lead months 2–4) to match it.
-- Confirm probability threshold (0.5 here; ECMWF chart shades from ~0.4) and dry-mask values.
-- Optional: hindcast skill mask (e.g. correlation/ROC vs ERA5) to flag low-skill regions.
+- **Probability threshold**: 0.5 default; ECMWF charts shade from ~0.4. The tab reports 40/50/60%
+  side by side rather than one figure, because 51 members quantise probability in ~2-point steps.
+  Ethiopia spanned 44.6M → 19.3M children across that range.
+- **No skill mask.** SEAS5 has real skill where ENSO teleconnections are strong and near none
+  elsewhere, and the tab renders both identically. Biggest remaining caveat on any number here.
+- **October initialisation** publishes ~5 Oct and would give a sharper OND (leads 1–3, 1–3 months
+  ahead instead of 2–4). That is a genuine re-download — new initial conditions AND an
+  October-initialised hindcast — landing under a `202610` tag. `elnino_config.INIT_TAG` currently
+  assumes one initialisation; showing both would need a small change.
+- QGIS visual check against the ECMWF `seasonal_system5_standard_rain` tsum chart: still not done.
 
 ## Conventions
-- Python: xarray, cfgrib, rioxarray, earthengine-api, google-cloud-storage.
+- Python: xarray, cfgrib, rioxarray, earthengine-api, geeup (NOT google-cloud-storage —
+  there is no bucket).
 - Concise, practical code; config constants at top of scripts.
 - Validate outputs visually (QGIS) against the ECMWF chart before computing exposure.
