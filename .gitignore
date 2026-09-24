@@ -5,6 +5,7 @@ app/data/
 scripts/.env
 app/credentials
 app/credentials/
+cookie_jar.json
 
 # Generated / local
 __pycache__/
@@ -13,3 +14,5 @@ scripts/iso3_mwater_review.csv
 
 # Excel lock files (created when a workbook is open)
 ~$*.xlsx
+# El Nino working data — GRIBs and GeoTIFFs, hundreds of MB, all re-downloadable
+scripts/el_nino/data/
