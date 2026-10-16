@@ -155,15 +155,15 @@ body {
 .layer-section-toggle:hover { background: var(--surf); color: var(--mid); }
 .layer-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px 10px 13px;
+  padding: 10px 16px; padding-inline-start: 13px;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
   transition: background 0.1s;
   user-select: none;
 }
 .layer-item:hover { background: var(--surf); }
-.layer-item.active { background: var(--cyan-lt); border-left-color: var(--cyan); }
+.layer-item.active { background: var(--cyan-lt); border-inline-start-color: var(--cyan); }
 
 .layer-radio {
   width: 14px; height: 14px; border-radius: 50%;
@@ -192,9 +192,9 @@ body {
 /* ── Topic list (exposure tab) ── */
 .topic-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px 10px 13px;
+  padding: 10px 16px; padding-inline-start: 13px;
   cursor: pointer; border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
   transition: background 0.1s; user-select: none;
 }
 .topic-item:hover { background: var(--surf); }
@@ -218,9 +218,9 @@ body {
 
 /* Inline threshold editor beneath the selected topic row. */
 .exposure-thr-inline {
-  padding: 10px 16px 12px 32px;
+  padding: 10px 16px 12px; padding-inline-start: 32px;
   border-bottom: 1px solid var(--border);
-  border-left: 3px solid var(--cyan);
+  border-inline-start: 3px solid var(--cyan);
   background: var(--cyan-lt);
 }
 
@@ -400,7 +400,7 @@ body {
 .info-row:hover { background: var(--surf); }
 .info-lbl { font-size: 0.74rem; color: var(--mid); display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .info-val  { font-size: 0.74rem; font-weight: 600; color: var(--hi); white-space: nowrap; }
-.info-pct  { font-size: 0.62rem; color: var(--lo); margin-left: 4px; }
+.info-pct  { font-size: 0.62rem; color: var(--lo); margin-inline-start: 4px; }
 .info-thr  { font-size: 0.6rem; color: var(--lo); font-weight: 400; }
 .bar-track { height: 2px; background: var(--border); margin: 1px 16px 5px; border-radius: 1px; }
 .bar-fill  { height: 2px; border-radius: 1px; }
@@ -451,7 +451,7 @@ body {
   font-size: 0.72rem; color: #0e7ab5;
 }
 .selected-badge {
-  background: var(--cyan-lt); border-left: 3px solid var(--cyan);
+  background: var(--cyan-lt); border-inline-start: 3px solid var(--cyan);
   padding: 8px 16px;
 }
 .selected-badge-tag {
@@ -546,6 +546,10 @@ body {
   border-right: 7px solid var(--panel-h);
   filter: drop-shadow(-1px 0 0 var(--border2));
 }
+/* RTL (Arabic): the page keeps the same rail | panel | map arrangement as
+   every other language — only the text inside the panel runs right-to-left. */
+[dir="rtl"] #main-app { direction: ltr; }
+[dir="rtl"] #panel    { direction: rtl; }
 .hazard-info-panel-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 14px 16px 12px;
@@ -557,7 +561,7 @@ body {
 .hazard-info-panel-title {
   font-size: 0.72rem; font-weight: 700; color: var(--hi);
   text-transform: uppercase; letter-spacing: 0.08em;
-  line-height: 1.4; flex: 1; padding-right: 8px; padding-top: 2px;
+  line-height: 1.4; flex: 1; padding-inline-end: 8px; padding-top: 2px;
 }
 .hazard-info-close {
   background: transparent; border: none;
@@ -590,7 +594,7 @@ body {
   margin: 12px 10px 6px;
   padding: 10px 12px;
   background: var(--panel-h);
-  border-left: 3px solid var(--cyan);
+  border-inline-start: 3px solid var(--cyan);
   border-radius: 4px;
 }
 .exposure-method-p {
@@ -635,7 +639,7 @@ body {
 
 /* ── Results panel: inline info icons ── */
 .info-icon-btn {
-  background: none; border: none; padding: 0; margin-right: 5px;
+  background: none; border: none; padding: 0; margin-inline-end: 5px;
   color: var(--lo); cursor: pointer; line-height: 1;
   font-size: 0.72em; vertical-align: baseline;
 }
@@ -685,3 +689,41 @@ body {
   }
   .map-disclaimer-text { padding-top: 2px; padding-bottom: 2px; }
 }
+
+/* ── Language switcher (beside the app title) ── */
+.lang-switch { position: relative; flex-shrink: 0; }
+.lang-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: transparent; border: 1px solid var(--border2); border-radius: 6px;
+  padding: 3px 7px; cursor: pointer; color: var(--mid);
+  font-family: 'Source Sans Pro', sans-serif; font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.04em; line-height: 1;
+}
+.lang-btn .bi { font-size: 0.85rem; }
+.lang-btn:hover, .lang-switch.open .lang-btn { color: var(--cyan); border-color: var(--cyan); }
+.lang-menu {
+  display: none; position: absolute; top: calc(100% + 4px); inset-inline-end: 0;
+  z-index: 800; min-width: 130px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border2); border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+}
+.lang-switch.open .lang-menu { display: block; }
+.lang-opt {
+  display: block; width: 100%; text-align: start;
+  background: transparent; border: none; border-radius: 5px;
+  padding: 6px 10px; cursor: pointer;
+  font-family: 'Source Sans Pro', sans-serif; font-size: 0.74rem; font-weight: 500;
+  color: var(--hi);
+}
+.lang-opt:hover { background: var(--surf); }
+.lang-opt.active { color: var(--cyan); font-weight: 700; }
+
+/* RTL legend: the colour ramp is drawn left-to-right (low → high), so its
+   min/max labels must stay in that order even when the text is Arabic. */
+.map-legend[dir="rtl"] .legend-range { direction: ltr; }
+
+/* Letter-spacing and forced uppercase only suit Latin/Cyrillic scripts. */
+:lang(zh) .nav-label, :lang(ar) .nav-label,
+:lang(zh) .hi-label,  :lang(ar) .hi-label,
+:lang(ar) .layer-section-header, :lang(ar) .ps-label,
+:lang(ar) .hazard-info-panel-title { letter-spacing: 0; }

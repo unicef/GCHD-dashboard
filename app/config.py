@@ -31,6 +31,41 @@ HAZARDS = [
 
 HAZARD_MAP = {h["name"]: h for h in HAZARDS}
 
+# How many leading words of each hazard name are descriptive (translated in the
+# UI). The rest — index, source and years — are dataset identifiers and stay
+# as-is: "heatwave_frequency_ecmwf_2014-2024" -> translated "Heatwave Frequency"
+# + "Ecmwf 2014 2024".
+HAZARD_NAME_WORDS = {
+    "river_flood_100yr_jrc_2024":             2,
+    "coastal_flood_100yr_jrc_2024":           2,
+    "tropical_storm_100yr_giri_2024":         2,
+    "agricultural_drought_fao_1984-2023":     2,
+    "drought_spei_terraclimate_1958-2025":    1,
+    "drought_spi_terraclimate_1958-2025":     1,
+    "heatwave_frequency_ecmwf_2014-2024":     2,
+    "heatwave_duration_ecmwf_2014-2024":      2,
+    "heatwave_severity_ecmwf_2014-2024":      2,
+    "extreme_heat_ecmwf_2014-2024":           2,
+    "fire_FRP_nasa_2001-2024":                1,
+    "fire_frequency_nasa_2001-2023":          2,
+    "sand_dust_storm_unccd_2024":             3,
+    "air_pollution_pm25_1998-2023":           2,
+    "vectorborne_malariapv_2012-2022":        1,
+    "vectorborne_malariapf_2012-2022":        1,
+    "landslide_rainfall_worldbank_1980-2018": 2,
+    "earthquake_pga_gem_2023":                1,
+    "volcanoes_gvp_1800-2025":                1,
+}
+
+
+def hazard_name_words(name):
+    """'heatwave_frequency_ecmwf_2014-2024' ->
+    (['Heatwave', 'Frequency'], ['Ecmwf', '2014', '2024'])."""
+    words = [w.capitalize() for w in name.replace("-", " ").split("_")]
+    words = " ".join(words).split()
+    n = HAZARD_NAME_WORDS.get(name, len(words))
+    return words[:n], words[n:]
+
 
 def is_binary_hazard(name):
     """True for presence/absence hazards (e.g. coastal flood, sand & dust storm)

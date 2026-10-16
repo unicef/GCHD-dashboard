@@ -19,10 +19,13 @@ from config import (
     MHC_OPTIONS, MHI_OPTIONS, HAZARD_INFO, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
     FORCE_NULL_RULES, EXCLUDE_ISO3, is_no_data_ucode,
     infra_layer_style,
-    is_binary_hazard,
+    is_binary_hazard, hazard_name_words,
     POPULATION_LAYERS, POP_LAYER_MAP, POP_VIS, POP_PREFIX,
     is_pop_layer, pop_class_of,
     gradient_spec, swatch_spec, vis_gradient_spec,
+)
+from i18n import (
+    tr, trc, current_lang, is_rtl, LANGUAGES, LANG_COOKIE, SKIP_NOTICE_COOKIE,
 )
 from ai_core import initialize_ai, ask_gemini
 from auth import request_otp, verify_otp, SESSION_HOURS
@@ -80,9 +83,13 @@ def _hazard_info_body(info):
     if not isinstance(info, dict):
         return info
     rows = []
-    for label, key in [("Description", "description"), ("Units", "units"), ("Availability", "availability")]:
+    for label, key in [(tr("Description"), "description"), (tr("Units"), "units"),
+                       (tr("Availability"), "availability")]:
         val = info.get(key, "")
         if val:
+            # Availability is a year range — nothing to translate.
+            if key != "availability":
+                val = tr(val)
             rows.append(html.Div([
                 html.Span(label, className="hi-label"),
                 html.Span(val,   className="hi-val"),
@@ -91,7 +98,7 @@ def _hazard_info_body(info):
     url    = info.get("source_url", "")
     if source:
         rows.append(html.Div([
-            html.Span("Source", className="hi-label"),
+            html.Span(tr("Source"), className="hi-label"),
             html.A(source, href=url, target="_blank", className="hi-val hi-link") if url
             else html.Span(source, className="hi-val"),
         ], className="hi-row"))
@@ -100,18 +107,21 @@ def _hazard_info_body(info):
 
 def _layer_label(name):
     if name in ("Multi Hazard Count", "Multi Hazard Intensity"):
-        return name
+        return tr(name)
     if is_pop_layer(name):
-        return POP_LAYER_MAP.get(pop_class_of(name), {}).get("label", name)
-    # "flood_river_2yr" → "Flood River 2yr"
-    return " ".join(w.capitalize() for w in name.replace("-", " ").split("_"))
+        return tr(POP_LAYER_MAP.get(pop_class_of(name), {}).get("label", name))
+    # "heatwave_frequency_ecmwf_2014-2024" → "Heatwave Frequency Ecmwf 2014 2024",
+    # translating only the descriptive words (source/years stay as-is).
+    desc, rest = hazard_name_words(name)
+    return " ".join([tr(" ".join(desc)), *rest]) if desc else " ".join(rest)
 
 
 def _layer_meta(name):
     if name == "Multi Hazard Count":
-        return f"{len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)} hazard topics combined"
+        return tr("{n} hazard topics combined",
+                  n=len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS))
     if name == "Multi Hazard Intensity":
-        return "Pixel-based hazard score (MHI)"
+        return tr("Pixel-based hazard score (MHI)")
     if is_pop_layer(name):
         return "WorldPop 2025 · 100 m"
     h = HAZARD_MAP.get(name)
@@ -144,6 +154,7 @@ def _fmt(v):
 #           callbacks compare against it), so it stays put across renames.
 # `label` - rail text. CSS uppercases it (.nav-label), so casing here is free.
 # `title` / `desc` - the pane's own .ph header, rendered by tab_header().
+# label/title/desc are English source text, translated where rendered.
 # ---------------------------------------------------------------------------
 
 TABS = [
@@ -183,8 +194,8 @@ def tab_header(key):
     label and the pane header can never drift apart."""
     t = TAB_BY_KEY[key]
     return html.Div(className="ph", children=[
-        html.Div(t["title"], className="ph-title"),
-        html.Div(t["desc"],  className="ph-sub"),
+        html.Div(tr(t["title"]), className="ph-title"),
+        html.Div(tr(t["desc"]),  className="ph-sub"),
     ])
 
 
@@ -233,7 +244,7 @@ def sidebar():
             }
         ),
         html.Div(className="sb-nav", children=[
-            nav_btn(t["icon"], t["label"], t["btn"], active=(i == 0))
+            nav_btn(t["icon"], tr(t["label"]), t["btn"], active=(i == 0))
             for i, t in enumerate(TABS)
         ]),
     ])
@@ -275,12 +286,12 @@ def tab_hazard_layers():
 
     items = []
     # Multi-hazard section
-    items.append(html.Div("Multi Hazard", className="layer-section-header"))
+    items.append(html.Div(tr("Multi Hazard"), className="layer-section-header"))
     for n in MH_LAYERS:
         items.append(_layer_item(n))
 
     # Per-topic sections
-    items.append(html.Div("Hazard Intensity", className="layer-section-header"))
+    items.append(html.Div(tr("Hazard Intensity"), className="layer-section-header"))
     for topic, names in by_topic:
         color     = TOPIC_COLORS.get(topic, "#9ca3af")
         foldable  = topic in SUB_TOPIC_DETAIL
@@ -288,9 +299,9 @@ def tab_hazard_layers():
             [
                 html.Span(style={"display":"inline-block","width":"8px","height":"8px",
                                  "borderRadius":"2px","background":color,
-                                 "marginRight":"7px","verticalAlign":"middle",
+                                 "marginInlineEnd":"7px","verticalAlign":"middle",
                                  "flexShrink":"0"}),
-                html.Span(topic, style={"flex":"1"}),
+                html.Span(tr(topic), style={"flex":"1"}),
                 html.I(className="bi bi-chevron-down",
                        id={"type":"topic-chevron","index":topic},
                        style={"fontSize":"0.65rem","color":"var(--lo)",
@@ -298,7 +309,7 @@ def tab_hazard_layers():
             ],
             id={"type":"topic-group-header","index":topic} if foldable else f"topic-hdr-{topic}",
             className="layer-section-header layer-section-toggle" if foldable else "layer-section-header",
-            style={"paddingLeft":"24px","fontWeight":"500","fontSize":"0.65rem",
+            style={"paddingInlineStart":"24px","fontWeight":"500","fontSize":"0.65rem",
                    "color":"var(--mid)","background":"var(--panel)","borderTop":"none",
                    "display":"flex","alignItems":"center","cursor":"pointer" if foldable else "default"},
             n_clicks=0 if foldable else None,
@@ -315,12 +326,12 @@ def tab_hazard_layers():
 
     # ── Population section — WorldPop 2025 grids, grouped by age band. Reuses
     # _layer_item so selection/click behaviour matches the hazard layers. ──
-    items.append(html.Div("Population", className="layer-section-header"))
+    items.append(html.Div(tr("Population"), className="layer-section-header"))
     for group in dict.fromkeys(p["group"] for p in POPULATION_LAYERS):
         items.append(html.Div(
-            group,
+            tr(group),
             className="layer-section-header",
-            style={"paddingLeft": "24px", "fontWeight": "500",
+            style={"paddingInlineStart": "24px", "fontWeight": "500",
                    "fontSize": "0.65rem", "color": "var(--mid)",
                    "background": "var(--panel)", "borderTop": "none"},
         ))
@@ -343,7 +354,7 @@ def _exposure_topic_row(t, selected):
                         "role": "radio"}),
             html.Div(className="topic-swatch",
                      style={"background": TOPIC_COLORS.get(t, "#888")}),
-            html.Span(t, className="topic-name"),
+            html.Span(tr(t), className="topic-name"),
         ],
         id={"type": "topic-item", "index": t},
         className="topic-item active" if selected else "topic-item",
@@ -359,10 +370,10 @@ def _exposure_inline_editor(topic):
         html.Div(id="exposure-thr-toggle", className="athr-toggle", n_clicks=0,
                  children=[
             html.I(className="bi bi-chevron-right", id="exposure-thr-chevron"),
-            html.Span("Adjust thresholds", className="athr-toggle-label"),
+            html.Span(tr("Adjust thresholds"), className="athr-toggle-label"),
             html.Span("", id="exposure-thr-badge", className="athr-badge"),
         ]),
-        html.Div("Changing a threshold updates the exposure map for this topic.",
+        html.Div(tr("Changing a threshold updates the exposure map for this topic."),
                  className="ps-caption", style={"marginTop": "4px",
                                                 "color": "var(--mid)"}),
         html.Div(id="exposure-thr-body", style={"display": "none"}, children=[
@@ -381,19 +392,19 @@ def tab_exposure():
         html.Div(id="exposure-topic-list",
                  children=[_exposure_topic_row(t, False) for t in TOPIC_LIST]),
         html.Div(className="exposure-method-note", children=[
-            html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
+            html.Div(tr("Methodology"), className="hi-label", style={"marginBottom": "6px"}),
             html.P(
-                "All exposure estimates use WorldPop's global gridded children population "
-                "estimate (under 18) for 2025 at 100 m spatial resolution.",
+                tr("All exposure estimates use WorldPop's global gridded children population "
+                   "estimate (under 18) for 2025 at 100 m spatial resolution."),
                 className="exposure-method-p",
             ),
             html.P(
-                "For topics with multiple hazard layers (e.g. Drought combines agricultural "
-                "and meteorological drought), hazard coverage is first computed independently "
-                "for each layer at its own threshold. An OR union is then applied across "
-                "layers to derive the combined topic footprint, which is subsequently "
-                "overlaid with the WorldPop under-18 grid to estimate the number of "
-                "children exposed.",
+                tr("For topics with multiple hazard layers (e.g. Drought combines agricultural "
+                   "and meteorological drought), hazard coverage is first computed independently "
+                   "for each layer at its own threshold. An OR union is then applied across "
+                   "layers to derive the combined topic footprint, which is subsequently "
+                   "overlaid with the WorldPop under-18 grid to estimate the number of "
+                   "children exposed."),
                 className="exposure-method-p",
             ),
         ]),
@@ -406,42 +417,42 @@ def tab_mh():
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
         tab_header("mh"),
         html.Div(className="ps", children=[
-            html.Div("Hazard Count (MHC)", className="ps-label"),
-            html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
+            html.Div(tr("Hazard Count (MHC)"), className="ps-label"),
+            html.Div(tr("Areas exposed to ≥ N simultaneous hazard topics"), className="ps-caption"),
             dcc.Dropdown(
                 id="mhc-select", className="ps-select",
                 options=[{"label": v, "value": v} for v in MHC_OPTIONS],
-                value=None, placeholder="None",
+                value=None, placeholder=tr("None"),
                 clearable=True, searchable=False,
             ),
         ]),
         html.Div(className="ps", children=[
-            html.Div("Hazard Intensity (MHI)", className="ps-label"),
-            html.Div("Areas with pixel hazard score above global percentile", className="ps-caption"),
+            html.Div(tr("Hazard Intensity (MHI)"), className="ps-label"),
+            html.Div(tr("Areas with pixel hazard score above global percentile"), className="ps-caption"),
             dcc.Dropdown(
                 id="mhi-select", className="ps-select",
                 options=[{"label": f"P{v}", "value": v} for v in MHI_OPTIONS],
-                value=None, placeholder="None",
+                value=None, placeholder=tr("None"),
                 clearable=True, searchable=False,
             ),
         ]),
         html.Div(className="exposure-method-note", children=[
-            html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
+            html.Div(tr("Methodology"), className="hi-label", style={"marginBottom": "6px"}),
             html.P([
                 html.Strong("MHC — "),
-                "Each hazard topic is flagged at the pixel level when its threshold is exceeded. "
-                "For topics with multiple layers (e.g. Drought combines agricultural and "
-                "meteorological drought), an OR union is applied across layers before flagging. "
-                "MHC then counts how many topics flag each pixel; only pixels reaching the "
-                "user-selected minimum count N are displayed.",
+                tr("Each hazard topic is flagged at the pixel level when its threshold is exceeded. "
+                   "For topics with multiple layers (e.g. Drought combines agricultural and "
+                   "meteorological drought), an OR union is applied across layers before flagging. "
+                   "MHC then counts how many topics flag each pixel; only pixels reaching the "
+                   "user-selected minimum count N are displayed."),
             ], className="exposure-method-p"),
             html.P([
                 html.Strong("MHI — "),
-                "A continuous pixel-based hazard score is derived by combining the normalised "
-                "intensity values across all hazard layers, integrating both the breadth and "
-                "severity of co-occurring hazards. The user selects a global percentile "
-                "threshold (e.g. P90); only pixels whose score exceeds that percentile are "
-                "highlighted on the map.",
+                tr("A continuous pixel-based hazard score is derived by combining the normalised "
+                   "intensity values across all hazard layers, integrating both the breadth and "
+                   "severity of co-occurring hazards. The user selects a global percentile "
+                   "threshold (e.g. P90); only pixels whose score exceeds that percentile are "
+                   "highlighted on the map."),
             ], className="exposure-method-p"),
         ]),
     ])
@@ -452,56 +463,56 @@ def tab_analysis():
         tab_header("analysis"),
         # ── Sub-tab switcher ──
         html.Div(className="analysis-sub-tabs", children=[
-            html.Button("GeoRepo Boundaries", id="btn-georapo-tab",
+            html.Button(tr("GeoRepo Boundaries"), id="btn-georapo-tab",
                         className="analysis-sub-tab active", n_clicks=0),
-            html.Button("Custom Boundary", id="btn-custom-tab",
+            html.Button(tr("Custom Boundary"), id="btn-custom-tab",
                         className="analysis-sub-tab", n_clicks=0),
         ]),
         # ── GeoRepo content ──
         html.Div(id="georapo-content", children=[
             html.Div(className="ps", children=[
-                html.Div("1. Select country / territory", className="ps-label"),
+                html.Div(tr("1. Select country / territory"), className="ps-label"),
                 dcc.Dropdown(
                     id="country-select", className="ps-select",
                     options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
-                    value=None, placeholder="Search country / territory…",
+                    value=None, placeholder=tr("Search country / territory…"),
                     clearable=False, searchable=True,
                 ),
             ]),
             html.Div(id="level-section", style={"display": "none"}, children=[
                 html.Div(className="ps", children=[
-                    html.Div("2. Analysis level", className="ps-label"),
+                    html.Div(tr("2. Analysis level"), className="ps-label"),
                     dcc.Dropdown(
                         id="level-select", className="ps-select",
-                        options=[{"label": l, "value": l} for l in ADMIN_DATA.keys()],
-                        value=None, placeholder="— select level —",
+                        options=[{"label": tr(l), "value": l} for l in ADMIN_DATA.keys()],
+                        value=None, placeholder=tr("— select level —"),
                         clearable=False, searchable=False,
                     ),
                 ]),
             ]),
             html.Div(id="hazard-select-section", style={"display": "none"}, children=[
                 html.Div(className="ps", children=[
-                    html.Div("3. Hazard topics & thresholds", className="ps-label"),
+                    html.Div(tr("3. Hazard topics & thresholds"), className="ps-label"),
                     dcc.Dropdown(
                         id="analysis-topic-select", className="ps-select",
-                        options=[{"label": t, "value": t} for t in HAZARD_TOPICS],
+                        options=[{"label": tr(t), "value": t} for t in HAZARD_TOPICS],
                         value=[t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS],
-                        multi=True, placeholder="Select hazard topics…",
+                        multi=True, placeholder=tr("Select hazard topics…"),
                         clearable=True, searchable=False,
                     ),
-                    html.Div("Climate hazards are selected by default. Add or remove "
-                             "topics, and adjust any hazard's threshold below.",
+                    html.Div(tr("Climate hazards are selected by default. Add or remove "
+                                "topics, and adjust any hazard's threshold below."),
                              className="ps-caption"),
                     # Collapsible threshold editor (collapsed by default).
                     html.Div(id="analysis-thr-toggle", className="athr-toggle", n_clicks=0,
                              children=[
                         html.I(className="bi bi-chevron-right", id="analysis-thr-chevron"),
-                        html.Span("Adjust thresholds", className="athr-toggle-label"),
+                        html.Span(tr("Adjust thresholds"), className="athr-toggle-label"),
                         html.Span("", id="analysis-thr-badge", className="athr-badge"),
                     ]),
                     # Shown at ADM0: custom thresholds are country-level disabled.
-                    html.Div("Custom thresholds apply at ADM1/ADM2. Country-level "
-                             "(ADM0) analysis uses the standard thresholds.",
+                    html.Div(tr("Custom thresholds apply at ADM1/ADM2. Country-level "
+                                "(ADM0) analysis uses the standard thresholds."),
                              id="analysis-thr-adm0-note", className="ps-caption",
                              style={"display": "none", "marginTop": "4px",
                                     "color": "var(--mid)"}),
@@ -515,9 +526,9 @@ def tab_analysis():
             html.Div(id="selected-badge-wrap"),
             html.Div(id="analysis-compute-wrap", style={"display": "none"}, children=[
                 html.Div(className="ps", children=[
-                    html.Button("▶  Compute exposure", id="analysis-compute-btn",
+                    html.Button("▶  " + tr("Compute exposure"), id="analysis-compute-btn",
                                 className="ps-btn", n_clicks=0, disabled=True),
-                    html.Div("Select a region, then Compute.", id="analysis-compute-hint",
+                    html.Div(tr("Select a region, then Compute."), id="analysis-compute-hint",
                              className="ps-caption", style={"marginTop": "6px"}),
                 ]),
             ]),
@@ -528,112 +539,132 @@ def tab_analysis():
         ]),
         # ── Custom boundary content ──
         html.Div(id="custom-content", style={"display": "none"}, children=[
-            # — GeoJSON upload —
-            html.Div(className="ps", children=[
-                html.Div("1. Upload GeoJSON (max 100 features, 1 MB)", className="ps-label"),
-                dcc.Upload(
-                    id="custom-upload",
-                    children=html.Div([
-                        html.I(className="bi bi-cloud-upload",
-                               style={"fontSize": "1.4rem", "color": "var(--lo)"}),
-                        html.Div("Drop file or click to browse",
-                                 style={"fontSize": "0.75rem", "color": "var(--lo)",
-                                        "marginTop": "6px"}),
-                        html.Div(".geojson / .json",
-                                 style={"fontSize": "0.62rem", "color": "var(--lo)",
-                                        "marginTop": "2px"}),
-                    ], style={"textAlign": "center", "padding": "16px 8px"}),
-                    style={
-                        "border": "2px dashed var(--border2)", "borderRadius": "8px",
-                        "cursor": "pointer", "transition": "border-color 0.15s",
-                    },
-                    accept=".geojson,.json",
-                    multiple=False,
+            dcc.Store(id="store-custom-auth", data=False),
+            # ── Auth gate (same password protection as the AI tab) ──
+            html.Div(id="custom-auth-gate", children=[
+                html.Div(className="ai-auth-card", children=[
+                    html.Div(tr("Custom Boundary Access"),
+                             style={"fontSize":"0.72rem","fontWeight":"700","color":"var(--hi)",
+                                    "textTransform":"uppercase","letterSpacing":"0.08em",
+                                    "marginBottom":"16px"}),
+                    dcc.Input(id="custom-auth-id",  placeholder=tr("User ID"),
+                              type="text",     className="ai-auth-input", n_submit=0),
+                    dcc.Input(id="custom-auth-pwd", placeholder=tr("Password"),
+                              type="password", className="ai-auth-input", n_submit=0),
+                    html.Div(id="custom-auth-error",
+                             style={"fontSize":"0.7rem","color":"var(--red)",
+                                    "marginBottom":"8px","minHeight":"16px"}),
+                    html.Button(tr("Sign In"), id="custom-auth-btn", className="ps-btn", n_clicks=0),
+                ]),
+            ]),
+            # ── Main custom-boundary interface (hidden until authenticated) ──
+            html.Div(id="custom-main", style={"display": "none"}, children=[
+                # — GeoJSON upload —
+                html.Div(className="ps", children=[
+                    html.Div(tr("1. Upload GeoJSON (max 100 features, 1 MB)"), className="ps-label"),
+                    dcc.Upload(
+                        id="custom-upload",
+                        children=html.Div([
+                            html.I(className="bi bi-cloud-upload",
+                                   style={"fontSize": "1.4rem", "color": "var(--lo)"}),
+                            html.Div(tr("Drop file or click to browse"),
+                                     style={"fontSize": "0.75rem", "color": "var(--lo)",
+                                            "marginTop": "6px"}),
+                            html.Div(".geojson / .json",
+                                     style={"fontSize": "0.62rem", "color": "var(--lo)",
+                                            "marginTop": "2px"}),
+                        ], style={"textAlign": "center", "padding": "16px 8px"}),
+                        style={
+                            "border": "2px dashed var(--border2)", "borderRadius": "8px",
+                            "cursor": "pointer", "transition": "border-color 0.15s",
+                        },
+                        accept=".geojson,.json",
+                        multiple=False,
+                    ),
+                    html.Div(id="custom-upload-status",
+                             style={"fontSize": "0.72rem", "marginTop": "8px",
+                                    "color": "var(--mid)"}),
+                ]),
+                html.Div(className="exposure-method-note", style={"margin": "4px 10px 8px"}, children=[
+                    html.P([
+                        *trc("GeoJSON upload supports up to {limits}. For larger files, "
+                             "upload your boundary to {gee} as an asset, make it publicly "
+                             "sharable, then paste the asset path into the text box below. ",
+                             limits=html.Strong(tr("100 features and 1 MB")),
+                             gee=html.Strong("Google Earth Engine")),
+                        html.A(tr("How to upload a table to GEE →"),
+                               href="https://developers.google.com/earth-engine/guides/table_upload",
+                               target="_blank", className="hi-link"),
+                    ], className="exposure-method-p", style={"marginBottom": "0"}),
+                ]),
+                html.Div(id="custom-name-field-wrap", style={"display": "none"}, children=[
+                    html.Div(className="ps", children=[
+                        html.Div(tr("2. Feature name / ID field"), className="ps-label"),
+                        dcc.Dropdown(
+                            id="custom-name-field", className="ps-select",
+                            clearable=False, searchable=False,
+                        ),
+                    ]),
+                    html.Div(className="ps", children=[
+                        html.Button(tr("Compute Exposure"), id="custom-compute-btn",
+                                    className="ps-btn", n_clicks=0),
+                        html.Div(tr("Uses your current hazard thresholds from the "
+                                    "Analysis tab."), className="ps-caption",
+                                 style={"marginTop": "6px", "color": "var(--mid)"}),
+                    ]),
+                ]),
+                dcc.Loading(
+                    id="custom-results-loading", type="circle", color="#1CABE2",
+                    children=html.Div(id="custom-results-panel"),
                 ),
-                html.Div(id="custom-upload-status",
-                         style={"fontSize": "0.72rem", "marginTop": "8px",
-                                "color": "var(--mid)"}),
-            ]),
-            html.Div(className="exposure-method-note", style={"margin": "4px 10px 8px"}, children=[
-                html.P([
-                    "GeoJSON upload supports up to ",
-                    html.Strong("100 features and 1 MB"),
-                    ". For larger files, upload your boundary to ",
-                    html.Strong("Google Earth Engine"),
-                    " as an asset, make it publicly sharable, then paste the asset path "
-                    "into the text box below. ",
-                    html.A("How to upload a table to GEE →",
-                           href="https://developers.google.com/earth-engine/guides/table_upload",
-                           target="_blank", className="hi-link"),
-                ], className="exposure-method-p", style={"marginBottom": "0"}),
-            ]),
-            html.Div(id="custom-name-field-wrap", style={"display": "none"}, children=[
+                # — Divider —
+                html.Div(style={"display":"flex","alignItems":"center","padding":"6px 16px","gap":"8px"},
+                         children=[
+                    html.Hr(style={"flex":"1","border":"none","borderTop":"1px solid var(--border)","margin":"0"}),
+                    html.Span(tr("or"), style={"fontSize":"0.65rem","color":"var(--lo)","flexShrink":"0"}),
+                    html.Hr(style={"flex":"1","border":"none","borderTop":"1px solid var(--border)","margin":"0"}),
+                ]),
+                # — GEE Asset —
                 html.Div(className="ps", children=[
-                    html.Div("2. Feature name / ID field", className="ps-label"),
-                    dcc.Dropdown(
-                        id="custom-name-field", className="ps-select",
-                        clearable=False, searchable=False,
-                    ),
+                    html.Div(tr("Use a GEE Asset"), className="ps-label"),
+                    html.Div(style={"display":"flex","gap":"6px"}, children=[
+                        dcc.Input(
+                            id="gee-asset-input",
+                            placeholder="projects/…/assets/…",
+                            debounce=False,
+                            style={"flex":"1","padding":"7px 9px","fontSize":"0.75rem",
+                                   "border":"1px solid var(--border2)","borderRadius":"6px",
+                                   "fontFamily":"Source Sans Pro, sans-serif",
+                                   "background":"var(--panel-h)","color":"var(--hi)"},
+                        ),
+                        html.Button(tr("Load"), id="gee-asset-load-btn", className="ps-btn",
+                                    n_clicks=0,
+                                    style={"width":"auto","padding":"7px 14px","flexShrink":"0"}),
+                    ]),
+                    html.Div(id="gee-asset-status",
+                             style={"fontSize":"0.72rem","marginTop":"8px","color":"var(--mid)"}),
                 ]),
-                html.Div(className="ps", children=[
-                    html.Button("Compute Exposure", id="custom-compute-btn",
-                                className="ps-btn", n_clicks=0),
-                    html.Div("Uses your current hazard thresholds from the "
-                             "Analysis tab.", className="ps-caption",
-                             style={"marginTop": "6px", "color": "var(--mid)"}),
+                html.Div(id="gee-asset-name-wrap", style={"display": "none"}, children=[
+                    html.Div(className="ps", children=[
+                        html.Div(tr("Feature name / ID field"), className="ps-label"),
+                        dcc.Dropdown(
+                            id="gee-asset-name-field", className="ps-select",
+                            clearable=False, searchable=False,
+                        ),
+                    ]),
+                    html.Div(className="ps", children=[
+                        html.Button(tr("Compute Exposure"), id="gee-asset-compute-btn",
+                                    className="ps-btn", n_clicks=0),
+                        html.Div(tr("Uses your current hazard thresholds from the "
+                                    "Analysis tab."), className="ps-caption",
+                                 style={"marginTop": "6px", "color": "var(--mid)"}),
+                    ]),
                 ]),
-            ]),
-            dcc.Loading(
-                id="custom-results-loading", type="circle", color="#1CABE2",
-                children=html.Div(id="custom-results-panel"),
-            ),
-            # — Divider —
-            html.Div(style={"display":"flex","alignItems":"center","padding":"6px 16px","gap":"8px"},
-                     children=[
-                html.Hr(style={"flex":"1","border":"none","borderTop":"1px solid var(--border)","margin":"0"}),
-                html.Span("or", style={"fontSize":"0.65rem","color":"var(--lo)","flexShrink":"0"}),
-                html.Hr(style={"flex":"1","border":"none","borderTop":"1px solid var(--border)","margin":"0"}),
-            ]),
-            # — GEE Asset —
-            html.Div(className="ps", children=[
-                html.Div("Use a GEE Asset", className="ps-label"),
-                html.Div(style={"display":"flex","gap":"6px"}, children=[
-                    dcc.Input(
-                        id="gee-asset-input",
-                        placeholder="projects/…/assets/…",
-                        debounce=False,
-                        style={"flex":"1","padding":"7px 9px","fontSize":"0.75rem",
-                               "border":"1px solid var(--border2)","borderRadius":"6px",
-                               "fontFamily":"Source Sans Pro, sans-serif",
-                               "background":"var(--panel-h)","color":"var(--hi)"},
-                    ),
-                    html.Button("Load", id="gee-asset-load-btn", className="ps-btn",
-                                n_clicks=0,
-                                style={"width":"auto","padding":"7px 14px","flexShrink":"0"}),
-                ]),
-                html.Div(id="gee-asset-status",
-                         style={"fontSize":"0.72rem","marginTop":"8px","color":"var(--mid)"}),
-            ]),
-            html.Div(id="gee-asset-name-wrap", style={"display": "none"}, children=[
-                html.Div(className="ps", children=[
-                    html.Div("Feature name / ID field", className="ps-label"),
-                    dcc.Dropdown(
-                        id="gee-asset-name-field", className="ps-select",
-                        clearable=False, searchable=False,
-                    ),
-                ]),
-                html.Div(className="ps", children=[
-                    html.Button("Compute Exposure", id="gee-asset-compute-btn",
-                                className="ps-btn", n_clicks=0),
-                    html.Div("Uses your current hazard thresholds from the "
-                             "Analysis tab.", className="ps-caption",
-                             style={"marginTop": "6px", "color": "var(--mid)"}),
-                ]),
-            ]),
-            dcc.Loading(
-                id="gee-asset-results-loading", type="circle", color="#1CABE2",
-                children=html.Div(id="gee-asset-results-panel"),
-            ),
+                dcc.Loading(
+                    id="gee-asset-results-loading", type="circle", color="#1CABE2",
+                    children=html.Div(id="gee-asset-results-panel"),
+                ),
+            ]),  # end custom-main
             # — Stores —
             dcc.Store(id="store-custom-geojson",         data=None),
             dcc.Store(id="store-custom-geojson-stripped",data=None),
@@ -662,8 +693,16 @@ def _infra_layer_options(country=None):
     source-qualified layers (e.g. 'Schools (Giga)'). Empty until a country with
     assets is picked. Discovered from GEE, so a newly uploaded layer appears
     without a code change."""
-    return [{"label": name, "value": name}
+    return [{"label": _infra_layer_label(name), "value": name}
             for name in infra_layers_for(country)]
+
+
+def _infra_layer_label(name):
+    """'Schools (Giga)' -> translated facility type + untranslated source."""
+    for base in ("Schools", "Health Facilities", "Water Points"):
+        if name == base or name.startswith(base + " ("):
+            return tr(base) + name[len(base):]
+    return name
 
 
 def tab_infrastructure():
@@ -674,44 +713,44 @@ def tab_infrastructure():
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
         # enables map district selection immediately (no level dropdown).
         html.Div(className="ps", children=[
-            html.Div("1. Select country / territory", className="ps-label"),
+            html.Div(tr("1. Select country / territory"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-country-select", className="ps-select",
                 # Populated by infra_populate_countries on tab entry, not here:
                 # tab_infrastructure() runs once at import, so baking the list
                 # in would freeze it at server start and defeat discovery.
                 options=[],
-                value=None, placeholder="Search country / territory…",
+                value=None, placeholder=tr("Search country / territory…"),
                 clearable=False, searchable=True,
             ),
         ]),
         html.Div(id="infra-level-section", style={"display": "none"}, children=[
             html.Div(id="infra-selected-badge-wrap"),
-            html.Div("Click a district on the map to analyze.",
+            html.Div(tr("Click a district on the map to analyze."),
                      className="info-box", id="infra-region-hint"),
         ]),
 
         # 2. Facility layer — options depend on the selected country (only its
         # uploaded, source-qualified layers). Populated on country select.
         html.Div(className="ps", children=[
-            html.Div("2. Facility layer", className="ps-label"),
+            html.Div(tr("2. Facility layer"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-layer-select", className="ps-select",
                 options=[], value=None,
-                placeholder="— select a country first —",
+                placeholder=tr("— select a country first —"),
                 clearable=True, searchable=False,
             ),
             html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
                 dcc.Input(
                     id="infra-asset-input",
-                    placeholder="…or paste a GEE asset path",
+                    placeholder=tr("…or paste a GEE asset path"),
                     debounce=False,
                     style={"flex": "1", "padding": "7px 9px", "fontSize": "0.75rem",
                            "border": "1px solid var(--border2)", "borderRadius": "6px",
                            "fontFamily": "Source Sans Pro, sans-serif",
                            "background": "var(--panel-h)", "color": "var(--hi)"},
                 ),
-                html.Button("Load", id="infra-asset-load-btn", className="ps-btn",
+                html.Button(tr("Load"), id="infra-asset-load-btn", className="ps-btn",
                             n_clicks=0,
                             style={"width": "auto", "padding": "7px 14px", "flexShrink": "0"}),
             ]),
@@ -721,22 +760,22 @@ def tab_infrastructure():
 
         # 3. Hazard topics
         html.Div(className="ps", children=[
-            html.Div("3. Hazard topics", className="ps-label"),
+            html.Div(tr("3. Hazard topics"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-topic-select", className="ps-select",
-                options=[{"label": t, "value": t} for t in HAZARD_TOPICS
+                options=[{"label": tr(t), "value": t} for t in HAZARD_TOPICS
                          if t not in EXPOSURE_ONLY_TOPICS],
-                value=[], multi=True, placeholder="All hazards (default)",
+                value=[], multi=True, placeholder=tr("All hazards (default)"),
                 clearable=True, searchable=False,
             ),
-            html.Div("Exposed population is attributed to each facility's "
-                     "nearest-neighbour (Voronoi) catchment across the district.",
+            html.Div(tr("Exposed population is attributed to each facility's "
+                        "nearest-neighbour (Voronoi) catchment across the district."),
                      className="ps-caption"),
             # Collapsible threshold editor (mirrors the Analysis tab).
             html.Div(id="infra-thr-toggle", className="athr-toggle", n_clicks=0,
                      children=[
                 html.I(className="bi bi-chevron-right", id="infra-thr-chevron"),
-                html.Span("Adjust thresholds", className="athr-toggle-label"),
+                html.Span(tr("Adjust thresholds"), className="athr-toggle-label"),
                 html.Span("", id="infra-thr-badge", className="athr-badge"),
             ]),
             html.Div(id="infra-thr-body", style={"display": "none"}, children=[
@@ -752,17 +791,17 @@ def tab_infrastructure():
                        style={"color": "var(--cyan)", "marginTop": "2px",
                               "flexShrink": "0"}),
                 html.Div(className="ps-caption", style={"color": "var(--mid)"}, children=[
-                    html.Div([html.Strong("How to run: "),
-                              "click a district (ADM2) on the map, then press Compute. "
-                              "Analysis is per-district — there is no country-wide "
-                              "summary, because per-facility Voronoi computation over "
-                              "many points is slow even for small areas."]),
-                    html.Div([html.Strong("Thresholds: "),
-                              "the summary applies your current hazard thresholds set "
-                              "above."], style={"marginTop": "4px"}),
+                    html.Div([html.Strong(tr("How to run:") + " "),
+                              tr("click a district (ADM2) on the map, then press Compute. "
+                                 "Analysis is per-district — there is no country-wide "
+                                 "summary, because per-facility Voronoi computation over "
+                                 "many points is slow even for small areas.")]),
+                    html.Div([html.Strong(tr("Thresholds:") + " "),
+                              tr("the summary applies your current hazard thresholds set "
+                                 "above.")], style={"marginTop": "4px"}),
                 ]),
             ]),
-            html.Button("Compute", id="infra-compute-btn", className="ps-btn",
+            html.Button(tr("Compute"), id="infra-compute-btn", className="ps-btn",
                         n_clicks=0, disabled=True),
         ]),
         dcc.Loading(
@@ -793,31 +832,31 @@ def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
         tab_header("ai"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
-            html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
-            html.P([
+            html.Div(tr("Under Development"), className="hi-label", style={"marginBottom": "6px"}),
+            html.P(trc(
                 "The AI application on GCHD is currently under development. "
-                "To test the initial version, please contact ",
-                html.A("dokim@unicef.org", href="mailto:dokim@unicef.org", className="hi-link"),
-                ".",
-            ], className="exposure-method-p"),
+                "To test the initial version, please contact {email}.",
+                email=html.A("dokim@unicef.org", href="mailto:dokim@unicef.org",
+                             className="hi-link"),
+            ), className="exposure-method-p"),
         ]),
         dcc.Store(id="store-ai-auth",    data=False),
         dcc.Store(id="store-ai-pending", data=None),
         # ── Auth gate ──
         html.Div(id="ai-auth-gate", children=[
             html.Div(className="ai-auth-card", children=[
-                html.Div("AI Assistant Access",
+                html.Div(tr("AI Assistant Access"),
                          style={"fontSize":"0.72rem","fontWeight":"700","color":"var(--hi)",
                                 "textTransform":"uppercase","letterSpacing":"0.08em",
                                 "marginBottom":"16px"}),
-                dcc.Input(id="ai-auth-id",  placeholder="User ID",
+                dcc.Input(id="ai-auth-id",  placeholder=tr("User ID"),
                           type="text",     className="ai-auth-input", n_submit=0),
-                dcc.Input(id="ai-auth-pwd", placeholder="Password",
+                dcc.Input(id="ai-auth-pwd", placeholder=tr("Password"),
                           type="password", className="ai-auth-input", n_submit=0),
                 html.Div(id="ai-auth-error",
                          style={"fontSize":"0.7rem","color":"var(--red)",
                                 "marginBottom":"8px","minHeight":"16px"}),
-                html.Button("Sign In", id="ai-auth-btn", className="ps-btn", n_clicks=0),
+                html.Button(tr("Sign In"), id="ai-auth-btn", className="ps-btn", n_clicks=0),
             ]),
         ]),
         # ── Main AI interface (hidden until authenticated) ──
@@ -825,8 +864,8 @@ def tab_ai():
             html.Div(className="ps", children=[
                 dcc.Textarea(
                     id="ai-query-input",
-                    placeholder="e.g. Show river flood layer in Bangladesh, or "
-                                "How many children are exposed to heatwaves in India?",
+                    placeholder=tr("e.g. Show river flood layer in Bangladesh, or "
+                                   "How many children are exposed to heatwaves in India?"),
                     maxLength=400,
                     style={"width":"100%","height":"90px","resize":"none",
                            "fontSize":"0.78rem","padding":"8px 10px",
@@ -837,7 +876,7 @@ def tab_ai():
                 html.Div(id="ai-char-count",
                          style={"fontSize":"0.6rem","color":"var(--lo)",
                                 "textAlign":"right","marginTop":"3px"}),
-                html.Button("Ask", id="ai-submit-btn", className="ps-btn",
+                html.Button(tr("Ask"), id="ai-submit-btn", className="ps-btn",
                             n_clicks=0, style={"marginTop":"8px"}),
             ]),
             html.Div(id="ai-confirm-line",
@@ -848,30 +887,33 @@ def tab_ai():
 
 
 def map_component():
-    return html.Div(id="map-container", children=[
+    return html.Div(id="map-container", dir="ltr", children=[
         # Unified floating legend — every tab renders into this one overlay
         # (see render_map_legend). Collapsible via the header chevron.
+        # The map stays left-to-right in Arabic; its overlays carry their own
+        # text direction.
         html.Div(id="map-legend", className="map-legend",
+                 dir="rtl" if is_rtl() else "ltr",
                  style={"display": "none"}, children=[
             html.Div(id="map-legend-header", className="map-legend-header",
                      n_clicks=0, children=[
-                html.Span("Legend", className="map-legend-title"),
+                html.Span(tr("Legend"), className="map-legend-title"),
                 html.I(className="bi bi-chevron-up", id="map-legend-chevron"),
             ]),
             html.Div(id="map-legend-body"),
         ]),
         # Basemap toggle (map ↔ satellite) — bottom-left floating control.
         html.Button(
-            [html.I(className="bi bi-globe-americas"), html.Span("Satellite")],
+            [html.I(className="bi bi-globe-americas"), html.Span(tr("Satellite"))],
             id="basemap-toggle", className="basemap-toggle", n_clicks=0,
-            title="Toggle satellite basemap",
+            title=tr("Toggle satellite basemap"),
         ),
         # PLACEHOLDER COPY — pending comms/legal sign-off.
         html.Div(id="map-disclaimer", className="map-disclaimer", children=[
             html.Span(
-                "Modelled estimates, not observed impacts. Boundaries and names "
-                "shown do not imply endorsement or acceptance by the United "
-                "Nations.",
+                tr("Modelled estimates, not observed impacts. Boundaries and names "
+                   "shown do not imply endorsement or acceptance by the United "
+                   "Nations."),
                 className="map-disclaimer-text",
             ),
         ]),
@@ -956,6 +998,7 @@ app.server.wsgi_app = ProxyFix(app.server.wsgi_app, x_for=1, x_proto=1, x_host=1
 # ---------------------------------------------------------------------------
 import secrets as _secrets, datetime as _dt
 from flask import session as _fsess, request as _freq, redirect as _fredirect
+from flask import has_request_context as _has_req
 
 _key_path = os.path.join(os.path.dirname(__file__), "credentials", "flask_secret.txt")
 if os.path.exists(_key_path):
@@ -1071,8 +1114,65 @@ def _login_page():
 
 
 # ---------------------------------------------------------------------------
-app.layout = html.Div(id="app-root", children=[
+# Strings used inside clientside (JS) callbacks, shipped to the browser in
+# store-i18n so those callbacks can show them in the current language.
+_JS_STRINGS = [
+    "File exceeds 1 MB limit.",
+    "Must be a GeoJSON FeatureCollection.",
+    "File contains no features.",
+    "Too many features ({n}). Limit is 100.",
+    "{n} feature loaded — {kb} KB",
+    "{n} features loaded — {kb} KB",
+    "Parse error:",
+    "Thinking ···",
+]
+
+
+def language_switcher():
+    """Translate icon + current language code beside the app title. The menu
+    and the switch itself are handled by assets/i18n.js (sets the language
+    cookie and reloads, so the whole layout re-renders in that language)."""
+    lang = current_lang()
+    return html.Div(id="lang-switch", className="lang-switch", children=[
+        html.Button(
+            [html.I(className="bi bi-translate"),
+             html.Span(lang.upper(), className="lang-code")],
+            id="lang-btn", className="lang-btn", title=tr("Language"),
+            **{"aria-haspopup": "true"},
+        ),
+        html.Div(className="lang-menu", role="menu", children=[
+            html.Button(name, lang=code,
+                        className="lang-opt active" if code == lang else "lang-opt",
+                        role="menuitem",
+                        **{"data-lang": code, "data-cookie": LANG_COOKIE,
+                           "data-skip-cookie": SKIP_NOTICE_COOKIE})
+            for code, name in LANGUAGES
+        ]),
+    ])
+
+
+def serve_layout():
+    """Built per page load (not once at import) so every string renders in
+    the language of the requesting browser's cookie."""
+    lang = current_lang()
+    # Set by the language switcher when the notice was already dismissed, so
+    # changing language doesn't make the user acknowledge it a second time.
+    skip_notice = _has_req() and bool(_freq.cookies.get(SKIP_NOTICE_COOKIE))
+    return html.Div(
+        id="app-root", lang=lang, dir="rtl" if is_rtl(lang) else "ltr",
+        # The product name is a proper noun, kept in English in every language.
+        **{"data-title": "UNICEF GCHD — Global Child Hazard Database"},
+        children=_layout_children(skip_notice),
+    )
+
+
+def _layout_children(skip_notice):
+    return [
     # ── Stores ──
+    dcc.Store(id="store-i18n", data={
+        "lang": current_lang(), "rtl": is_rtl(),
+        "strings": {s: tr(s) for s in _JS_STRINGS},
+    }),
     dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
     dcc.Store(id="store-tab",           data="hazard"),
     dcc.Store(id="store-hazard-layer",  data=None),
@@ -1102,28 +1202,30 @@ app.layout = html.Div(id="app-root", children=[
 
     # ── Data-use gate ──────────────────────────────────────────────────────
     # PLACEHOLDER COPY — pending comms/legal sign-off before public launch.
-    html.Div(id="embargo-gate", children=[
+    html.Div(id="embargo-gate",
+             style={"display": "none"} if skip_notice else None, children=[
         html.Div(className="embargo-card", children=[
-            html.Div("UNICEF — Data Use Notice", className="embargo-tag"),
-            html.Div("About this data", className="embargo-title"),
+            html.Div(tr("UNICEF — Data Use Notice"), className="embargo-tag"),
+            html.Div(tr("About this data"), className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Figures shown are ", html.Strong("modelled estimates"),
-                ", derived from global hazard datasets combined with WorldPop "
-                "gridded population. They indicate relative exposure — not "
-                "observed impacts — and carry uncertainty that increases at "
-                "finer administrative levels.",
+                *trc("Figures shown are {modelled}, derived from global hazard "
+                     "datasets combined with WorldPop gridded population. They "
+                     "indicate relative exposure — not observed impacts — and "
+                     "carry uncertainty that increases at finer administrative "
+                     "levels.",
+                     modelled=html.Strong(tr("modelled estimates"))),
                 html.Br(), html.Br(),
-                "The designations employed and the presentation of material on "
-                "this site do not imply the expression of any opinion on the "
-                "part of UNICEF concerning the legal status of any country or "
-                "territory, or the delimitation of its frontiers or boundaries.",
+                tr("The designations employed and the presentation of material on "
+                   "this site do not imply the expression of any opinion on the "
+                   "part of UNICEF concerning the legal status of any country or "
+                   "territory, or the delimitation of its frontiers or boundaries."),
             ]),
             dcc.Checklist(
                 id="embargo-dismiss-forever",
-                options=[{"label": "Don't show this again", "value": "yes"}],
+                options=[{"label": tr("Don't show this again"), "value": "yes"}],
                 value=[], className="embargo-check",
             ),
-            html.Button("I Understand",
+            html.Button(tr("I Understand"),
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
         ]),
     ]),
@@ -1149,14 +1251,21 @@ app.layout = html.Div(id="app-root", children=[
         sidebar(),
         html.Div(id="panel", children=[
             html.Div(
-                "Global Child Hazard Database",
+                [html.Span("Global Child Hazard Database",   # product name: not translated
+                           style={"whiteSpace": "nowrap", "overflow": "hidden",
+                                  "textOverflow": "ellipsis", "minWidth": "0"}),
+                 language_switcher()],
                 style={
                     "padding": "14px 16px",
-                    "fontSize": "0.95rem",
+                    "fontSize": "0.86rem",
                     "fontWeight": "700",
                     "color": "#1CABE2",
                     "borderBottom": "1px solid var(--border)",
                     "letterSpacing": "0.01em",
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "space-between",
+                    "gap": "8px",
                 }
             ),
             # Order mirrors TABS so the file reads in rail order; panes are
@@ -1170,7 +1279,10 @@ app.layout = html.Div(id="app-root", children=[
         ]),
         map_component(),
     ]),
-])
+    ]
+
+
+app.layout = serve_layout
 
 
 # ===========================================================================
@@ -1342,8 +1454,15 @@ app.clientside_callback(
         // Centre on the button, then clamp inside the viewport.
         var top = r.top + r.height / 2 - H / 2;
         top = Math.max(M, Math.min(top, window.innerHeight - H - M));
+        // In Arabic the panel text runs right-to-left, putting the buttons at
+        // the panel's left edge; open past the panel's right edge instead so
+        // the popover sits over the map rather than covering the list.
+        var root  = document.getElementById("app-root");
+        var panel = document.getElementById("panel");
+        var left  = (root && root.getAttribute("dir") === "rtl" && panel)
+                    ? panel.getBoundingClientRect().right + 10 : r.right + 10;
         return [{
-            display: "flex", top: top + "px", left: (r.right + 10) + "px",
+            display: "flex", top: top + "px", left: left + "px",
             height: H + "px", width: W + "px", bottom: "auto"
         }, classes];
     }
@@ -1444,7 +1563,7 @@ def sync_exposure_thresholds(values, ids, topic):
     """Publish the exposure editor's thresholds to the shared store (drives the
     exposure map) and update the 'N changed' badge."""
     overrides, _ = _threshold_overrides([topic] if topic else [], ids, values)
-    badge = f"{len(overrides)} changed" if overrides else ""
+    badge = tr("{n} changed", n=len(overrides)) if overrides else ""
     return overrides, badge
 
 
@@ -1486,7 +1605,7 @@ def toggle_infra_thr(n):
 )
 def infra_thr_badge(values, ids, topics):
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), ids, values)
-    return f"{len(overrides)} changed" if overrides else ""
+    return tr("{n} changed", n=len(overrides)) if overrides else ""
 
 
 # ── Topic group fold/unfold ───────────────────────────────────────────────────
@@ -1535,22 +1654,23 @@ def _layer_legend_specs(sel):
 
     if is_pop_layer(sel):
         meta = POP_LAYER_MAP.get(pop_class_of(sel), {})
-        return [vis_gradient_spec(f"{meta.get('label', 'Population')} (per 100 m)",
-                                  POP_VIS, unit="+")]
+        return [vis_gradient_spec(
+            tr("{label} (per 100 m)", label=tr(meta.get("label", "Population"))),
+            POP_VIS, unit="+")]
 
     if sel == "Multi Hazard Count":
         n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
-        return [gradient_spec("Hazard topics (count)", MHC_PALETTE, 1, n)]
+        return [gradient_spec(tr("Hazard topics (count)"), MHC_PALETTE, 1, n)]
 
     if sel == "Multi Hazard Intensity":
-        return [gradient_spec("Hazard score", MHI_PALETTE, 0, 10)]
+        return [gradient_spec(tr("Hazard score"), MHI_PALETTE, 0, 10)]
 
     if sel not in HAZARD_MAP:
         return []
     pal   = HAZARD_VIS_PALETTES.get(
         sel, ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"])
-    units = (HAZARD_INFO.get(sel) or {}).get("units", "")
-    return [gradient_spec(_layer_label(sel), pal, "Low", "High", unit=units)]
+    units = tr((HAZARD_INFO.get(sel) or {}).get("units", ""))
+    return [gradient_spec(_layer_label(sel), pal, tr("Low"), tr("High"), unit=units)]
 
 
 def _infra_legend_specs(viz):
@@ -1566,20 +1686,20 @@ def _infra_legend_specs(viz):
         return []
     pt_color = "#" + (viz.get("color") or "e67e22")
     specs = [
-        vis_gradient_spec("Children (per 100 m)", INFRA_POP_VIS,
+        vis_gradient_spec(tr("Children (per 100 m)"), INFRA_POP_VIS,
                           layer_id="infra-pop", unit="+", toggleable=True),
-        swatch_spec("Facilities", pt_color,
+        swatch_spec(tr("Facilities"), pt_color,
                     layer_id="infra-points", toggleable=True),
-        swatch_spec("Facility catchments", "#1CABE2", shape="line",
+        swatch_spec(tr("Facility catchments"), "#1CABE2", shape="line",
                     layer_id="infra-catchments", toggleable=True),
     ]
     for i, topic in enumerate(viz.get("topics") or []):
         if i >= ANALYSIS_TOPIC_SLOTS:
             break
         specs.append(swatch_spec(
-            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
+            tr("{topic} — hazard area", topic=tr(topic)), TOPIC_COLORS.get(topic, "#888"),
             layer_id=f"infra-topic-{i}", toggleable=True, visible=False))
-    specs.append(swatch_spec("Selected subregion", "#f1c40f", shape="line",
+    specs.append(swatch_spec(tr("Selected subregion"), "#f1c40f", shape="line",
                              layer_id="infra-selection", toggleable=True))
     return specs
 
@@ -1591,10 +1711,10 @@ def _analysis_legend_specs(viz):
     if not viz:
         return []
     if viz.get("no_data"):
-        return [swatch_spec("Selected region", "#FFD700", shape="line",
+        return [swatch_spec(tr("Selected region"), "#FFD700", shape="line",
                             layer_id="analysis-selection", toggleable=True)]
     specs = [
-        vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
+        vis_gradient_spec(tr("Children exposed (per 100 m)"), POP_VIS,
                           layer_id="analysis-exposed", unit="+",
                           toggleable=True),
     ]
@@ -1602,9 +1722,9 @@ def _analysis_legend_specs(viz):
         if i >= ANALYSIS_TOPIC_SLOTS:
             break
         specs.append(swatch_spec(
-            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
+            tr("{topic} — hazard area", topic=tr(topic)), TOPIC_COLORS.get(topic, "#888"),
             layer_id=f"analysis-topic-{i}", toggleable=True, visible=False))
-    specs.append(swatch_spec("Selected region", "#FFD700", shape="line",
+    specs.append(swatch_spec(tr("Selected region"), "#FFD700", shape="line",
                              layer_id="analysis-selection", toggleable=True))
     return specs
 
@@ -1663,19 +1783,19 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
         # default tile when this topic has no override).
         url, _ = get_topic_tile_url_thr(exp_topic, color, thresholds or None)
         layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
-        specs = [swatch_spec(f"{exp_topic} — children exposed", color)]
+        specs = [swatch_spec(tr("{topic} — children exposed", topic=tr(exp_topic)), color)]
 
     elif tab == "mh":
         n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
         if mhc:
             url, _ = get_topic_count_tile_url(int(mhc))
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
-            specs.append(gradient_spec(f"Hazard count (≥ {mhc})",
+            specs.append(gradient_spec(tr("Hazard count (≥ {n})", n=mhc),
                                        MHC_PALETTE, int(mhc), n))
         if mhi:
             url, _ = get_pixel_score_percentile_tile_url(mhi)
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.65))
-            specs.append(gradient_spec(f"Hazard score (> P{mhi})",
+            specs.append(gradient_spec(tr("Hazard score (> P{p})", p=mhi),
                                        MHI_PALETTE, 0, 10))
 
     return layers, specs
@@ -1725,10 +1845,10 @@ def on_level_select(level):
     if level == "adm0 (Country)":
         content = None                      # country is already selected; just Compute
     else:
-        short = "province" if "adm1" in level else "district"
+        msg = (tr("Click a province on the map, then Compute.") if "adm1" in level
+               else tr("Click a district on the map, then Compute."))
         content = html.Div(className="ps", children=[
-            html.Div(f"Click a {short} on the map, then Compute.",
-                     className="info-box"),
+            html.Div(msg, className="info-box"),
         ])
     return (level, None, None, None, content,
             {"display": "block"}, {"display": "block"}, {"display": "block"})
@@ -1766,7 +1886,7 @@ def _threshold_row(h_name, prefix="analysis"):
     `prefix` scopes the pattern-matching ids so the same editor can live in
     multiple tabs (analysis | exposure | infra). Binary hazards render disabled."""
     hz      = HAZARD_MAP.get(h_name, {})
-    units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
+    units   = tr((HAZARD_INFO.get(h_name) or {}).get("units", ""))
     default = hz.get("threshold", 0)
     lo, hi  = hz.get("min", 0), hz.get("max", 100)
     step, marks = _thr_step_marks(lo, hi)
@@ -1779,8 +1899,8 @@ def _threshold_row(h_name, prefix="analysis"):
                 type="number", value=default, min=lo, max=hi, step=step,
                 debounce=True, className="athr-input", disabled=binary,
             ),
-            html.Span("presence/absence" if binary else units,
-                      className="athr-units", title=f"range {lo}–{hi}"),
+            html.Span(tr("presence/absence") if binary else units,
+                      className="athr-units", title=tr("range {lo}–{hi}", lo=lo, hi=hi)),
         ]),
         dcc.Slider(
             id={"type": f"{prefix}-threshold-slider", "index": h_name},
@@ -1797,7 +1917,7 @@ def build_threshold_editor_for(prefix, topics):
     """Reusable threshold-editor body for any tab. `prefix` scopes the row ids
     (analysis | exposure | infra); `topics` is the selected topic list."""
     if not topics:
-        return html.Div("Select at least one hazard topic to adjust thresholds.",
+        return html.Div(tr("Select at least one hazard topic to adjust thresholds."),
                         className="ps-caption", style={"padding": "4px 0"})
     blocks = []
     for topic in HAZARD_TOPICS:            # stable, config order
@@ -1808,7 +1928,7 @@ def build_threshold_editor_for(prefix, topics):
             html.Div([
                 html.Span(className="topic-swatch",
                           style={"background": TOPIC_COLORS.get(topic, "#888")}),
-                html.Span(topic, className="athr-topic-name"),
+                html.Span(tr(topic), className="athr-topic-name"),
             ], className="athr-topic-head"),
             *rows,
         ]))
@@ -1816,7 +1936,7 @@ def build_threshold_editor_for(prefix, topics):
     # threshold). id is prefix-scoped so each tab's editor resets independently.
     blocks.append(html.Button(
         [html.I(className="bi bi-arrow-counterclockwise",
-                style={"marginRight": "5px"}), "Reset to defaults"],
+                style={"marginInlineEnd": "5px"}), tr("Reset to defaults")],
         id=f"{prefix}-thr-reset", n_clicks=0, className="athr-reset-btn",
     ))
     return blocks
@@ -1923,7 +2043,7 @@ def analysis_thr_badge(values, ids):
                 n += 1
         except (TypeError, ValueError):
             continue
-    return f"{n} changed" if n else ""
+    return tr("{n} changed", n=n) if n else ""
 
 
 @app.callback(
@@ -2080,7 +2200,7 @@ def update_badge(name):
     if not name:
         return None
     return html.Div(className="selected-badge", children=[
-        html.Div("Selected region", className="selected-badge-tag"),
+        html.Div(tr("Selected region"), className="selected-badge-tag"),
         html.Div(name, className="selected-badge-name"),
     ])
 
@@ -2365,18 +2485,12 @@ def _apply_force_null(result, ucode):
 
 
 def _hazard_label(name):
-    words = [w.capitalize() for w in name.replace("-", " ").split("_")]
-    return " ".join(words[:2])
-
-
-POP_BASIS = "WorldPop under-18 gridded population, 2025, 100 m"
-
-
-_ESTIMATE_CAVEAT = (
-    "Figures are the modelled child population in areas where the hazard "
-    "exceeds the stated threshold — indicative of relative exposure, not "
-    "observed impacts."
-)
+    """Short label: the first two words of the hazard name, with the
+    descriptive part translated ('Heatwave Frequency', 'Drought Spei')."""
+    desc, rest = hazard_name_words(name)
+    if not desc:
+        return " ".join(rest[:2])
+    return " ".join([tr(" ".join(desc)), *rest[:max(0, 2 - len(desc))]])
 
 
 def _info_icon(hazard_name, scope="an"):
@@ -2402,11 +2516,15 @@ def _provenance_block(extra_lines=None):
     Shared by Analysis and Infrastructure so the two panels can never state it
     differently.
     """
-    lines = [f"Population: {POP_BASIS}", *(extra_lines or [])]
+    lines = [tr("Population: {basis}",
+                basis=tr("WorldPop under-18 gridded population, 2025, 100 m")),
+             *(extra_lines or [])]
     return html.Div(className="ps", children=[
-        html.Div("Methodology", className="hi-label",
+        html.Div(tr("Methodology"), className="hi-label",
                  style={"marginBottom": "6px"}),
-        html.Div(_ESTIMATE_CAVEAT, className="ps-caption"),
+        html.Div(tr("Figures are the modelled child population in areas where the "
+                    "hazard exceeds the stated threshold — indicative of relative "
+                    "exposure, not observed impacts."), className="ps-caption"),
         html.Div([html.Div(t) for t in lines],
                  className="ps-caption", style={"lineHeight": "1.7",
                                                 "marginBottom": "0"}),
@@ -2417,11 +2535,11 @@ def _eff_threshold(h_name, overrides):
     """Effective threshold + unit label for a hazard, given the user overrides."""
     default = HAZARD_MAP.get(h_name, {}).get("threshold")
     thr     = (overrides or {}).get(h_name, default)
-    units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
+    units   = tr((HAZARD_INFO.get(h_name) or {}).get("units", ""))
     if thr is None:
         return ""
     thr_str = f"{thr:g}"
-    return f"thr {thr_str}" + (f" {units}" if units else "")
+    return f"{tr('thr')} {thr_str}" + (f" {units}" if units else "")
 
 
 def _no_data_panel(region_name):
@@ -2432,12 +2550,13 @@ def _no_data_panel(region_name):
     from a measured "no children are exposed here".
     """
     return html.Div(className="ps", children=[
-        html.Div("Data not available", className="hi-label",
+        html.Div(tr("Data not available"), className="hi-label",
                  style={"marginBottom": "6px"}),
         html.Div(
-            f"Hazard and exposure data are not available for {region_name}, "
-            "so no figures are reported. This reflects a gap in the underlying "
-            "global datasets, not an absence of hazard or of children.",
+            tr("Hazard and exposure data are not available for {region}, "
+               "so no figures are reported. This reflects a gap in the underlying "
+               "global datasets, not an absence of hazard or of children.",
+               region=region_name),
             className="ps-caption", style={"marginBottom": "0"},
         ),
     ])
@@ -2448,7 +2567,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
     if ucode and is_no_data_ucode(ucode):
         return _no_data_panel(region_name)
     if not result:
-        return html.Div("No data available.", className="ps-caption",
+        return html.Div(tr("No data available."), className="ps-caption",
                         style={"padding": "14px 16px"})
 
     # Which topics to display: the user's selection (default = climate topics).
@@ -2491,7 +2610,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
                     _info_icon(hazards[0]) if hazards else None,
-                    topic.upper(),
+                    tr(topic).upper(),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ]),
                 html.Span([
@@ -2517,7 +2636,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
                     _hazard_label(h_name),
                     html.Span(f" · {thr_txt}", className="info-thr") if thr_txt else None,
                 ], className="info-lbl",
-                    style={"paddingLeft": "22px", "color": "var(--lo)",
+                    style={"paddingInlineStart": "22px", "color": "var(--lo)",
                            "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span(f"{h_count:,}" if h_count else "—", className="info-val",
                           style={"color": "var(--mid)", "fontWeight": "500"}),
@@ -2566,7 +2685,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
 
     mh_rows = []
     for val, key, fallback_key, color, label in [
-        (mhc_val, f"count_filter_{mhc_val}",     None,                      "#800026", f"MHC (≥{mhc_val} topics)"),
+        (mhc_val, f"count_filter_{mhc_val}",     None,                      "#800026", tr("MHC (≥{n} topics)", n=mhc_val)),
         (mhi_val, f"intensity_filter_{mhi_val}", "active_intensity_filter", "#de4968", f"MHI (≥P{mhi_val})"),
     ]:
         raw = 0
@@ -2599,46 +2718,46 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
         html.Div(className="metrics", children=[
             html.Div(className="metric", children=[
                 html.Div(_fmt(total), className="metric-val"),
-                html.Div("Total children", className="metric-lbl"),
+                html.Div(tr("Total children"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
                 html.Div(_fmt(male), className="metric-val", style={"color": "#3b82f6"}),
-                html.Div("Male", className="metric-lbl"),
+                html.Div(tr("Male"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
                 html.Div(_fmt(fema), className="metric-val", style={"color": "#ec4899"}),
-                html.Div("Female", className="metric-lbl"),
+                html.Div(tr("Female"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
                 html.Div(pct_f, className="metric-val", style={"color": "#ec4899"}),
-                html.Div("Female %", className="metric-lbl"),
+                html.Div(tr("Female %"), className="metric-lbl"),
             ]),
         ]),
         html.Div(className="ps", children=[
-            html.Div("Exposure by hazard topic", className="ps-label"),
+            html.Div(tr("Exposure by hazard topic"), className="ps-label"),
             *exposure_items,
         ]) if topic_data else None,
         html.Div(className="ps", children=[
-            html.Div("Multi Hazard Filters", className="ps-label"),
+            html.Div(tr("Multi Hazard Filters"), className="ps-label"),
             *mh_rows,
         ]) if mh_rows else None,
         html.Div(className="ps", children=[
-            html.Div("No hazard data available:", className="ps-label"),
+            html.Div(tr("No hazard data available:"), className="ps-label"),
             html.Div(
                 [html.Div([
                     html.Span(className="topic-swatch",
                               style={"background": TOPIC_COLORS.get(t, "#ccc"),
-                                     "display": "inline-block", "marginRight": "6px"}),
-                    html.Span(t, style={"color": "var(--lo)"}),
+                                     "display": "inline-block", "marginInlineEnd": "6px"}),
+                    html.Span(tr(t), style={"color": "var(--lo)"}),
                 ], style={"display": "flex", "alignItems": "center", "gap": "4px",
                           "padding": "3px 16px", "fontSize": "0.8em"})
                  for t in no_data_topics],
             ),
         ]) if no_data_topics else None,
-        _provenance_block([f"Region: {region_name}"]),
+        _provenance_block([tr("Region: {region}", region=region_name)]),
         html.Div(className="ps", children=[
             html.A(
-                "⬇  Download results (JSON)",
+                "⬇  " + tr("Download results (JSON)"),
                 href=f"data:application/json;charset=utf-8,{_json.dumps(export_data, indent=2)}",
                 download=f"ccri_{safe}.json",
                 className="ps-btn-ghost",
@@ -2671,12 +2790,35 @@ def switch_analysis_subtab(n_geo, n_custom):
             "analysis-sub-tab active", "analysis-sub-tab")
 
 
+@app.callback(
+    Output("store-custom-auth", "data"),
+    Output("custom-auth-gate",  "style"),
+    Output("custom-main",       "style"),
+    Output("custom-auth-error", "children"),
+    Input("custom-auth-btn",    "n_clicks"),
+    State("custom-auth-id",     "value"),
+    State("custom-auth-pwd",    "value"),
+    prevent_initial_call=True,
+)
+def custom_authenticate(_n, user_id, password):
+    _CUSTOM_ID  = "unicef2026"
+    _CUSTOM_PWD = "unicef2026"
+    if (user_id or "").strip() == _CUSTOM_ID and (password or "") == _CUSTOM_PWD:
+        return True, {"display": "none"}, {"display": "block"}, ""
+    return False, no_update, no_update, tr("Incorrect credentials.")
+
+
 # ── Custom GeoJSON upload — fully client-side ─────────────────────────────────
 
 app.clientside_callback(
     """
-    function(contents, filename) {
+    function(contents, filename, i18n) {
         var nu = window.dash_clientside.no_update;
+        var T = function(k, v) {
+            var s = ((i18n || {}).strings || {})[k] || k;
+            Object.keys(v || {}).forEach(function(n){ s = s.split('{'+n+'}').join(v[n]); });
+            return s;
+        };
         if (!contents) return [null,"",{display:"none"},{display:"none"},[],null,nu];
         var err = function(msg) {
             return [null, msg, {fontSize:'0.72rem',marginTop:'8px',color:'var(--red)'},
@@ -2685,12 +2827,12 @@ app.clientside_callback(
         try {
             var b64 = contents.split(',')[1];
             var raw = atob(b64);
-            if (raw.length > 1048576) return err('File exceeds 1 MB limit.');
+            if (raw.length > 1048576) return err(T('File exceeds 1 MB limit.'));
             var gj = JSON.parse(raw);
-            if (gj.type !== 'FeatureCollection') return err('Must be a GeoJSON FeatureCollection.');
+            if (gj.type !== 'FeatureCollection') return err(T('Must be a GeoJSON FeatureCollection.'));
             var n = (gj.features || []).length;
-            if (n === 0) return err('File contains no features.');
-            if (n > 100) return err('Too many features (' + n + '). Limit is 100.');
+            if (n === 0) return err(T('File contains no features.'));
+            if (n > 100) return err(T('Too many features ({n}). Limit is 100.', {n: n}));
             var minLat=90,maxLat=-90,minLon=180,maxLon=-180;
             function visit(p){
                 if(p[1]<minLat)minLat=p[1]; if(p[1]>maxLat)maxLat=p[1];
@@ -2711,11 +2853,12 @@ app.clientside_callback(
             var opts  = keys.map(function(k){return {label:k,value:k};});
             var def   = keys.indexOf('ucode')>=0 ? 'ucode' : (keys[0]||null);
             var kb    = (raw.length/1024).toFixed(1);
-            var msg   = '✓  ' + n + ' feature' + (n!==1?'s':'') + ' loaded — ' + kb + ' KB';
+            var msg   = '✓  ' + T(n !== 1 ? '{n} features loaded — {kb} KB'
+                                       : '{n} feature loaded — {kb} KB', {n: n, kb: kb});
             return [gj, msg, {fontSize:'0.72rem',marginTop:'8px',color:'var(--mid)'},
                     {display:'block'}, opts, def, viewport];
         } catch(e) {
-            return err('Parse error: ' + e.message);
+            return err(T('Parse error:') + ' ' + e.message);
         }
     }
     """,
@@ -2728,6 +2871,7 @@ app.clientside_callback(
     Output("main-map",               "viewport", allow_duplicate=True),
     Input("custom-upload",           "contents"),
     State("custom-upload",           "filename"),
+    State("store-i18n",              "data"),
     prevent_initial_call=True,
 )
 
@@ -2769,7 +2913,7 @@ def compute_custom_exposure(n_clicks, geojson, name_field, thresholds):
     try:
         features = compute_exposure_custom(geojson, threshold_overrides=thresholds or None)
     except Exception as e:
-        return html.Div(f"GEE error: {e}",
+        return html.Div(tr("GEE error: {e}", e=e),
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
 
@@ -2792,35 +2936,37 @@ def _exposure_xlsx_div(features, name_field, filename, overrides=None):
             row[col] = int(round(props.get(col) or 0))
         rows.append(row)
     if not rows:
-        return html.Div("No results returned.",
+        return html.Div(tr("No results returned."),
                         style={"padding": "12px 16px", "fontSize": "0.75rem"})
 
     groups = [
-        {"title": "Feature", "columns": [
+        {"title": tr("Feature"), "columns": [
             {"key": name_field, "label": name_field, "kind": "text"},
         ]},
-        {"title": "Population (children)", "columns": [
-            {"key": "total_population",        "label": "Total",  "kind": "int"},
-            {"key": "total_population_male",   "label": "Male",   "kind": "int"},
-            {"key": "total_population_female", "label": "Female", "kind": "int"},
+        {"title": tr("Population (children)"), "columns": [
+            {"key": "total_population",        "label": tr("Total"),  "kind": "int"},
+            {"key": "total_population_male",   "label": tr("Male"),   "kind": "int"},
+            {"key": "total_population_female", "label": tr("Female"), "kind": "int"},
         ]},
-        {"title": "Exposed children by hazard", "columns": [
+        {"title": tr("Exposed children by hazard"), "columns": [
             {"key": h, "label": _hazard_label(h), "kind": "int"} for h in hazard_cols
         ]},
     ]
     climate_topics = [t for t in HAZARD_TOPICS if t not in EXPOSURE_ONLY_TOPICS]
-    banner = ["Hazard exposure by feature"] + _thresholds_banner(climate_topics, overrides)
+    banner = [tr("Hazard exposure by feature")] + _thresholds_banner(climate_topics, overrides)
 
     n_feat = len(rows)
     return html.Div(className="ps", children=[
         html.Div([
             html.I(className="bi bi-check-circle-fill",
-                   style={"color": "var(--cyan)", "marginRight": "8px"}),
-            html.Strong(f"Hazard exposure for {n_feat} feature{'s' if n_feat != 1 else ''} ready."),
+                   style={"color": "var(--cyan)", "marginInlineEnd": "8px"}),
+            html.Strong(tr("Hazard exposure for {n} features ready.", n=n_feat)
+                        if n_feat != 1 else tr("Hazard exposure for 1 feature ready.")),
         ], style={"fontSize": "0.8rem", "color": "var(--hi)", "marginBottom": "10px"}),
         html.A(
-            f"⬇  Download Excel ({n_feat} features × {len(hazard_cols)} hazards)",
-            href=build_xlsx("Hazard exposure", groups, rows, banner),
+            "⬇  " + tr("Download Excel ({n} features × {h} hazards)",
+                       n=n_feat, h=len(hazard_cols)),
+            href=build_xlsx(tr("Hazard exposure"), groups, rows, banner),
             download=filename, className="ps-btn",
             style={"display": "block", "textAlign": "center", "textDecoration": "none",
                    "padding": "10px 16px"},
@@ -2858,11 +3004,11 @@ def load_gee_asset(n_clicks, asset_id):
         tile_url = get_custom_asset_tile_url(asset_id)
         bounds   = get_asset_bounds(asset_id)
     except Exception as e:
-        return None, f"Error: {e}", err_style, hidden, [], None, nu, nu, nu
+        return None, tr("Error: {e}", e=e), err_style, hidden, [], None, nu, nu, nu
 
     options    = [{"label": p, "value": p} for p in props]
     default    = "ucode" if "ucode" in props else (props[0] if props else None)
-    status     = f"✓  {n} features — {asset_id.split('/')[-1]}"
+    status     = "✓  " + tr("{n} features — {name}", n=n, name=asset_id.split('/')[-1])
     tile_layer = [dl.TileLayer(url=tile_url, attribution=GEE_ATTR, opacity=0.9)]
     viewport   = {"bounds": bounds, "transition": "fitBounds"}
     return ({"asset_id": asset_id, "n": n}, status, ok_style,
@@ -2884,7 +3030,7 @@ def compute_gee_asset_exposure(n_clicks, asset_info, name_field, thresholds):
         features = compute_exposure_asset(asset_info["asset_id"],
                                           threshold_overrides=thresholds or None)
     except Exception as e:
-        return html.Div(f"GEE error: {e}",
+        return html.Div(tr("GEE error: {e}", e=e),
                         style={"color": "var(--red)", "fontSize": "0.75rem",
                                "padding": "12px 16px"})
     fname = asset_info["asset_id"].split("/")[-1] + "_hazard_exposure.xlsx"
@@ -2897,7 +3043,7 @@ def compute_gee_asset_exposure(n_clicks, asset_info, name_field, thresholds):
 
 def _ai_msg(text, icon="bi-check-circle", color="var(--cyan)"):
     return html.Div(className="ps", children=[
-        html.I(className=f"bi {icon}", style={"color": color, "marginRight": "8px"}),
+        html.I(className=f"bi {icon}", style={"color": color, "marginInlineEnd": "8px"}),
         html.Span(text, style={"fontSize": "0.8rem", "color": "var(--mid)"}),
     ])
 
@@ -2917,9 +3063,9 @@ def _country_viewport(country_name):
 def _format_exposure_summary(stats, country_name):
     total = stats.get("total_population", 0)
     lines = [
-        html.Strong(f"Child exposure — {country_name}",
+        html.Strong(tr("Child exposure — {country}", country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)",
                         "marginTop": "6px", "marginBottom": "6px"}),
     ]
@@ -2928,7 +3074,7 @@ def _format_exposure_summary(stats, country_name):
         if exposed and total:
             pct = exposed / total * 100
             lines.append(html.Div(
-                f"• {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+                f"• {tr(topic)}: {_fmt(exposed)} ({pct:.1f}%)",
                 style={"fontSize": "0.78rem", "color": "var(--mid)"},
             ))
     return html.Div(className="ps", children=lines)
@@ -2939,11 +3085,13 @@ def _format_single_hazard_exposure(stats, topic, country_name):
     exposed = stats.get(topic, 0)
     pct     = (exposed / total * 100) if total else 0
     lines   = [
-        html.Strong(f"{topic} exposure — {country_name}",
+        html.Strong(tr("{topic} exposure — {country}", topic=tr(topic),
+                       country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)", "marginTop": "6px"}),
-        html.Div(f"Exposed to {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+        html.Div(tr("Exposed to {topic}: {n}", topic=tr(topic), n=_fmt(exposed))
+                 + f" ({pct:.1f}%)",
                  style={"fontSize": "0.78rem", "color": "var(--cyan)",
                         "marginTop": "4px", "fontWeight": "600"}),
     ]
@@ -2952,8 +3100,8 @@ def _format_single_hazard_exposure(stats, topic, country_name):
             sub = stats.get(h_name, 0)
             if sub and total:
                 lines.append(html.Div(
-                    f"  ↳ {h_name}: {_fmt(sub)} ({sub/total*100:.1f}%)",
-                    style={"fontSize": "0.74rem", "color": "var(--lo)", "paddingLeft": "12px"},
+                    f"  ↳ {_layer_label(h_name)}: {_fmt(sub)} ({sub/total*100:.1f}%)",
+                    style={"fontSize": "0.74rem", "color": "var(--lo)", "paddingInlineStart": "12px"},
                 ))
     return html.Div(className="ps", children=lines)
 
@@ -2961,9 +3109,9 @@ def _format_single_hazard_exposure(stats, topic, country_name):
 def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
     total = stats.get("total_population", 0)
     lines = [
-        html.Strong(f"Multi-hazard exposure — {country_name}",
+        html.Strong(tr("Multi-hazard exposure — {country}", country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)",
                         "marginTop": "6px", "marginBottom": "4px"}),
     ]
@@ -2971,13 +3119,15 @@ def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
         exposed = stats.get(topic, 0)
         pct = (exposed / total * 100) if total else 0
         lines.append(html.Div(
-            f"• {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+            f"• {tr(topic)}: {_fmt(exposed)} ({pct:.1f}%)",
             style={"fontSize": "0.78rem", "color": "var(--mid)"},
         ))
     if overlap is not None and total:
         ov_pct = overlap / total * 100
         lines.append(html.Div(
-            f"Exposed to ALL ({' & '.join(topics)}): {_fmt(overlap)} ({ov_pct:.1f}%)",
+            tr("Exposed to ALL ({topics}): {n}",
+               topics=" & ".join(tr(t) for t in topics), n=_fmt(overlap))
+            + f" ({ov_pct:.1f}%)",
             style={"fontSize": "0.78rem", "color": "var(--cyan)",
                    "marginTop": "6px", "fontWeight": "600"},
         ))
@@ -2985,42 +3135,45 @@ def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
 
 
 def _ai_processing():
-    return html.Div("Computing ···", className="ai-processing")
+    return html.Div(tr("Computing ···"), className="ai-processing")
 
 
 def _confirm_sentence(action, params):
+    # Whole-sentence templates (not concatenated fragments) so each language
+    # can order the bold parts its own way.
     B = lambda t: html.Strong(str(t), style={"color": "var(--hi)"})
+    country = B(params.get("country_name", ""))
+    adm     = B(tr(params.get("admin_level") or "adm0 (Country)"))
     if action == "show_hazard_layer":
-        parts = ["Showing hazard layer ", B(params.get("hazard_name", ""))]
-        if params.get("country_name"):
-            parts += [" in ", B(params["country_name"])]
+        layer = B(_layer_label(params.get("hazard_name", "")))
+        parts = (trc("Showing hazard layer {layer} in {country}",
+                     layer=layer, country=country)
+                 if params.get("country_name") else
+                 trc("Showing hazard layer {layer}", layer=layer))
     elif action == "show_topic_layer":
-        parts = ["Showing ", B(params.get("topic_name", "")), " exposure layer"]
-        if params.get("country_name"):
-            parts += [" in ", B(params["country_name"])]
+        topic = B(tr(params.get("topic_name", "")))
+        parts = (trc("Showing {topic} exposure layer in {country}",
+                     topic=topic, country=country)
+                 if params.get("country_name") else
+                 trc("Showing {topic} exposure layer", topic=topic))
     elif action == "exposure_summary":
-        adm = params.get("admin_level") or "adm0 (Country)"
-        parts = ["Full hazard exposure summary for ", B(params.get("country_name", "")),
-                 " at ", B(adm), " level"]
+        parts = trc("Full hazard exposure summary for {country} at {level} level",
+                    country=country, level=adm)
     elif action == "hazard_exposure":
-        adm = params.get("admin_level") or "adm0 (Country)"
-        parts = ["Child exposure to ", B(params.get("topic_name", "")),
-                 " in ", B(params.get("country_name", "")),
-                 " at ", B(adm), " level"]
+        parts = trc("Child exposure to {topic} in {country} at {level} level",
+                    topic=B(tr(params.get("topic_name", ""))),
+                    country=country, level=adm)
     elif action == "multi_hazard_exposure":
-        adm    = params.get("admin_level") or "adm0 (Country)"
-        topics = params.get("topic_names", [])
         topic_parts = []
-        for i, t in enumerate(topics):
+        for i, t in enumerate(params.get("topic_names", [])):
             if i > 0:
                 topic_parts.append(" & ")
-            topic_parts.append(B(t))
-        parts = ["Children exposed to "] + topic_parts + [
-            " simultaneously in ", B(params.get("country_name", "")),
-            " at ", B(adm), " level",
-        ]
+            topic_parts.append(B(tr(t)))
+        parts = trc("Children exposed to {topics} simultaneously in {country} "
+                    "at {level} level",
+                    topics=html.Span(topic_parts), country=country, level=adm)
     elif action == "zoom_to_country":
-        parts = ["Zooming map to ", B(params.get("country_name", ""))]
+        parts = trc("Zooming map to {country}", country=country)
     else:
         return None
     return html.Div(parts, style={"fontSize": "0.76rem", "color": "var(--lo)",
@@ -3034,10 +3187,14 @@ app.clientside_callback(
 )
 
 app.clientside_callback(
-    "function(n){ return n ? ['Thinking ···', null] : [window.dash_clientside.no_update, window.dash_clientside.no_update]; }",
+    """function(n, i18n){
+        var msg = ((i18n || {}).strings || {})['Thinking ···'] || 'Thinking ···';
+        return n ? [msg, null] : [window.dash_clientside.no_update, window.dash_clientside.no_update];
+    }""",
     Output("ai-confirm-line",   "children", allow_duplicate=True),
     Output("ai-response-panel", "children", allow_duplicate=True),
     Input("ai-submit-btn",      "n_clicks"),
+    State("store-i18n",         "data"),
     prevent_initial_call=True,
 )
 
@@ -3057,7 +3214,7 @@ def ai_authenticate(_n, user_id, password):
     _AI_PWD = "unicef2026"
     if (user_id or "").strip() == _AI_ID and (password or "") == _AI_PWD:
         return True, {"display": "none"}, {"display": "block"}, ""
-    return False, no_update, no_update, "Incorrect credentials."
+    return False, no_update, no_update, tr("Incorrect credentials.")
 
 
 @app.callback(
@@ -3076,9 +3233,9 @@ def ai_classify(_n, query):
     try:
         result = ask_gemini(query.strip())
     except _json_mod.JSONDecodeError:
-        return None, "", _ai_error("AI returned an unexpected response. Please try rephrasing.")
+        return None, "", _ai_error(tr("AI returned an unexpected response. Please try rephrasing."))
     except Exception as e:
-        return None, "", _ai_error(f"AI error: {e}")
+        return None, "", _ai_error(tr("AI error: {e}", e=e))
 
     action  = result.get("action")
     params  = result.get("params", {})
@@ -3114,14 +3271,14 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception:
-            return _ai_error(f"Country not found: {country}"), no_update, no_update
+            return _ai_error(tr("Country not found: {country}", country=country)), no_update, no_update
         return _ai_msg(message), no_update, viewport
 
     if action == "show_hazard_layer":
         hazard   = params.get("hazard_name", "")
         url, _   = get_hazard_tile_url(hazard)
         if not url:
-            return _ai_error(f"Unknown hazard: {hazard}"), no_update, no_update
+            return _ai_error(tr("Unknown hazard: {hazard}", hazard=hazard)), no_update, no_update
         layer    = [dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75)]
         viewport = _country_viewport(params.get("country_name"))
         return _ai_msg(message), layer, viewport
@@ -3146,7 +3303,7 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, no_update, viewport
 
     if action == "hazard_exposure":
@@ -3156,7 +3313,7 @@ def ai_execute(pending):
         if admin_level not in ADMIN_DATA:
             admin_level = "adm0 (Country)"
         if topic not in HAZARD_TOPICS:
-            return _ai_error(f"Unknown hazard topic: {topic}"), no_update, no_update
+            return _ai_error(tr("Unknown hazard topic: {topic}", topic=topic)), no_update, no_update
         try:
             ucode    = get_country_ucode(country_name)
             stats    = compute_exposure(ucode, admin_level)
@@ -3167,7 +3324,7 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, layer, viewport
 
     if action == "multi_hazard_exposure":
@@ -3178,9 +3335,9 @@ def ai_execute(pending):
             admin_level = "adm0 (Country)"
         invalid = [t for t in topics if t not in HAZARD_TOPICS]
         if invalid:
-            return _ai_error(f"Unknown topics: {', '.join(invalid)}"), no_update, no_update
+            return _ai_error(tr("Unknown topics: {topics}", topics=", ".join(invalid))), no_update, no_update
         if not topics:
-            return _ai_error("No topics specified."), no_update, no_update
+            return _ai_error(tr("No topics specified.")), no_update, no_update
         try:
             ucode    = get_country_ucode(country_name)
             stats    = compute_exposure(ucode, admin_level)
@@ -3192,10 +3349,10 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, no_update, viewport
 
-    return _ai_error("Unrecognised action from AI."), no_update, no_update
+    return _ai_error(tr("Unrecognised action from AI.")), no_update, no_update
 
 
 # ---------------------------------------------------------------------------
@@ -3226,9 +3383,9 @@ def infra_populate_countries(tab):
         print(f"[infra] country discovery failed: {e}")
         countries = []
     if not countries:
-        return [], "— no infrastructure data available —"
+        return [], tr("— no infrastructure data available —")
     return ([{"label": c, "value": c} for c in countries],
-            "Search country / territory…")
+            tr("Search country / territory…"))
 
 
 # ── Region selection (writes the shared region stores) ────────────────────────
@@ -3254,13 +3411,13 @@ def infra_on_country_select(country):
     # source-qualified layers (empty if none are ingested yet).
     if not country:
         return (None, None, None, None, None, None, {"display": "none"},
-                [], None, "— select a country first —")
+                [], None, tr("— select a country first —"))
     ucode  = get_country_ucode(country)
     bounds = get_country_bounds(ucode)
     options = _infra_layer_options(country)
     value   = options[0]["value"] if options else None
-    placeholder = ("— select a facility layer —" if options
-                   else "— no infrastructure data for this country yet —")
+    placeholder = (tr("— select a facility layer —") if options
+                   else tr("— no infrastructure data for this country yet —"))
     return (country, ucode, bounds, "adm2 (Districts/Counties)", None, None,
             {"display": "block"}, options, value, placeholder)
 
@@ -3275,7 +3432,7 @@ def infra_update_badge(name, tab):
     if not name or tab != "infrastructure":
         return None, no_update
     badge = html.Div(className="selected-badge", children=[
-        html.Div("Selected region", className="selected-badge-tag"),
+        html.Div(tr("Selected region"), className="selected-badge-tag"),
         html.Div(name, className="selected-badge-name"),
     ])
     return badge, {"display": "none"}  # hide the "click a district" hint
@@ -3331,7 +3488,7 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
         if not asset_id:
             return no_update, no_update, no_update, no_update, no_update
         color    = infra_layer_style(layer_name)["color"].lstrip("#")
-        label    = layer_name
+        label    = _infra_layer_label(layer_name)
         fit      = False
     elif trig in ("infra-layer-select", "store-country"):
         # Layer picked, or country switched: reload the layer for that country.
@@ -3345,9 +3502,9 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
             return None, "", ok_style, "", no_update
         asset_id = infra_asset_id(country, layer_name)
         if not asset_id:
-            return None, "Select a country first.", ok_style, "", no_update
+            return None, tr("Select a country first."), ok_style, "", no_update
         color    = infra_layer_style(layer_name)["color"].lstrip("#")
-        label    = layer_name
+        label    = _infra_layer_label(layer_name)
         if trig == "store-country":
             fit = False
     else:
@@ -3362,9 +3519,9 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
         tile_url = get_infra_tile_url(asset_id, color)   # whole country (no AOI)
         bounds   = get_asset_bounds(asset_id)
     except Exception as e:
-        return None, f"Error loading asset: {e}", err_style, no_update, no_update
+        return None, tr("Error loading asset: {e}", e=e), err_style, no_update, no_update
 
-    status   = f"✓  {n} features — {label}"
+    status   = "✓  " + tr("{n} features — {name}", n=n, name=label)
     viewport = {"bounds": bounds, "transition": "fitBounds"} if fit else no_update
     return ({"asset_id": asset_id, "name_field": "name", "props": props},
             status, ok_style, tile_url, viewport)
@@ -3393,8 +3550,8 @@ def _thresholds_banner(topics, overrides):
             if default is None:
                 continue
             thr    = (overrides or {}).get(h, default)
-            units  = (HAZARD_INFO.get(h) or {}).get("units", "")
-            tag    = "custom" if h in (overrides or {}) else "default"
+            units  = tr((HAZARD_INFO.get(h) or {}).get("units", ""))
+            tag    = tr("custom") if h in (overrides or {}) else tr("default")
             unit_s = f" {units}" if units else ""
             lines.append(f"{_hazard_label(h)} >= {thr:g}{unit_s} ({tag})")
     return lines
@@ -3493,8 +3650,8 @@ def build_xlsx(sheet_name, groups, rows, banner_lines=None):
 def _infra_download(groups, rows, filename, banner_lines=None):
     """Secondary (ghost) styled-Excel download link, below the visual summary."""
     return html.A(
-        "⬇  Download full data (Excel)",
-        href=build_xlsx("Facility exposure", groups, rows, banner_lines),
+        "⬇  " + tr("Download full data (Excel)"),
+        href=build_xlsx(tr("Facility exposure"), groups, rows, banner_lines),
         download=filename, className="ps-btn-ghost",
         style={"display": "block", "textAlign": "center", "textDecoration": "none",
                "padding": "9px 16px", "marginTop": "10px"},
@@ -3582,12 +3739,12 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
                     _info_icon(hazards[0], "infra") if hazards else None,
-                    topic.upper(),
+                    tr(topic).upper(),
                 ]),
                 html.Span([
                     html.Span(f"{td['pop']:,}", className="info-val"),
                     html.Span(f" ({pct:.1f}%)", className="info-pct"),
-                    html.Span(f"  · {td['fac']} fac.", className="info-pct",
+                    html.Span("  · " + tr("{n} fac.", n=td["fac"]), className="info-pct",
                               style={"color": "var(--lo)"}),
                 ]),
             ]),
@@ -3612,7 +3769,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                                          style={"color": "var(--lo)",
                                                 "fontSize": "0.9em"})],
                               className="info-lbl",
-                              style={"paddingLeft": "22px", "color": "var(--lo)",
+                              style={"paddingInlineStart": "22px", "color": "var(--lo)",
                                      "fontWeight": "400", "fontSize": "0.85em"}),
                     html.Span(f"{hc:,}" if hc else "—", className="info-val",
                               style={"color": "var(--mid)", "fontWeight": "500"}),
@@ -3652,14 +3809,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     phase 2."""
     nu = (no_update,) * 7
     if not asset:
-        return (_infra_error("Select or load a facility layer first."), *nu)
+        return (_infra_error(tr("Select or load a facility layer first.")), *nu)
     if not adm2_ucode or not level or level == "adm0 (Country)":
-        return (_infra_error("Select an adm2 region and click a district on the map "
-                             "to bound the analysis."), *nu)
+        return (_infra_error(tr("Select an adm2 region and click a district on the map "
+                                "to bound the analysis.")), *nu)
     # Districts inherit their country's data availability: the adm2 ucode
     # carries the same stem, so this catches them without a separate list.
     if is_no_data_ucode(adm2_ucode):
-        return (_no_data_panel(region_name or "this region"), *nu)
+        return (_no_data_panel(region_name or tr("this region")), *nu)
     asset_id = asset["asset_id"]
     topics_sel = topics or None
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
@@ -3670,7 +3827,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
         r = compute_facility_combined(asset_id, adm2_ucode, topics_sel,
                                       threshold_overrides=overrides or None)
     except Exception as e:
-        return (_infra_error(f"GEE error: {e}"), *nu)
+        return (_infra_error(tr("GEE error: {e}", e=e)), *nu)
 
     sel_topics = r.get("topics") or [t for t in HAZARD_TOPICS
                                      if t not in EXPOSURE_ONLY_TOPICS]
@@ -3683,10 +3840,10 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     pct     = f"{exposed/total*100:.1f}%" if total else "—"
 
     cards = [
-        _metric(f"{nfac:,}", "Facilities"),
-        _metric(_fmt(total), "Children served"),
-        _metric(_fmt(exposed), "Children exposed", color="#e31a1c"),
-        _metric(f"{n_site_exp:,}", "Facilities in hazard", color="#e31a1c"),
+        _metric(f"{nfac:,}", tr("Facilities")),
+        _metric(_fmt(total), tr("Children served")),
+        _metric(_fmt(exposed), tr("Children exposed"), color="#e31a1c"),
+        _metric(f"{n_site_exp:,}", tr("Facilities in hazard"), color="#e31a1c"),
     ]
 
     items = _infra_combined_items(r.get("per_topic_exposed"),
@@ -3695,20 +3852,21 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                                   overrides=overrides or None)
 
     n_custom = len(overrides or {})
-    thr_note = (f"{n_custom} custom threshold(s) applied"
-                if n_custom else "Standard (default) thresholds")
-    where = region_name or "the selected district"
-    caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
-               "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
-               "rows show exposed children · facilities whose site is in that "
-               f"hazard. {thr_note}.")
+    thr_note = (tr("{n} custom threshold(s) applied", n=n_custom)
+                if n_custom else tr("Standard (default) thresholds"))
+    where = region_name or tr("the selected district")
+    caption = tr("{n} facilities in {where}. Population is attributed to "
+                 "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
+                 "rows show exposed children · facilities whose site is in that "
+                 "hazard. {thr_note}.",
+                 n=f"{nfac:,}", where=where, thr_note=thr_note)
 
     panel = html.Div([
-        _infra_panel("Facility exposure", cards, items, None, caption=caption),
+        _infra_panel(tr("Facility exposure"), cards, items, None, caption=caption),
         _provenance_block([
-            f"Region: {region_name or adm2_ucode} · {level}",
-            "Facilities: as supplied by the selected infrastructure layer "
-            "(see the layer name for its source)",
+            tr("Region: {region}", region=region_name or adm2_ucode) + f" · {tr(level)}",
+            tr("Facilities: as supplied by the selected infrastructure layer "
+               "(see the layer name for its source)"),
         ]),
     ])
 
@@ -3732,7 +3890,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
            "thr": sorted((h, v) for h, v in (overrides or {}).items())}
     pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
                "overrides": overrides or None}
-    placeholder = html.Div("Preparing per-facility download…",
+    placeholder = html.Div(tr("Preparing per-facility download…"),
                            className="ps-caption", style={"padding": "4px 0"})
 
     # Fit the map to the district once its layers are built — same treatment as
@@ -3762,7 +3920,7 @@ def infra_compute_perfacility(pending):
                                       pending.get("topics"),
                                       threshold_overrides=pending.get("overrides"))
     except Exception as e:
-        return html.Div(f"Per-facility data failed: {e}", className="ps-caption",
+        return html.Div(tr("Per-facility data failed: {e}", e=e), className="ps-caption",
                         style={"color": "var(--red)"})
 
     topic_cols = r.get("topic_cols") or []
@@ -3797,36 +3955,36 @@ def infra_compute_perfacility(pending):
 
     # Column groups drive the styled workbook's merged header + cell formats.
     groups = [
-        {"title": "Facility", "columns": [
-            {"key": "name", "label": "Name",      "kind": "text"},
-            {"key": "lon",  "label": "Longitude", "kind": "float"},
-            {"key": "lat",  "label": "Latitude",  "kind": "float"},
+        {"title": tr("Facility"), "columns": [
+            {"key": "name", "label": tr("Name"),      "kind": "text"},
+            {"key": "lon",  "label": tr("Longitude"), "kind": "float"},
+            {"key": "lat",  "label": tr("Latitude"),  "kind": "float"},
         ]},
-        {"title": "Catchment population (children)", "columns": [
-            {"key": "voronoi_pop", "label": "In catchment", "kind": "int"},
-            {"key": "exposed_pop", "label": "Exposed",      "kind": "int"},
+        {"title": tr("Catchment population (children)"), "columns": [
+            {"key": "voronoi_pop", "label": tr("In catchment"), "kind": "int"},
+            {"key": "exposed_pop", "label": tr("Exposed"),      "kind": "int"},
         ]},
-        {"title": "Site in hazard (1 = exposed)", "columns": [
-            {"key": t, "label": t, "kind": "flag"} for t in topic_cols
+        {"title": tr("Site in hazard (1 = exposed)"), "columns": [
+            {"key": t, "label": tr(t), "kind": "flag"} for t in topic_cols
         ]},
-        {"title": "Hazard intensity at site (native units)", "columns": [
+        {"title": tr("Hazard intensity at site (native units)"), "columns": [
             {"key": h,
              "label": f"{_hazard_label(h)}"
-                      + (f" ({(HAZARD_INFO.get(h) or {}).get('units','')})"
+                      + (f" ({tr((HAZARD_INFO.get(h) or {}).get('units',''))})"
                          if (HAZARD_INFO.get(h) or {}).get("units") else ""),
              "kind": "float"}
             for h in int_cols
         ]},
     ]
-    banner = ["Facility exposure — per-facility detail"]
+    banner = [tr("Facility exposure — per-facility detail")]
     banner += _thresholds_banner(pending.get("topics")
                                  or [t for t in HAZARD_TOPICS
                                      if t not in EXPOSURE_ONLY_TOPICS],
                                  pending.get("overrides"))
-    banner.append("Catchment population uses each facility's nearest-neighbour "
-                  "(Voronoi) catchment (non-overlapping, summable). Site flags and "
-                  "Exposed reflect the thresholds above; intensity columns are raw "
-                  "native values.")
+    banner.append(tr("Catchment population uses each facility's nearest-neighbour "
+                     "(Voronoi) catchment (non-overlapping, summable). Site flags and "
+                     "Exposed reflect the thresholds above; intensity columns are raw "
+                     "native values."))
     return _infra_download(groups, rows, "infra_facility_exposure.xlsx",
                            banner_lines=banner)
 
