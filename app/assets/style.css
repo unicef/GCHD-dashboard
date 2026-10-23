@@ -10,6 +10,9 @@
   --border2: #c8ccd1;
   --cyan:    #1CABE2;
   --cyan-lt: rgba(28,171,226,0.08);
+  /* Text hover for cyan headings. --cyan-lt is a translucent
+     BACKGROUND tint; using it as `color` is near-invisible. */
+  --cyan-hi: #7FD4F2;
   --hi:      #111827;
   --mid:     #4b5563;
   --lo:      #9ca3af;
@@ -739,10 +742,17 @@ body {
 
 /* ── Results panel: inline info icons ── */
 .info-icon-btn {
-  background: none; border: none; padding: 0; margin-right: 5px;
+  background: none; border: none; padding: 1px 2px; margin-right: 4px;
   color: var(--lo); cursor: pointer; line-height: 1;
-  font-size: 0.72em; vertical-align: baseline;
+  /* 0.95em, not 0.72: inside a 0.58rem uppercase .ps-label the smaller size
+     rendered at roughly 8px, which is below the point where an icon reads as
+     a control rather than a speck. */
+  font-size: 0.95em; vertical-align: baseline;
 }
+/* In section headings the label text is tiny, so the icon needs its own floor
+   rather than inheriting a fraction of it. */
+.ps-label .info-icon-btn { font-size: 0.78rem; margin-left: 3px;
+  vertical-align: -1px; }
 .info-icon-btn:hover,
 .info-icon-btn.active { color: var(--cyan); }
 
@@ -891,3 +901,142 @@ body {
 }
 .leave-btn-ghost:hover { background: var(--panel-h); color: var(--hi); }
 .leave-btn-go { flex: 1; width: auto; padding: 12px; font-size: 0.84rem; }
+
+/* ── El Niño: ENSO context ─────────────────────────────────────────────────
+   Hand-rolled chart, matching .en-hist rather than pulling in a plot library
+   for one sparkline. Bars diverge from a mid-height zero line. */
+.en-enso-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.en-enso-state { font-size: 0.92rem; font-weight: 700; }
+.en-enso-val   { font-size: 0.78rem; color: var(--hi); font-weight: 600; }
+.en-enso-asof  { font-size: 0.68rem; color: var(--lo); }
+
+.en-enso-chart {
+  position: relative; height: 76px;
+  border: 1px solid var(--border2); border-radius: 6px;
+  background: var(--panel-h); overflow: hidden;
+}
+.en-enso-bars {
+  position: absolute; inset: 0;
+  display: flex; align-items: stretch; gap: 1px; padding: 0 2px;
+}
+.en-enso-bar { position: relative; flex: 1; }
+.en-enso-fill {
+  position: absolute; left: 0; right: 0; border-radius: 1px;
+  transition: opacity 0.15s;
+}
+.en-enso-bar:hover .en-enso-fill { opacity: 0.7; }
+/* Zero baseline, and the ±0.5 event thresholds. */
+.en-enso-zero {
+  position: absolute; left: 0; right: 0; bottom: 50%;
+  border-top: 1px solid var(--mid); opacity: 0.55;
+}
+.en-enso-thr {
+  position: absolute; left: 0; right: 0;
+  border-top: 1px dashed var(--lo); opacity: 0.75;
+}
+
+/* ── El Niño: signal picker, threshold bar, map-layer panel ───────────────
+   Scoped .en-* like the rest of the El Niño block so nothing here reaches the
+   Forecast or Analysis panes, which share the .ps primitives these sit beside. */
+.en-sub-label{font-size:.62rem;font-weight:600;color:var(--mid);
+  margin:2px 0 4px;letter-spacing:.04em}
+.en-resolved{font-size:.72rem;color:var(--hi);margin-top:6px;
+  padding:5px 8px;background:var(--surf);border-radius:4px;
+  border-left:2px solid var(--cyan)}
+
+/* Readout under the threshold slider: how far above chance the
+   value sits, in words. The visual bar it replaced was unlabelled. */
+.en-thr-readout{font-size:.68rem;color:var(--mid);margin-top:16px}
+.en-thr-readout strong{color:var(--hi)}
+
+/* Map-layer panel — floats over the map, top-right, under the legend. */
+.en-layer-panel{position:absolute;top:12px;right:12px;z-index:600;
+  width:232px;flex-direction:column;background:var(--panel);
+  border:1px solid var(--border2);border-radius:8px;
+  box-shadow:0 4px 18px rgba(0,0,0,.34);overflow:hidden;max-height:62vh}
+.en-layer-head{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 11px;background:var(--panel-h);cursor:pointer;
+  border-bottom:2px solid var(--cyan)}
+.en-layer-title{font-size:.62rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--hi)}
+.en-layer-head i{font-size:.7rem;color:var(--lo)}
+.en-layer-body{overflow-y:auto;padding:8px 6px 10px}
+.en-layer-note{font-size:.62rem;color:var(--lo);font-style:italic;
+  padding:0 6px 7px;line-height:1.4}
+.en-layer-group{font-size:.55rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--cyan);padding:7px 6px 3px}
+.en-layer-row{display:flex;align-items:center;gap:1px;border-radius:4px}
+.en-layer-row:hover{background:var(--surf)}
+.en-layer-row.active{background:rgba(28,171,226,.12);
+  box-shadow:inset 0 0 0 1px var(--cyan)}
+.en-layer-btn{flex:1;text-align:left;background:none;border:none;
+  color:var(--mid);font-size:.71rem;padding:5px 7px;cursor:pointer;
+  font-family:inherit;line-height:1.3}
+.en-layer-row.active .en-layer-btn{color:var(--hi);font-weight:600}
+.en-layer-btn:hover{color:var(--hi)}
+
+/* Zero-exposure empty state — a bare 0 reads as "no risk" rather than
+   "below this threshold", which at a 70% default is actively misleading. */
+.en-empty{padding:11px 13px;background:var(--surf);border-radius:5px;
+  border-left:3px solid #e8b84b;font-size:.74rem;color:var(--hi);
+  line-height:1.55}
+.en-empty strong{color:#e8b84b}
+
+/* Results: anomaly + attribution rows reuse .info-row, these are just the
+   emphasis variants. */
+.en-attrib-val{font-size:.74rem;font-weight:700;color:var(--cyan)}
+
+/* Layer-panel rows: eye toggle, inline key, collapsibles. */
+.en-layer-item { border-radius: 4px; }
+.en-layer-eye { background: none; border: none; padding: 3px 4px 3px 6px;
+  color: var(--lo); cursor: pointer; font-size: .72rem; line-height: 1; }
+.en-layer-eye:hover { color: var(--cyan); }
+.en-layer-eye-off { color: var(--border2); }
+.en-lg { margin: 0 6px 3px 26px; }
+.en-lg-head { font-size: .55rem; color: var(--lo); cursor: pointer;
+  text-transform: uppercase; letter-spacing: .07em; padding: 1px 0;
+  list-style: none; }
+.en-lg-head::marker, .en-lg-head::-webkit-details-marker { display: none; }
+.en-lg-head:hover { color: var(--cyan-hi); }
+.en-lg-body { padding: 4px 0 6px; }
+.en-lg-ramp { height: 8px; border-radius: 2px; border: 1px solid var(--border); }
+.en-lg-ends { display: flex; justify-content: space-between;
+  font-size: .55rem; color: var(--lo); margin-top: 2px; }
+.en-lg-units { color: var(--mid); }
+.en-lg-class { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+.en-lg-swatch { width: 9px; height: 9px; border-radius: 2px;
+  flex-shrink: 0; border: 1px solid var(--border); }
+.en-lg-lbl { font-size: .6rem; color: var(--mid); line-height: 1.25; }
+
+/* Chance-marker caption under the threshold bar. */
+
+/* Collapsible prose: title always visible, body one click away. */
+.en-collapse { margin-top: 8px; border-top: 1px solid var(--border);
+  padding-top: 7px; }
+.en-collapse-head { font-size: .62rem; font-weight: 700; color: var(--cyan);
+  cursor: pointer; text-transform: uppercase; letter-spacing: .07em;
+  list-style: none; padding: 2px 0; }
+.en-collapse-head::marker,
+.en-collapse-head::-webkit-details-marker { display: none; }
+.en-collapse-head::before { content: "\25B8  "; display: inline-block;
+  transition: transform .12s; }
+.en-collapse[open] > .en-collapse-head::before { content: "\25BE  "; }
+.en-collapse-head:hover { color: var(--cyan-hi); }
+.en-collapse-body { padding-top: 6px; }
+
+/* The plain-language methodology summary that sits above the numbered steps. */
+.en-method-tldr { background: var(--surf); border-radius: 5px;
+  padding: 9px 11px; margin-bottom: 4px; }
+.en-method-tldr p { margin: 0 0 7px; }
+.en-method-tldr p:last-child { margin-bottom: 0; }
+
+/* Colour key for the ENABLED extra layer. The description is in the (i)
+   popover; this is the key only, and only for the layer actually drawn. */
+.en-layer-detail { margin: 2px 6px 7px 26px; padding: 6px 8px;
+  background: var(--surf); border-radius: 4px;
+  border-left: 2px solid var(--cyan); }
+.en-layer-desc { font-size: .63rem; color: var(--mid); line-height: 1.45;
+  margin-bottom: 6px; }

@@ -1,5 +1,7 @@
 .venv/
 app/data/
+docs/*.md
+docs/presentations/
 
 # Secrets — never commit
 scripts/.env
@@ -16,3 +18,5 @@ scripts/iso3_mwater_review.csv
 ~$*.xlsx
 # El Nino working data — GRIBs and GeoTIFFs, hundreds of MB, all re-downloadable
 scripts/el_nino/data/
+scripts/el_nino/docs/
+scripts/el_nino/*.xlsx

@@ -65,12 +65,42 @@ from elnino_config import (
     SENSITIVITY_THRESHOLDS, CHANCE_LEVEL,
     METHOD_STEPS, CAVEATS, SOURCE_URL,
     INIT_LABEL, HINDCAST, SYSTEM as ELNINO_SYSTEM,
+    SKILL_USABLE_MIN, SKILL_REFERENCE, ENSO_EVENT_MIN, ENSO_YEARS,
+    SIGNAL_GROUPS, is_compound, threshold_contract,
+    EN_INFO, ENSO_MASK_DIR,
+    PROB_COMPOUND_DEFAULT, COMPOUND_CHANCE_LEVEL,
 )
 from elnino_core import (
     ElNinoError, compute_elnino_exposure, hindcast_area_share,
     get_elnino_preview_tile, get_elnino_layer_tile, get_elnino_exposed_tile,
     get_elnino_pop_tile, forecast_area_share, elnino_available,
+    signal_skill_share, skill_available, enso_state,
+    t2m_available, compound_available, skill_t2m_available,
+    signal_anomalies, enso_attributable, enso_mask_available,
 )
+
+# The layer that renders the SIGNAL itself. Section 2 chooses the signal and
+# this is how it is drawn; the map dialog's layers are additive extras on their
+# own tile and never replace it. Compound signals carry their own band, so
+# signal_prob resolves per-signal inside elnino_core._d_signal_prob.
+SIGNAL_LAYER = "signal_prob"
+
+
+# Popover headings for the El Nino concept icons. Separate from EN_INFO so the
+# config stays pure data and the heading can read as a question.
+EN_INFO_TITLES = {
+    "threshold":          "Probability threshold",
+    "threshold_compound": "Combined threshold",
+    "signal":             "What a signal means",
+    "heat":               "Adding the heat requirement",
+    "sensitivity":        "Why the threshold matters",
+    "history":            "Historical context",
+    "skill":              "Forecast skill",
+    "anomaly":            "How unusual is it",
+    "enso_attrib":        "Historically linked to El Nino",
+    "enso":               "ENSO conditions",
+}
+
 
 # ---------------------------------------------------------------------------
 # GEE init (once at server start)
@@ -1163,6 +1193,53 @@ def tab_forecast():
 
 # ── El Niño tab ──────────────────────────────────────────────────────────────
 
+def _en_collapse(key, summary, body, open_default=False):
+    """A <details> block: title visible, body one click away.
+
+    Plain HTML details/summary rather than a Dash callback — it needs no
+    server round trip, keeps working if a callback errors, and is accessible
+    by default. Used for the long prose that has to EXIST for a figure to be
+    quotable but should not occupy the panel before anyone has read a number.
+    """
+    attrs = {"open": "open"} if open_default else {}
+    return html.Details(id=f"en-collapse-{key}", className="en-collapse",
+                        children=[
+        html.Summary(summary, className="en-collapse-head"),
+        html.Div(body, className="en-collapse-body"),
+    ], **attrs)
+
+
+def _en_info(slug):
+    """Inline (i) opening an El Nino concept explanation from EN_INFO.
+
+    Same button type as _info_icon so the existing auto-open guard (Dash
+    re-fires ALL pattern inputs when results-panel components enter the layout)
+    keeps covering these; only the scope differs.
+    """
+    return html.Button(
+        html.I(className="bi bi-info-circle"),
+        id={"type": "prov-info-btn", "index": f"en:{slug}"},
+        className="info-icon-btn", n_clicks=0,
+        title=EN_INFO_TITLES.get(slug, slug),
+    )
+
+
+def _en_layer_info(layer_name):
+    """(i) for a map layer — opens its description, changes nothing on the map.
+
+    Deliberately separate from the row button: the eye and the title both
+    ENABLE the layer, while this only explains it. Scope "enl" so a layer
+    named like a concept slug cannot collide; resolved in toggle_hazard_info
+    from EXPLORE_MAP, so the prose is not duplicated.
+    """
+    return html.Button(
+        html.I(className="bi bi-info-circle"),
+        id={"type": "prov-info-btn", "index": f"enl:{layer_name}"},
+        className="info-icon-btn", n_clicks=0,
+        title=(EXPLORE_MAP.get(layer_name) or {}).get("label", layer_name),
+    )
+
+
 def _elnino_radio(id_, options, value, inline=True):
     """Small labelled radio group matching the .ps control styling."""
     return dcc.RadioItems(
@@ -1181,25 +1258,143 @@ def _elnino_method_block():
     """
     return html.Div(className="ps", children=[
         html.Div("Methodology", className="ps-label"),
-        html.Div(className="en-method", children=[
-            html.Div(className="en-method-step", children=[
-                html.Div(f"{i}", className="en-method-num"),
-                html.Div([
-                    html.Div(title, className="en-method-title"),
-                    html.Div(body, className="en-method-body"),
-                ]),
-            ]) for i, (title, body) in enumerate(METHOD_STEPS, 1)
+        # The four-sentence version, always visible. The numbered steps are
+        # the auditable detail and stay one click away — a reader who needs to
+        # judge a defensible-but-arguable choice can still see every one.
+        html.Div(className="en-method-tldr", children=[
+            html.P([html.Strong("In short. "),
+                    "A seasonal forecast is run 51 times with slightly "
+                    "different starting conditions. We count how many of "
+                    "those 51 runs put this season in the driest (or "
+                    "wettest) third of what the model normally predicts."],
+                   className="en-method-body"),
+            html.P([html.Strong("The threshold "),
+                    "is how many runs must agree before a place counts. "
+                    "Raising it is more demanding, so fewer children are "
+                    "counted."],
+                   className="en-method-body"),
+            html.P([html.Strong("The figure "),
+                    "is how many children live in those places — not how "
+                    "many will be harmed. Whether unusual weather becomes a "
+                    "crisis depends on water, harvests, drainage and health "
+                    "services, none of which are measured here."],
+                   className="en-method-body"),
+            html.P([html.Strong("Reliability varies. "),
+                    "The forecast has a real track record in some regions "
+                    "and almost none in others; each result says which."],
+                   className="en-method-body", style={"marginBottom": "0"}),
         ]),
-        html.Div("Read this before quoting a number", className="ps-label",
-                 style={"marginTop": "14px"}),
-        html.Ul(className="en-caveats",
-                children=[html.Li(c) for c in CAVEATS]),
+        _en_collapse("method", "Step by step", [
+            html.Div(className="en-method", children=[
+                html.Div(className="en-method-step", children=[
+                    html.Div(f"{i}", className="en-method-num"),
+                    html.Div([
+                        html.Div(title, className="en-method-title"),
+                        html.Div(body, className="en-method-body"),
+                    ]),
+                ]) for i, (title, body) in enumerate(METHOD_STEPS, 1)
+            ]),
+        ]),
+        _en_collapse("caveats", "Read this before quoting a number", [
+            html.Ul(className="en-caveats",
+                    children=[html.Li(c) for c in CAVEATS]),
+        ]),
         html.Div(className="ps-caption", style={"marginTop": "8px"}, children=[
             html.Span("Source: "),
             html.A("Copernicus CDS — seasonal-monthly-single-levels",
                    href=SOURCE_URL, target="_blank", className="hi-link"),
             html.Span(f" · ECMWF SEAS5 system {ELNINO_SYSTEM} · "
                       f"initialised {INIT_LABEL} · hindcast {HINDCAST}"),
+        ]),
+    ])
+
+
+
+# Which explore layers belong in which group on the map panel, and why the
+# grouping is this and not alphabetical: the reader's first question is "what
+# am I looking at", and these are the answers in descending order of how often
+# they are wanted. Layers absent from the config (or gated by `needs`) simply
+# do not appear.
+EN_LAYER_GROUPS = [
+    # No "This signal" group: the signal layer is chosen in section 2 and
+    # always drawn on its own tile. Offering signal_prob / cat here too
+    # implied this panel could change the signal, which is the confusion
+    # the two-tile split exists to remove.
+    ("Rainfall",     ["anom_mm", "anom_pct", "signal_strength",
+                      "fc_mean_mm", "clim_mean_mm", "dry_mask"]),
+    ("Temperature",  ["anom_c", "fc_mean_c", "t2m_signal_prob"]),
+    ("Combined",     ["compound_prob", "cat_compound", "dependence_ratio"]),
+    ("Reliability",  ["skill_class", "skill_r", "skill_r_t2m"]),
+    ("Attribution",  ["enso_composite"]),
+]
+
+
+def _en_layer_detail(cfg):
+    """Colour key for the ENABLED extra layer, inline in the panel.
+
+    Shown only when that layer is both chosen and switched on, so the panel
+    never displays a scale for something that is not drawn. The map's own
+    legend keeps describing the SIGNAL plus the population rows; this is the
+    key for the additive overlay, which is why both can coexist.
+
+    Always expanded rather than a <details>: it belongs to the one row the
+    user just enabled, so hiding it behind a second click serves nothing.
+    """
+    kids = []
+    # No prose here: the description lives in the (i) popover, which the user
+    # confirmed worked well. This block is the colour KEY only, expanded
+    # because the layer is actually on the map.
+    if cfg.get("classified") and cfg.get("classes"):
+        kids += [html.Div(className="en-lg-class", children=[
+                     html.Span(className="en-lg-swatch",
+                               style={"background": c["color"]}),
+                     html.Span(c["label"], className="en-lg-lbl"),
+                 ]) for c in cfg["classes"]]
+    elif cfg.get("palette"):
+        grad = ", ".join(cfg["palette"])
+        kids += [
+            html.Div(className="en-lg-ramp",
+                     style={"background":
+                            f"linear-gradient(to right, {grad})"}),
+            html.Div(className="en-lg-ends", children=[
+                html.Span(f"{cfg.get('min', '')}"),
+                html.Span(cfg.get("units") or "", className="en-lg-units"),
+                html.Span(f"{cfg.get('max', '')}"),
+            ]),
+        ]
+    if not kids:
+        return None
+    return html.Div(kids, className="en-layer-detail")
+
+
+def _elnino_layer_panel():
+    """Map-layer picker, floating over the map rather than in the sidebar.
+
+    It lived in the control stack as "5. Map layer", which implied it affected
+    the computation. It never did — a result depends on period, signal and
+    threshold only — so moving it onto the map puts "what am I looking at"
+    where the looking happens, and the header says so explicitly.
+
+    The radio keeps the id `elnino-layer` and the `value` property, so
+    elnino_update_layers, elnino_preview, elnino_layer_options and the legend
+    specs are all untouched. Options are still filtered at runtime by
+    elnino_layer_options against the asset probes.
+    """
+    return html.Div(id="elnino-layer-panel", className="en-layer-panel",
+                    style={"display": "none"}, children=[
+        html.Div(className="en-layer-head", children=[
+            html.Span("Map layer", className="en-layer-title"),
+            html.I(className="bi bi-chevron-up", id="en-layer-chevron"),
+        ], id="en-layer-header", n_clicks=0),
+        html.Div(id="elnino-layer-body", className="en-layer-body", children=[
+            html.Div("Changes what the map shows, not the numbers.",
+                     className="en-layer-note"),
+            # One radio over every layer; the group headings are rendered
+            # separately so dcc.RadioItems stays a single component with one
+            # value, which is what the existing callbacks expect.
+            html.Div(id="elnino-layer-rows"),
+            dcc.RadioItems(id="elnino-layer", value=DEFAULT_EXPLORE,
+                           options=[], style={"display": "none"}),
         ]),
     ])
 
@@ -1211,13 +1406,25 @@ def tab_elnino():
         html.Div(className="exposure-method-note",
                  style={"margin": "12px 10px 0"}, children=[
             html.P([
-                html.Strong("Seasonal outlook"), " — one ECMWF SEAS5 forecast "
-                f"issued {INIT_LABEL}, not a live feed. It shows where the "
-                "season is likely to fall in the driest or wettest third of "
-                "what this model normally predicts. ",
                 html.Strong("A signal is a reason to look closer, not a "
                             "forecast of drought or flooding."),
             ], className="exposure-method-p", style={"marginBottom": "0"}),
+            _en_collapse("intro", "What this tab shows", [
+                html.P(
+                    f"One ECMWF SEAS5 forecast issued {INIT_LABEL}, not a "
+                    f"live feed. It shows where the season is likely to fall "
+                    f"in the driest or wettest third of what this model "
+                    f"normally predicts, during a period when El Niño "
+                    f"conditions are present.",
+                    className="exposure-method-p"),
+                html.P(
+                    "Co-occurrence with El Niño is not proof of causation: "
+                    "the forecast is the model's response to every initial "
+                    "condition it was given, and El Niño is never isolated "
+                    "within it.",
+                    className="exposure-method-p",
+                    style={"marginBottom": "0"}),
+            ]),
         ]),
 
         # Availability banner — one clear sentence when the assets are missing.
@@ -1236,13 +1443,48 @@ def tab_elnino():
                 html.Div(id="elnino-period-note", className="ps-caption"),
             ]),
 
-            # 2. Signal
+            # 2. Signal — rainfall direction, then heat as an optional
+            # qualifier. Six flat radios asked the reader to hold the whole
+            # variable matrix in their head; this matches how people actually
+            # think about it ("drier — and also hot?"). The resolved signal
+            # name goes into a hidden store so every downstream callback keeps
+            # reading ONE signal value and none of the computation moves.
             html.Div(className="ps", children=[
-                html.Div("2. Signal", className="ps-label"),
+                html.Div([
+                    html.Span("2. Signal"), _en_info("signal"),
+                ], className="ps-label"),
+                html.Div("Rainfall", className="en-sub-label"),
                 _elnino_radio(
-                    "elnino-signal",
-                    [{"label": s["label"], "value": s["name"]} for s in SIGNALS],
-                    DEFAULT_SIGNAL),
+                    "elnino-rain",
+                    [{"label": SIGNAL_MAP[n]["label"], "value": n}
+                     for n in ("dry", "wet", "either")],
+                    DEFAULT_SIGNAL, inline=False),
+                html.Div(id="elnino-heat-wrap", children=[
+                    html.Div([
+                        dcc.Checklist(
+                            id="elnino-heat-on", className="en-check",
+                            options=[{"label": " Also require unusual "
+                                               "temperature", "value": "on"}],
+                            value=[],
+                        ),
+                        _en_info("heat"),
+                    ], style={"display": "flex", "alignItems": "center",
+                              "gap": "1px"}),
+                    # Revealed only when the box is ticked: the direction is a
+                    # second question that does not exist until the first is
+                    # answered, and showing three radios up front made
+                    # "temperature" look mandatory.
+                    html.Div(id="elnino-heat-dir-wrap",
+                             style={"display": "none"}, children=[
+                        _elnino_radio(
+                            "elnino-heat",
+                            [{"label": "Unusually hot", "value": "hot"},
+                             {"label": "Unusually cool", "value": "cool"}],
+                            "hot", inline=True),
+                    ]),
+                ], style={"marginTop": "8px"}),
+                html.Div(id="elnino-signal-resolved",
+                         className="en-resolved"),
                 html.Div(id="elnino-signal-note", className="ps-caption"),
             ]),
 
@@ -1268,6 +1510,14 @@ def tab_elnino():
                         tooltip={"placement": "bottom", "always_visible": False},
                     ),
                 ]),
+                # Where the value sits relative to chance. Without this the
+                # percentage invites comparison between two scales whose
+                # baselines differ (33.3% vs 11.1%).
+                # The chance-baseline bar was removed: an unlabelled red line
+                # read as an artefact. The same point is made in words by the
+                # readout below and the (i) beside the section title.
+                html.Div(id="elnino-thr-readout",
+                         className="en-thr-readout"),
                 html.Div(id="elnino-threshold-note", className="ps-caption"),
             ]),
 
@@ -1287,17 +1537,13 @@ def tab_elnino():
                          className="ps-caption"),
             ]),
 
-            # 5. Layer to display
-            html.Div(className="ps", children=[
-                html.Div("5. Map layer", className="ps-label"),
-                dcc.Dropdown(
-                    id="elnino-layer", className="ps-select",
-                    options=[{"label": l["label"], "value": l["name"]}
-                             for l in EXPLORE_LAYERS],
-                    value=DEFAULT_EXPLORE, clearable=False, searchable=False,
-                ),
-                html.Div(id="elnino-layer-note", className="ps-caption"),
-            ]),
+            # Section 5 (map layer) MOVED to an overlay on the map itself —
+            # see _elnino_layer_panel(). It sat here implying it affected the
+            # computation, which it never did: results depend on period,
+            # signal and threshold only. The control keeps the id
+            # `elnino-layer` so every consumer (elnino_update_layers,
+            # elnino_preview, the legend specs, elnino_layer_options) is
+            # unchanged.
 
             # 6. Country
             html.Div(className="ps", children=[
@@ -1343,10 +1589,24 @@ def tab_elnino():
                 children=html.Div(id="elnino-results-panel"),
             ),
 
+            # Global, so it needs no country selection. Populated on tab open.
+            html.Div(id="elnino-enso-section"),
+
             _elnino_method_block(),
         ]),
 
         # — Stores —
+        # The resolved signal name, written by elnino_resolve_signal from the
+        # rainfall radio + heat toggle. A STORE rather than a visible control
+        # so every existing reader (nine _signal_mask call sites, the compute
+        # callback, the threshold contract) keeps reading one signal value and
+        # the computation path is untouched.
+        dcc.Store(id="elnino-signal", data=DEFAULT_SIGNAL),
+        # Whether the map dialog's extra layer is currently drawn, and what it
+        # is. Separate from `elnino-layer` (which layer is chosen) so a hidden
+        # layer keeps its selection.
+        dcc.Store(id="elnino-extra-on", data=False),
+        dcc.Store(id="store-elnino-extra", data=None),
         dcc.Store(id="store-elnino-result",  data=None),
         dcc.Store(id="store-elnino-viz",     data=None),
         # Previewed layer + its vis, so the legend can describe the global map
@@ -1439,6 +1699,7 @@ def map_component():
             ]),
             html.Div(id="map-legend-body"),
         ]),
+        _elnino_layer_panel(),
         # Basemap toggle (map ↔ satellite) — bottom-left floating control.
         html.Button(
             [html.I(className="bi bi-globe-americas"), html.Span("Satellite")],
@@ -1521,7 +1782,15 @@ def map_component():
                 # ── El Niño: its own pair rather than reusing the forecast
                 # tiles, so switching tabs does not blank the other tab's map
                 # state (both stacks stay addressable independently). ──
+                # The SIGNAL layer, always driven by section 2's signal and
+                # never replaced by a map-dialog choice: the thing the numbers
+                # describe must stay on screen.
                 dl.TileLayer(id="elnino-layer-tile", url="", opacity=0.8),
+                # An optional EXTRA layer chosen in the map dialog, drawn over
+                # the signal at lower opacity so both read at once. Its own
+                # tile rather than a shared one, because overwriting the
+                # signal's url is exactly the behaviour being removed.
+                dl.TileLayer(id="elnino-extra-tile", url="", opacity=0),
                 # Total child population sits UNDER the exposed layer so the
                 # exposed subset reads as a highlight on the whole, not as a
                 # separate map. It starts hidden to keep the default readable.
@@ -2315,10 +2584,32 @@ def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name,
         # Results-panel icons carry a "<scope>:" prefix to keep their ids unique
         # across the Analysis and Infrastructure panels; the popover is keyed on
         # the hazard itself.
+        scope = ""
         if triggered["type"] == "prov-info-btn":
-            name = name.split(":", 1)[1]
-        if open_for == name:                      # same button → toggle closed
+            scope, name = name.split(":", 1)
+        # Scoped keys stay scoped in the open-state store: an "en" slug and a
+        # hazard could otherwise share a name and toggle each other closed.
+        key = f"{scope}:{name}" if scope in ("en", "enl") else name
+        if open_for == key:                       # same button -> toggle closed
             return {"display": "none"}, no_update, no_update, None
+        # El Nino icons explain CONCEPTS, not layers, so they resolve against
+        # EN_INFO rather than the hazard catalogue. Keyed with the scope kept on
+        # so an "en" slug cannot collide with a hazard of the same name.
+        if scope == "en":
+            info = EN_INFO.get(name)
+            if info:
+                return ({"display": "flex"}, EN_INFO_TITLES.get(name, name),
+                        _hazard_info_body(info), f"en:{name}")
+            return no_update, no_update, no_update, no_update
+        if scope == "enl":
+            cfg = EXPLORE_MAP.get(name)
+            if cfg:
+                body = {"description": cfg.get("desc", "")}
+                if cfg.get("units"):
+                    body["units"] = cfg["units"]
+                return ({"display": "flex"}, cfg.get("label", name),
+                        _hazard_info_body(body), f"enl:{name}")
+            return no_update, no_update, no_update, no_update
         if name.startswith(FC_INFO_PREFIX):
             fc_name = name[len(FC_INFO_PREFIX):]
             title   = FORECAST_MAP.get(fc_name, {}).get("label", fc_name)
@@ -2350,6 +2641,8 @@ app.clientside_callback(
         var btn = document.getElementById(exact);
         // Results-panel icons prefix their index with a scope ("an:", "infra:")
         // to stay unique across panels, so match on the part after the colon.
+        // El Nino concept icons ("en:threshold") keep the scope in openFor, so
+        // they hit the `idx === openFor` arm below rather than the split one.
         if (!btn) {
             btn = (Array.prototype.find.call(
                 document.querySelectorAll(".hazard-info-btn, .info-icon-btn"),
@@ -2379,8 +2672,15 @@ app.clientside_callback(
         // Centre on the button, then clamp inside the viewport.
         var top = r.top + r.height / 2 - H / 2;
         top = Math.max(M, Math.min(top, window.innerHeight - H - M));
+        // Open LEFT when there is no room on the right. The map-layer panel
+        // sits against the right edge, so a fixed rightward popover fell off
+        // the screen entirely. Flip rather than clamp: a clamped panel would
+        // cover the button that opened it.
+        var left = r.right + 10;
+        var flip = (left + W + M) > window.innerWidth;
+        if (flip) { left = Math.max(M, r.left - W - 10); }
         return [{
-            display: "flex", top: top + "px", left: (r.right + 10) + "px",
+            display: "flex", top: top + "px", left: left + "px",
             height: H + "px", width: W + "px", bottom: "auto"
         }, classes];
     }
@@ -2646,7 +2946,38 @@ def _analysis_legend_specs(viz):
     return specs
 
 
-def _elnino_legend_specs(viz, preview):
+def _elnino_outlook_specs(layer_name, vis, visible=True):
+    """Legend row(s) for the outlook layer — a gradient, or one swatch per class.
+
+    A classified layer gets a swatch per class rather than a colour ramp: the
+    values are categories, and a gradient would invite reading a cell as
+    "between dry and wet" when the classes are exclusive.
+
+    Only the first row carries the layer_id, so the eye toggle appears once and
+    controls the whole layer rather than offering three switches for one tile.
+    """
+    cfg = EXPLORE_MAP.get(layer_name) or {}
+    label = cfg.get("label", "Outlook")
+    units = cfg.get("units")
+
+    if cfg.get("classified") and cfg.get("classes"):
+        rows = []
+        for i, c in enumerate(cfg["classes"]):
+            rows.append(swatch_spec(
+                f"{label} — {c['label']}" if i == 0 else c["label"],
+                c["color"],
+                layer_id=("elnino-layer" if i == 0 else None),
+                toggleable=(i == 0), visible=visible))
+        return rows
+
+    if not vis:
+        return []
+    return [vis_gradient_spec(label + (f" ({units})" if units else ""), vis,
+                              layer_id="elnino-layer", toggleable=True,
+                              visible=visible)]
+
+
+def _elnino_legend_specs(viz, preview, extra=None):
     """Legend for the El Niño tab.
 
     Two states, and the preview one matters: this tab has a default period and
@@ -2660,38 +2991,63 @@ def _elnino_legend_specs(viz, preview):
     """
     # Computed result — the full three-layer stack.
     if viz:
-        layer_cfg = EXPLORE_MAP.get(viz.get("layer")) or {}
         sig = SIGNAL_MAP.get(viz.get("signal")) or {}
         vis = viz.get("layer_vis")
-        label = layer_cfg.get("label", "Outlook")
-        units = layer_cfg.get("units")
-        specs = []
-        if vis:
-            specs.append(vis_gradient_spec(
-                f"{label}" + (f" ({units})" if units else ""), vis,
-                layer_id="elnino-layer", toggleable=True))
+        # The SIGNAL layer, not viz["layer"]: the dialog's choice is an
+        # additive extra with its own row below, and labelling the first row
+        # after it claimed the signal had been replaced.
+        sig_layer = ("cat" if sig.get("union_of") else SIGNAL_LAYER)
+        specs = _elnino_outlook_specs(sig_layer, vis)
+        exposed, total = viz.get("exposed"), viz.get("total")
+        tot_lbl = "All children (per 1 km)"
+        exp_lbl = f"Children in {sig.get('area_phrase', 'a signal area')}"
+        if total:
+            tot_lbl += f" — {_fmt(total)}"
+        if exposed is not None and total:
+            exp_lbl += (f" — {_fmt(exposed)}"
+                        f" ({100.0 * exposed / total:.0f}%)")
+        specs += _elnino_extra_specs(extra)
         specs += [
-            vis_gradient_spec("All children (per 1 km)", POP_VIS,
+            vis_gradient_spec(tot_lbl, POP_VIS,
                               layer_id="elnino-pop", unit="+",
                               toggleable=True, visible=False),
-            vis_gradient_spec(
-                f"Children in {sig.get('label', 'signal').lower()} area",
-                POP_VIS, layer_id="elnino-exposed", unit="+",
-                toggleable=True),
+            vis_gradient_spec(exp_lbl, POP_VIS,
+                              layer_id="elnino-exposed", unit="+",
+                              toggleable=True),
         ]
         return specs
 
-    # Preview only — one row describing what is already on the map.
+    # Preview only — describe whatever is already on the map.
     if preview:
-        layer_cfg = EXPLORE_MAP.get(preview.get("layer")) or {}
-        vis = preview.get("vis")
-        if not vis:
-            return []
-        units = layer_cfg.get("units")
-        return [vis_gradient_spec(
-            layer_cfg.get("label", "Outlook") + (f" ({units})" if units else ""),
-            vis, layer_id="elnino-layer", toggleable=True)]
+        return (_elnino_outlook_specs(preview.get("layer"),
+                                      preview.get("vis"))
+                + _elnino_extra_specs(extra))
     return []
+
+
+def _elnino_extra_specs(extra):
+    """Legend row for the additive map-dialog layer, when one is drawn.
+
+    Appears BELOW the signal row and above the population rows, matching the
+    draw order on the map. Absent entirely when no extra layer is enabled, so
+    the legend never describes something that is not there.
+    """
+    if not extra or not extra.get("layer"):
+        return []
+    cfg = EXPLORE_MAP.get(extra["layer"]) or {}
+    label = f"{cfg.get('label', extra['layer'])} (extra layer)"
+    if cfg.get("classified") and cfg.get("classes"):
+        return [swatch_spec(f"{label} — {c['label']}" if i == 0
+                            else c["label"], c["color"],
+                            layer_id=("elnino-extra" if i == 0 else None),
+                            toggleable=(i == 0))
+                for i, c in enumerate(cfg["classes"])]
+    if not extra.get("vis"):
+        return []
+    units = cfg.get("units")
+    return [vis_gradient_spec(label + (f" ({units})" if units else ""),
+                              extra["vis"], layer_id="elnino-extra",
+                              toggleable=True)]
 
 
 # ── Map data layers ───────────────────────────────────────────────────────────
@@ -2711,10 +3067,12 @@ def _elnino_legend_specs(viz, preview):
     Input("store-forecast-preview", "data"),
     Input("store-elnino-viz",     "data"),
     Input("store-elnino-preview", "data"),
+    Input("store-elnino-extra",   "data"),
 )
 def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
                        infra_viz, analysis_viz, forecast_viz, forecast_preview,
-                       elnino_viz, elnino_preview):
+                       elnino_viz, elnino_preview,
+                      elnino_extra):
     """Build this tab's map tiles and the legend specs that describe them.
 
     Single source of truth for the legend: whichever tab is active writes its
@@ -2737,7 +3095,8 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
 
     # Dedicated top-level components (elnino-*-tile).
     if tab == "elnino":
-        return layers, _elnino_legend_specs(elnino_viz, elnino_preview)
+        return layers, _elnino_legend_specs(elnino_viz, elnino_preview,
+                                            elnino_extra)
 
     if tab == "hazard" and sel_layer:
         if sel_layer == "Multi Hazard Count":
@@ -3610,6 +3969,7 @@ def _info_icon(hazard_name, scope="an"):
         className="info-icon-btn", n_clicks=0,
         title=_layer_label(hazard_name),
     )
+
 
 
 def _provenance_block(extra_lines=None):
@@ -6015,6 +6375,35 @@ def _elnino_error(msg):
 
 
 @app.callback(
+    Output("elnino-layer", "options"),
+    Input("store-tab",     "data"),
+)
+def elnino_layer_options(tab):
+    """Offer the skill layers only when the skill collection exists.
+
+    It is built by a separate script and is legitimately absent on a fresh
+    deployment, so the dropdown is filtered at runtime rather than baked at
+    import — otherwise selecting one would produce an asset-not-found error
+    the user cannot act on.
+    """
+    if tab != "elnino":
+        return no_update
+    have = {}
+    # "brier" is deliberately absent: no layer carries needs="brier" any more.
+    for key, probe in (("skill", skill_available),
+                       ("t2m", t2m_available),
+                       ("compound", compound_available),
+                       ("skill_t2m", skill_t2m_available)):
+        try:
+            have[key] = probe()
+        except Exception:
+            have[key] = False
+    return [{"label": l["label"], "value": l["name"]}
+            for l in EXPLORE_LAYERS
+            if not l.get("needs") or have.get(l["needs"])]
+
+
+@app.callback(
     Output("elnino-status",   "children"),
     Output("elnino-controls", "style"),
     Input("store-tab",        "data"),
@@ -6040,11 +6429,46 @@ def elnino_status(tab):
 
 
 @app.callback(
+    Output("elnino-layer",  "value"),
+    Input("elnino-signal",  "data"),
+    State("elnino-layer",   "value"),
+    prevent_initial_call=True,
+)
+def elnino_layer_for_signal(signal, current):
+    """Switch the map to the categorised view when the signal is the union.
+
+    A single probability ramp cannot represent two opposite signals — there is
+    no one band to colour — so "Either signal" on the probability layer shows
+    max(p_below, p_above), which looks like one continuous field and hides the
+    very distinction the user asked for. The classified layer is the only view
+    that answers it, so select it automatically.
+
+    Moving off the union restores the probability layer, but only if the user
+    is still on the classified one: a deliberate choice of some other layer is
+    left alone.
+    """
+    cfg = SIGNAL_MAP.get(signal) or {}
+    if cfg.get("union_of"):
+        return "cat"
+    # A compound signal's probability lives in a different asset, so the
+    # default rainfall probability layer would show something unrelated to the
+    # count. Point at the joint layer instead.
+    if cfg.get("compound"):
+        if current in ("signal_prob", "cat"):
+            return "compound_prob"
+        return no_update
+    # Coming BACK from a compound signal, the joint layers no longer match.
+    if current in ("cat", "compound_prob", "cat_compound"):
+        return DEFAULT_EXPLORE
+    return no_update
+
+
+@app.callback(
     Output("elnino-period-note",    "children"),
     Output("elnino-signal-note",    "children"),
     Output("elnino-layer-note",     "children"),
     Input("elnino-period",          "value"),
-    Input("elnino-signal",          "value"),
+    Input("elnino-signal",          "data"),
     Input("elnino-layer",           "value"),
 )
 def elnino_notes(period, signal, layer):
@@ -6057,41 +6481,348 @@ def elnino_notes(period, signal, layer):
 
 
 @app.callback(
+    Output("elnino-layer-panel", "style"),
+    Output("elnino-layer-rows",  "children"),
+    Output("elnino-layer",       "options"),
+    Input("store-tab",           "data"),
+    Input("elnino-layer",        "value"),
+    Input("elnino-extra-on",     "data"),
+)
+def elnino_layer_panel(tab, current, extra_on):
+    """Show the map-layer panel on this tab only, and build its grouped rows.
+
+    The hidden dcc.RadioItems holds the value (so every existing consumer is
+    unchanged); these rows are the visible control and write to it by click.
+    Each row carries the layer's own `desc` prose in an (i) rather than
+    stacking six captions under a dropdown.
+
+    Layers are filtered by `needs` against the live asset probes, so a
+    half-finished deployment shows only what exists.
+    """
+    if tab != "elnino":
+        return {"display": "none"}, [], no_update
+    extra_on = bool(extra_on)
+
+    have = {}
+    for key, probe in (("skill", skill_available),
+                       ("t2m", t2m_available),
+                       ("compound", compound_available),
+                       ("skill_t2m", skill_t2m_available)):
+        try:
+            have[key] = probe()
+        except Exception:
+            have[key] = False
+
+    def ok(name):
+        cfg = EXPLORE_MAP.get(name)
+        if not cfg:
+            return False
+        need = cfg.get("needs")
+        return (not need) or have.get(need, False)
+
+    rows, opts = [], []
+    for group, names in EN_LAYER_GROUPS:
+        live = [n for n in names if ok(n)]
+        if not live:
+            continue
+        rows.append(html.Div(group, className="en-layer-group"))
+        for n in live:
+            cfg = EXPLORE_MAP[n]
+            opts.append({"label": cfg["label"], "value": n})
+            # "Enabled" means chosen AND switched on. The legend expands only
+            # then, because a key for a layer that is not drawn is noise.
+            is_sel = (n == current)
+            live = is_sel and extra_on
+            rows.append(html.Div(className="en-layer-item", children=[
+                html.Div(className=(
+                    "en-layer-row active" if live else "en-layer-row"
+                ), children=[
+                    # Eye and title do the SAME thing: enable this layer. The
+                    # eye additionally turns it back off.
+                    html.Button(html.I(className="bi bi-eye-fill"),
+                                id={"type": "en-layer-eye", "index": n},
+                                className=("en-layer-eye" if live
+                                           else "en-layer-eye "
+                                                "en-layer-eye-off"),
+                                n_clicks=0,
+                                title="Show / hide on map"),
+                    # Title enables the layer (same as the eye).
+                    html.Button(cfg["label"],
+                                id={"type": "en-layer-pick", "index": n},
+                                className="en-layer-btn", n_clicks=0,
+                                title="Show this layer on the map"),
+                    # The (i) explains the layer and does NOT change the map —
+                    # a separate concern, so a separate control.
+                    _en_layer_info(n),
+                ]),
+                # Key expands when the layer is ENABLED, not merely chosen.
+                _en_layer_detail(cfg) if live else None,
+            ]))
+    return {"display": "flex"}, rows, opts
+
+
+@app.callback(
+    Output("elnino-layer", "value", allow_duplicate=True),
+    Input({"type": "en-layer-pick", "index": ALL}, "n_clicks"),
+    prevent_initial_call=True,
+)
+def elnino_pick_layer(clicks):
+    """Clicking a row sets the hidden radio that everything else reads.
+
+    Guarded the same way the info popover is: Dash re-fires ALL pattern inputs
+    when matching components enter the layout, and the rows are rebuilt
+    whenever the panel re-renders, so without this an unrelated re-render would
+    silently change the selected layer.
+    """
+    if not any(c for c in (clicks or []) if c):
+        return no_update
+    t = ctx.triggered_id
+    if not t:
+        return no_update
+    return t["index"]
+
+
+# The EXTRA map layer: an additive overlay chosen in the map dialog, drawn
+# above the signal at lower opacity. It never replaces the signal tile — that
+# always shows what section 2 selected, because the signal is what the numbers
+# in the panel describe.
+@app.callback(
+    Output("elnino-extra-tile", "url"),
+    Output("elnino-extra-tile", "opacity"),
+    Output("store-elnino-extra", "data"),
+    Input("elnino-layer",       "value"),
+    Input("elnino-extra-on",    "data"),
+    Input("elnino-period",      "value"),
+    Input("elnino-signal",      "data"),
+    Input("elnino-threshold",   "value"),
+    Input("elnino-dry-mask",    "value"),
+    Input("store-tab",          "data"),
+    prevent_initial_call=True,
+)
+def elnino_extra_layer(layer, on, period, signal, threshold, dry_mask, tab):
+    """Render the chosen extra layer, or nothing when it is switched off.
+
+    Opacity 0 rather than an empty url when off: keeping the tile loaded means
+    re-enabling it is instant, and a blank url would make the eye feel like a
+    reload rather than a switch.
+    """
+    if tab != "elnino":
+        return no_update, no_update, no_update
+    if not layer or not on:
+        return no_update, 0, None
+    try:
+        thr = float(threshold)
+    except (TypeError, ValueError):
+        thr = PROB_DEFAULT
+    try:
+        url, vis = get_elnino_preview_tile(period, layer, signal, thr,
+                                           "on" in (dry_mask or []))
+    except Exception:
+        return no_update, 0, None
+    return url, 0.6, {"layer": layer, "vis": vis}
+
+
+# Clicking a layer row turns the extra layer ON; the eye toggles it. Two
+# inputs, one state, so selecting a different layer while hidden also reveals
+# it — otherwise a click would appear to do nothing.
+@app.callback(
+    Output("elnino-extra-on", "data"),
+    Output({"type": "en-layer-eye", "index": ALL}, "className"),
+    Input({"type": "en-layer-pick", "index": ALL}, "n_clicks"),
+    Input({"type": "en-layer-eye", "index": ALL}, "n_clicks"),
+    State("elnino-extra-on", "data"),
+    State({"type": "en-layer-eye", "index": ALL}, "id"),
+    State("elnino-layer", "value"),
+    prevent_initial_call=True,
+)
+def elnino_extra_toggle(picks, eyes, on, eye_ids, current):
+    """Keep the extra layer's on/off state and the eye icons in step.
+
+    Guarded against Dash's re-fire of ALL pattern inputs when the panel
+    re-renders: without it, rebuilding the rows would silently toggle the
+    layer.
+    """
+    if not any(c for c in ((picks or []) + (eyes or [])) if c):
+        return no_update, no_update
+    t = ctx.triggered_id
+    if not t:
+        return no_update, no_update
+    if t.get("type") == "en-layer-eye":
+        on = not bool(on) if t["index"] == current else True
+    else:
+        on = True                      # choosing a layer shows it
+    cls = ["en-layer-eye" if (on and i["index"] == current)
+           else "en-layer-eye en-layer-eye-off" for i in (eye_ids or [])]
+    return bool(on), cls
+
+
+@app.callback(
+    Output("elnino-layer-body", "style"),
+    Output("en-layer-chevron",  "className"),
+    Input("en-layer-header",    "n_clicks"),
+    prevent_initial_call=True,
+)
+def elnino_layer_collapse(n):
+    """Collapse the panel — it overlaps the map, and on a small screen the
+    reader needs the map back."""
+    closed = bool(n) and n % 2 == 1
+    return ({"display": "none"} if closed else {"display": "block"},
+            "bi bi-chevron-down" if closed else "bi bi-chevron-up")
+
+
+# elnino_signal_options was REMOVED. It populated six radios with disabled
+# rows faking group headings; section 2 now has a static rainfall radio plus a
+# heat toggle, and elnino_resolve_signal below turns that pair into the single
+# signal name everything downstream already expects.
+@app.callback(
+    Output("elnino-signal",          "data"),
+    Output("elnino-signal-resolved", "children"),
+    Output("elnino-heat",            "options"),
+    Output("elnino-heat",            "value"),
+    Output("elnino-heat-wrap",       "style"),
+    Output("elnino-heat-dir-wrap",   "style"),
+    Output("elnino-heat-on",         "options"),
+    Output("elnino-heat-on",         "value"),
+    Input("elnino-rain",             "value"),
+    Input("elnino-heat-on",          "value"),
+    Input("elnino-heat",             "value"),
+    Input("store-tab",               "data"),
+    State("elnino-heat-wrap",        "style"),
+)
+def elnino_resolve_signal(rain, heat_on, heat, tab, wrap_style):
+    """(rainfall direction, heat on/off) -> one signal name.
+
+    The whole point of the indirection: downstream code keeps reading a single
+    signal, so nothing about the computation changes while the control becomes
+    readable.
+
+    "Either" + heat is not a valid combination. A union has no single joint
+    probability band to threshold — dry-and-hot and wet-and-hot are different
+    forecasts that verify separately — so the toggle is disabled and says why
+    rather than silently producing a number that means neither.
+    """
+    rain = rain or DEFAULT_SIGNAL
+    style = dict(wrap_style or {})
+
+    # Hide the toggle entirely when the compound assets are absent: same
+    # degradation contract as the skill layers.
+    have_compound = False
+    if tab == "elnino":
+        try:
+            have_compound = compound_available()
+        except Exception:
+            have_compound = False
+        style["display"] = "flex" if have_compound else "none"
+
+    is_union = bool((SIGNAL_MAP.get(rain) or {}).get("union_of"))
+    # All four corners of the 2x2 exist in the compound asset, so every
+    # rainfall x temperature pairing resolves — except with the union, which
+    # has no single joint band to threshold.
+    pair = {("dry", "hot"):  "hotdry", ("dry", "cool"):  "cooldry",
+            ("wet", "hot"):  "hotwet", ("wet", "cool"):  "coolwet"}
+    direction = heat if heat in ("hot", "cool") else "hot"
+    on = bool(heat_on) and not is_union and have_compound
+
+    opts = [{"label": "Unusually hot", "value": "hot"},
+            {"label": "Unusually cool", "value": "cool"}]
+    # Disabled rather than hidden for a union, so the reason is visible.
+    check_opts = [{"label": " Also require unusual temperature",
+                   "value": "on", "disabled": is_union}]
+    dir_style = {"display": "block" if on else "none",
+                 "marginTop": "5px", "marginLeft": "18px"}
+
+    signal = pair.get((rain, direction), rain) if on else rain
+    cfg = SIGNAL_MAP.get(signal) or {}
+    if is_union:
+        resolved = html.Span([
+            "Temperature cannot be combined with ", html.Em("Either signal"),
+            " — the two rainfall directions verify separately, so there is no "
+            "single combined probability to threshold.",
+        ])
+    else:
+        resolved = html.Span([
+            "Showing: ", html.Strong(cfg.get("label", signal)),
+        ])
+    return (signal, resolved, opts, direction, style, dir_style,
+            check_opts, (["on"] if on else []))
+
+
+@app.callback(
     Output("elnino-threshold",        "value"),
     Output("elnino-threshold-slider", "value"),
     Output("elnino-threshold-note",   "children"),
+    Output("elnino-threshold",        "min"),
+    Output("elnino-threshold",        "max"),
+    Output("elnino-threshold-slider", "min"),
+    Output("elnino-threshold-slider", "max"),
+    Output("elnino-threshold-slider", "marks"),
+    Output("elnino-thr-readout",      "children"),
+    Output("elnino-thr-info",         "children"),
     Input("elnino-threshold",         "value"),
     Input("elnino-threshold-slider",  "value"),
+    Input("elnino-signal",            "data"),
 )
-def elnino_sync_threshold(box, slider):
+def elnino_sync_threshold(box, slider, signal):
     """Keep the number box and slider in step, and say what the value means.
 
-    The note is not decoration: 33% is the no-information baseline for terciles,
-    and a user dragging towards it needs to know the signal is dissolving into
-    chance rather than getting more inclusive.
+    The bounds and the baseline BOTH depend on the signal. A compound event
+    needs two conditions at once, so its no-information baseline is 1/9 =
+    11.1%, not 1/3 — and a slider left on the single-variable range would make
+    every compound map look empty while implying the two numbers are
+    comparable. Switching signal between the groups therefore resets the value
+    to that group's default rather than carrying a meaningless number across.
+
+    The note is not decoration: a user dragging towards the baseline needs to
+    know the signal is dissolving into chance rather than getting more
+    inclusive, and the baseline differs between the two groups.
     """
+    lo, hi, default, marks, chance = threshold_contract(signal)
+    mark_dict = {m: {"label": f"{m}%"} for m in marks}
+
     src = ctx.triggered_id
-    val = box if src == "elnino-threshold" else slider
+    if src == "elnino-signal":
+        # Crossing between the two groups invalidates the current number.
+        val = default
+    else:
+        val = box if src == "elnino-threshold" else slider
     try:
         val = float(val)
     except (TypeError, ValueError):
-        val = PROB_DEFAULT
+        val = default
     # Already a percentage — no scaling here. The single 0-100 -> 0-1 step
     # happens in elnino_core._signal_mask via to_fraction().
-    val = int(round(max(PROB_MIN, min(PROB_MAX, val))))
+    val = int(round(max(lo, min(hi, val))))
 
-    margin = val - CHANCE_LEVEL
-    if val <= 36:
-        note = (f"{val}% is barely above the {CHANCE_LEVEL:.0f}% "
+    margin = val - chance
+    if is_compound(signal):
+        if val <= chance + 3:
+            note = (f"{val}% is barely above the {chance:.1f}% joint baseline "
+                    f"— for two conditions at once, chance is 1/9, not 1/3.")
+        else:
+            note = (f"{val}% of the 51 members have BOTH conditions at once "
+                    f"— {margin:+.0f} points above the {chance:.1f}% joint "
+                    f"baseline. Not comparable with a single-variable "
+                    f"threshold: 25% here is as far above chance as 50% there.")
+    elif val <= 36:
+        note = (f"{val}% is barely above the {chance:.0f}% "
                 f"no-information baseline — almost every cell will qualify.")
     elif val >= 65:
         note = (f"{val}% demands strong ensemble agreement; expect few "
                 f"cells and a conservative count.")
     else:
         note = (f"{val}% of the 51 members — {margin:+.0f} points above the "
-                f"{CHANCE_LEVEL:.0f}% baseline. ECMWF's own charts shade from "
+                f"{chance:.0f}% baseline. ECMWF's own charts shade from "
                 f"about 40%.")
-    return val, val, note
+    ratio = (val / chance) if chance else 0
+    readout = html.Span([
+        html.Strong(f"{ratio:.1f}x"),
+        f" more likely than chance ({chance:.1f}%).",
+    ] + ([" Not comparable with the rainfall threshold — a combined event "
+          "is rarer, so its whole scale sits lower."]
+         if is_compound(signal) else []))
+    slug = "threshold_compound" if is_compound(signal) else "threshold"
+    return (val, val, note, lo, hi, lo, hi, mark_dict,
+            readout, _en_info(slug))
 
 
 @app.callback(
@@ -6166,7 +6897,7 @@ def elnino_toggle_compute(level, ucode, clicked, tab):
     Output("store-elnino-viz",    "data"),
     Input("elnino-compute-btn",   "n_clicks"),
     State("elnino-period",        "value"),
-    State("elnino-signal",        "value"),
+    State("elnino-signal",        "data"),
     State("elnino-threshold",     "value"),
     State("elnino-layer",         "value"),
     State("elnino-dry-mask",      "value"),
@@ -6214,10 +6945,29 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
         this_area = forecast_area_share(period, signal, thr, target, level)
     except Exception:
         this_area = None
-
+    # Skill is a qualifier on the figure, never a filter of it — a failure here
+    # must not cost the user their numbers.
+    try:
+        skill = signal_skill_share(period, signal, thr, target, level,
+                                   apply_mask)
+    except Exception:
+        skill = None
+    # Magnitude and attribution are qualifiers too: a failure in either must
+    # not cost the user their count, so each fails soft independently.
+    try:
+        anoms = signal_anomalies(period, signal, thr, target, level,
+                                 apply_mask)
+    except Exception:
+        anoms = None
+    try:
+        attrib = enso_attributable(period, signal, thr, target, level,
+                                   apply_mask)
+    except Exception:
+        attrib = None
     meta = {"period": period, "signal": signal, "threshold": thr,
             "region": region_name, "level": level, "ucode": target,
             "layer": layer, "dry_mask": apply_mask,
+            "skill": skill, "anoms": anoms, "attrib": attrib,
             "pop_res": result.get("_pop_resolution_m", 1000)}
 
     # The outlook layer's vis travels with the result so the legend's gradient
@@ -6231,6 +6981,11 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
         meta["layer_vis"] = None
 
     meta["area_share"] = this_area
+    # The legend states the actual counts, not just layer names: a reader
+    # looking at the map should not have to scroll back to the panel to learn
+    # what the highlighted area amounts to.
+    meta["exposed"] = int(round(result.get("exposed", 0) or 0))
+    meta["total"] = int(round(result.get("total_population", 0) or 0))
     return result, render_elnino_results(result, meta, history), meta
 
 
@@ -6254,8 +7009,12 @@ def elnino_update_layers(viz):
     kw = dict(period=viz["period"], signal=viz["signal"],
               threshold=viz["threshold"], apply_dry_mask=viz["dry_mask"])
     try:
+        # The signal, always — never viz["layer"], which is the map dialog's
+        # additive extra and has its own tile.
+        sig_layer = ("cat" if (SIGNAL_MAP.get(viz["signal"]) or {}).get(
+                         "union_of") else SIGNAL_LAYER)
         l_url, _ = get_elnino_layer_tile(
-            layer=viz["layer"], feature_ucode=viz["ucode"],
+            layer=sig_layer, feature_ucode=viz["ucode"],
             admin_level=viz["level"], **kw)
     except Exception:
         l_url = ""
@@ -6281,13 +7040,12 @@ def elnino_update_layers(viz):
     Output("store-elnino-preview", "data"),
     Input("store-tab",            "data"),
     Input("elnino-period",        "value"),
-    Input("elnino-layer",         "value"),
-    Input("elnino-signal",        "value"),
+    Input("elnino-signal",        "data"),
     Input("elnino-threshold",     "value"),
     Input("elnino-dry-mask",      "value"),
     prevent_initial_call=True,
 )
-def elnino_preview(tab, period, layer, signal, threshold, dry_mask):
+def elnino_preview(tab, period, signal, threshold, dry_mask):
     """Global preview, so a layer can be inspected before choosing a region.
 
     Driven by store-tab as well as the controls, so opening the tab renders the
@@ -6305,12 +7063,177 @@ def elnino_preview(tab, period, layer, signal, threshold, dry_mask):
         thr = float(threshold)
     except (TypeError, ValueError):
         thr = PROB_DEFAULT
+    # SIGNAL_LAYER, not the map dialog's selection: this tile shows what the
+    # chosen signal looks like, and the dialog's layers are additive extras
+    # drawn on top (see elnino_extra_layer). A classified view is the only
+    # readable option for the union, which has no single probability band.
+    layer = "cat" if (SIGNAL_MAP.get(signal) or {}).get("union_of")         else SIGNAL_LAYER
     try:
         url, vis = get_elnino_preview_tile(period, layer, signal, thr,
                                            "on" in (dry_mask or []))
     except Exception:
         return no_update, no_update
-    return url, {"layer": layer, "signal": signal, "period": period, "vis": vis}
+    return url, {"layer": layer, "signal": signal, "period": period,
+                 "vis": vis}
+
+
+def _enso_chart(series):
+    """Niño 3.4 as CSS divs diverging from a zero baseline.
+
+    Hand-rolled rather than dcc.Graph to match _elnino_history_block — the only
+    other chart in this app — and to avoid pulling a plotting bundle in for one
+    sparkline. Warm months read red, cool blue, and the ±0.5 event thresholds
+    are drawn so "is this an event" is answerable at a glance.
+    """
+    if not series:
+        return None
+    vals = [r["oni"] for r in series]
+    span = max(2.0, max(abs(min(vals)), abs(max(vals))))   # symmetric, min ±2
+    half = lambda v: 50.0 * v / span                        # % of box height
+
+    bars = []
+    for r in series:
+        v = r["oni"]
+        h = abs(half(v))
+        warm = v >= 0
+        style = {"height": f"{h:.1f}%",
+                 "background": "#d7443e" if warm else "#2b7bba"}
+        style["bottom" if warm else "top"] = "50%"
+        bars.append(html.Div(className="en-enso-bar", title=f"{r['date']}: {v:+.2f} °C",
+                             children=html.Div(className="en-enso-fill",
+                                               style=style)))
+    return html.Div(className="en-enso-chart", children=[
+        html.Div(className="en-enso-zero"),
+        html.Div(className="en-enso-thr",
+                 style={"bottom": f"{50 + half(ENSO_EVENT_MIN):.1f}%"}),
+        html.Div(className="en-enso-thr",
+                 style={"bottom": f"{50 - half(ENSO_EVENT_MIN):.1f}%"}),
+        html.Div(className="en-enso-bars", children=bars),
+    ])
+
+
+def _elnino_enso_block(state):
+    """Observed ENSO state, its recent trend, and what it does not prove."""
+    if not state:
+        return None
+    oni, label = state["oni"], state["label"]
+    series = state.get("series") or []
+    warm = oni >= ENSO_EVENT_MIN
+    cool = oni <= -ENSO_EVENT_MIN
+    tone = "#d7443e" if warm else ("#2b7bba" if cool else "var(--mid)")
+
+    first = series[0]["date"] if series else ""
+    last = series[-1]["date"] if series else ""
+
+    return html.Div(className="ps", children=[
+        html.Div([
+            html.Span("ENSO conditions"), _en_info("enso"),
+        ], className="ps-label"),
+        html.Div(className="en-enso-head", children=[
+            html.Span(label, className="en-enso-state",
+                      style={"color": tone}),
+            html.Span(f"Niño 3.4  {oni:+.2f} °C", className="en-enso-val"),
+            html.Span(f"3-month mean to {state['asof']}",
+                      className="en-enso-asof"),
+        ]),
+        _enso_chart(series),
+        html.Div(f"Monthly sea-surface temperature anomaly in the Niño 3.4 "
+                 f"region, {first} to {last}. Dashed lines mark the ±"
+                 f"{ENSO_EVENT_MIN} °C event thresholds. Observed from NOAA "
+                 f"OISST — independent of the rainfall forecast.",
+                 className="ps-caption", style={"marginTop": "8px"}),
+        html.Div([
+            html.Strong("This does not prove the forecast signal is caused "
+                        "by ENSO. "),
+            "For the empirical check, compare the map against the ",
+            html.Em("El Niño rainfall fingerprint"),
+            f" layer — the model's own difference between its "
+            f"{len(ENSO_YEARS['elnino'])} El Niño hindcast seasons and its "
+            f"{len(ENSO_YEARS['neutral'])} neutral ones.",
+        ], className="ps-caption", style={"marginTop": "8px"}),
+    ])
+
+
+@app.callback(
+    Output("elnino-enso-section", "children"),
+    Input("store-tab",            "data"),
+)
+def elnino_enso(tab):
+    """Populate the ENSO block when the tab opens.
+
+    Best-effort: a failure here leaves the section empty rather than taking the
+    tab down, since it is context rather than a result.
+    """
+    if tab != "elnino":
+        return no_update
+    try:
+        return _elnino_enso_block(enso_state())
+    except Exception as e:
+        print(f"[elnino] ENSO context unavailable: {str(e)[:160]}", flush=True)
+        return None
+
+
+# _elnino_bss_row was REMOVED here. It rendered the Brier verdict beside the
+# correlation, and the two genuinely disagree (Horn of Africa: r +0.47 vs BSS
+# +0.07). Reviewers of the rainfall report preferred the correlation: BSS asks
+# the stricter question but does not line up with the classified historical
+# values they read a signal's direction from. The scores are still computed and
+# stored in el_nino/brier by build_brier_skill.py, and signal_bss() still works
+# — nothing renders them. See elnino_config.EXPLORE_LAYERS for the full note.
+
+
+def _elnino_skill_note(skill, bss=None):
+    """How much of this signal area the model has a track record for.
+
+    The CORRELATION only. A Brier skill score is also computed and stored
+    (el_nino/brier), and it is the stricter measure — it grades the tercile
+    probabilities the threshold actually reads, rather than the seasonal mean —
+    but reviewers of the rainfall report found it did not sit alongside the
+    classified historical values they use to read a signal's direction, and
+    chose the correlation. `bss` is accepted and ignored so the caller does not
+    have to change; see elnino_config's EXPLORE_LAYERS comment.
+
+    Caption on the figure, never a filter of it: the count stays comparable
+    with every other published number. Returns None when the skill collection
+    does not exist, so the panel degrades quietly.
+    """
+    usable = (skill or {}).get("usable_pct")
+    if usable is None:
+        return None
+    assessed = skill.get("assessed_pct")
+
+    if usable >= 60:
+        tone, verdict = "#3d9e56", "most of this signal sits where the model has a track record"
+    elif usable >= 30:
+        tone, verdict = "#e8b84b", "only part of this signal sits where the model has a track record"
+    else:
+        tone, verdict = "#c94040", "little of this signal sits where the model has a track record"
+
+    bits = [
+        html.Span(f"{usable:.0f}%", style={"fontWeight": "700",
+                                           "color": tone}),
+        html.Span(f" of the signal area has usable forecast skill "
+                  f"(r ≥ {SKILL_USABLE_MIN} against {SKILL_REFERENCE}, "
+                  f"{HINDCAST}) — {verdict}."),
+    ]
+    if assessed is not None and assessed < 95:
+        bits.append(html.Span(
+            f" {100 - assessed:.0f}% of it is over ocean or outside the "
+            f"observation record and could not be scored.",
+            style={"color": "var(--lo)"}))
+    return html.Div(className="ps", children=[
+        html.Div([
+            html.Span("Forecast skill here"), _en_info("skill"),
+        ], className="ps-label"),
+        html.Div(bits, className="ps-caption"),
+        html.Div("Skill is reported, never applied — the count above is "
+                 "unfiltered. The correlation grades how well the forecast "
+                 "ranked wet and dry years, which is a more forgiving test "
+                 "than whether its probabilities verify.",
+                 className="ps-caption",
+                 style={"color": "var(--lo)", "fontStyle": "italic",
+                        "marginTop": "6px"}),
+    ])
 
 
 def _elnino_history_block(history, area_share):
@@ -6341,7 +7264,9 @@ def _elnino_history_block(history, area_share):
                      style={"height": f"{100 * h['share'] / hi:.1f}%"})
             for h in history]
     return html.Div(className="ps", children=[
-        html.Div("Historical context", className="ps-label"),
+        html.Div([
+            html.Span("Historical context"), _en_info("history"),
+        ], className="ps-label"),
         html.Div(className="en-hist", children=[
             html.Div(className="en-hist-bars", children=bars),
             html.Div(className="en-hist-now",
@@ -6358,17 +7283,315 @@ def _elnino_history_block(history, area_share):
             html.Strong(f"{'more' if rank > len(history) / 2 else 'less'} "
                         f"widespread than usual."),
         ], className="ps-caption", style={"marginTop": "8px"}),
-        html.Div("Each bar is one hindcast season (1993–2016); the dashed line "
-                 "is this forecast. This is a share of AREA — the children "
-                 "figure above is a share of POPULATION and is usually "
-                 "different, because children are not spread evenly across a "
-                 "country.",
+        html.Div("Each bar is one hindcast season (1993–2016); the dashed "
+                 "line is this forecast. Shares of AREA, not population — "
+                 "see the note above for why the two differ.",
                  className="ps-caption", style={"marginTop": "6px"}),
-        html.Div("From the model's own hindcast — not a record of observed "
-                 "past droughts or floods.",
-                 className="ps-caption",
-                 style={"color": "var(--lo)", "fontStyle": "italic"}),
     ])
+
+
+# Pastel ramp for the sensitivity table, matching the one the offline
+# reliability workbook uses so a dashboard download and a script-produced
+# workbook look like the same family of document.
+_XLSX_PASTEL = ["#F4C7C3", "#FADBC8", "#FDF3C8", "#DDEFD5", "#CCE5D9"]
+
+
+def build_elnino_xlsx(meta, result, history, export):
+    """Multi-sheet formatted workbook for one computed El Nino region.
+
+    Deliberately NOT an extension of build_xlsx: that helper writes a single
+    grid and is used by two other tabs, and widening its contract to carry
+    prose sheets would put their formatting at risk for no gain. The styling
+    vocabulary (cyan headers, pastel fills) is shared by reading the same
+    module constants.
+
+    Sheet order is the reading order: caveats first, because a number lifted
+    out of this file without them is the failure mode the whole module is
+    written against.
+    """
+    import io, base64
+    import xlsxwriter
+
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+
+    PCT = '0.0"%"'
+    PCT0 = '0"%"'
+
+    f_title = wb.add_format({"bold": True, "font_size": 13})
+    f_h2    = wb.add_format({"bold": True, "font_size": 11,
+                             "font_color": "#1CABE2"})
+    f_hdr   = wb.add_format({"bold": True, "align": "center",
+                             "valign": "vcenter", "bg_color": _XLSX_HDR,
+                             "font_color": "white", "border": 1,
+                             "text_wrap": True})
+    f_lbl   = wb.add_format({"bold": True, "border": 1, "bg_color": _XLSX_GRP,
+                             "valign": "top"})
+    f_txt   = wb.add_format({"border": 1, "text_wrap": True, "valign": "top"})
+    f_int   = wb.add_format({"border": 1, "num_format": "#,##0"})
+    f_pct   = wb.add_format({"border": 1, "num_format": PCT})
+    f_dec   = wb.add_format({"border": 1, "num_format": "0.0"})
+    f_wrap  = wb.add_format({"text_wrap": True, "valign": "top"})
+    f_note  = wb.add_format({"font_size": 9, "font_color": "#595959",
+                             "text_wrap": True, "valign": "top"})
+
+    sig = SIGNAL_MAP.get(meta["signal"], {})
+    anoms = meta.get("anoms") or {}
+    attrib = meta.get("attrib") or {}
+    skill = meta.get("skill") or {}
+
+    def _frac(v):
+        """Percent -> fraction for Excel's % number format, or None."""
+        return None if v is None else v / 100.0
+
+    # -- 1. Read me first --------------------------------------------------
+    ws = wb.add_worksheet("Read me first")
+    ws.set_column(0, 0, 112)
+    ws.write(0, 0, "Read this before quoting any number in this file", f_title)
+    r = 2
+    for c in CAVEATS:
+        ws.write(r, 0, "- " + c, f_wrap)
+        ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
+        r += 1
+    r += 1
+    ws.write(r, 0, f"Source: ECMWF SEAS5 system {ELNINO_SYSTEM}, initialised "
+                   f"{INIT_LABEL}, hindcast {HINDCAST}. "
+                   f"Generated {export.get('computed_utc', '')}.", f_note)
+
+    # -- 2. Summary --------------------------------------------------------
+    ws = wb.add_worksheet("Summary")
+    ws.set_column(0, 0, 42)
+    ws.set_column(1, 1, 30)
+    ws.write(0, 0, f"{meta['region']} - {period_label(meta['period'])}",
+             f_title)
+    rows = [
+        ("WHAT WAS ASKED", None, None),
+        ("Region", meta["region"], f_txt),
+        ("Administrative level", meta["level"], f_txt),
+        ("Period", period_label(meta["period"]), f_txt),
+        ("Signal", sig.get("label", meta["signal"]), f_txt),
+        ("Probability threshold", _frac(meta["threshold"]), f_pct),
+        ("No-information baseline",
+         _frac(export.get("chance_level_pct")), f_pct),
+        ("Arid areas excluded", "yes" if meta["dry_mask"] else "no", f_txt),
+        ("THE ANSWER", None, None),
+        ("Children in signal area", export.get("children_exposed"), f_int),
+        ("Total children in region", export.get("total_children"), f_int),
+        ("Share of children", _frac(export.get("pct_children_exposed")),
+         f_pct),
+        ("Boys", export.get("male"), f_int),
+        ("Girls", export.get("female"), f_int),
+        ("Children in excluded arid areas",
+         export.get("children_in_excluded_arid_areas"), f_int),
+        ("HOW UNUSUAL", None, None),
+        ("Rainfall anomaly (mm vs model normal)", anoms.get("anom_mm"), f_dec),
+        ("Rainfall anomaly (% of normal)", _frac(anoms.get("anom_pct")),
+         f_pct),
+        ("Temperature anomaly (degC vs model normal)", anoms.get("anom_c"),
+         f_dec),
+        ("ATTRIBUTION", None, None),
+        ("Children in El Nino-consistent areas", attrib.get("children"),
+         f_int),
+        ("Share of signal area attributable", _frac(attrib.get("pct")),
+         f_pct),
+        ("RELIABILITY", None, None),
+        ("Signal area with usable skill", _frac(skill.get("usable_pct")),
+         f_pct),
+        ("Signal area that could be scored",
+         _frac(skill.get("assessed_pct")), f_pct),
+        ("Skill metric", export.get("skill_metric"), f_txt),
+    ]
+    r = 2
+    for label, val, fmt in rows:
+        if val is None and fmt is None:          # section heading
+            ws.write(r, 0, label, f_h2)
+            r += 1
+            continue
+        ws.write(r, 0, label, f_lbl)
+        if val is None:
+            ws.write(r, 1, "not available", f_txt)
+        else:
+            ws.write(r, 1, val, fmt)
+        r += 1
+    if attrib.get("rainfall_only"):
+        r += 1
+        ws.merge_range(r, 0, r, 1,
+                       "Attribution note: the El Nino mask covers rainfall "
+                       "only. For a combined rainfall+temperature signal it "
+                       "says nothing about whether the heat component is "
+                       "El Nino-related, so read it as the weaker claim.",
+                       f_note)
+        ws.set_row(r, 42)
+
+    # -- 3. Sensitivity ----------------------------------------------------
+    ws = wb.add_worksheet("Sensitivity")
+    ws.set_column(0, 0, 22)
+    ws.set_column(1, 2, 22)
+    ws.write(0, 0, "How much does the probability threshold matter?", f_title)
+    ws.merge_range(1, 0, 1, 2,
+                   "With 51 ensemble members probability can only move in "
+                   "steps of about 2 points, so cells near any cutoff qualify "
+                   "on essentially arbitrary grounds. Quote the range.",
+                   f_note)
+    ws.set_row(1, 30)
+    for i, h in enumerate(("Threshold", "Children in signal area",
+                           "Share of children")):
+        ws.write(3, i, h, f_hdr)
+    sens = (result or {}).get("_sensitivity") or {}
+    total = export.get("total_children") or 0
+    ordered = sorted(sens.items(), key=lambda kv: float(kv[0]))
+    for i, (k, v) in enumerate(ordered):
+        band = _XLSX_PASTEL[min(i, len(_XLSX_PASTEL) - 1)]
+        active = abs(float(k) - meta["threshold"]) < 1e-9
+        f_k = wb.add_format({"border": 1, "num_format": PCT0,
+                             "bg_color": band, "bold": active})
+        f_v = wb.add_format({"border": 1, "num_format": "#,##0",
+                             "bold": active})
+        f_p = wb.add_format({"border": 1, "num_format": PCT, "bold": active})
+        ws.write(4 + i, 0, _frac(float(k)), f_k)
+        ws.write(4 + i, 1, int(round(v)), f_v)
+        ws.write(4 + i, 2, (v / total) if total else 0, f_p)
+    ws.write(4 + len(ordered) + 1, 0,
+             f"Bold row = the {int(meta['threshold'])}% threshold used for "
+             f"the Summary sheet.", f_note)
+
+    # -- 4. Historical context ---------------------------------------------
+    ws = wb.add_worksheet("Historical")
+    ws.set_column(0, 0, 16)
+    ws.set_column(1, 1, 28)
+    ws.write(0, 0, "This forecast against the model's own hindcast", f_title)
+    ws.merge_range(1, 0, 1, 1,
+                   "Shares of interpretable AREA, not population: the child "
+                   "population grid is 2025 and applying it to 1993 would "
+                   "imply a precision that does not exist. This is why these "
+                   "percentages differ from the Summary sheet's share of "
+                   "children.", f_note)
+    ws.set_row(1, 44)
+    ws.write(3, 0, "Season", f_hdr)
+    ws.write(3, 1, "Share of area under signal", f_hdr)
+    r = 4
+    for h in (history or []):
+        ws.write(r, 0, h.get("year"), f_int)
+        ws.write(r, 1, _frac(h.get("share") or 0), f_pct)
+        r += 1
+    area = meta.get("area_share")
+    if area is not None:
+        f_now = wb.add_format({"border": 1, "bold": True,
+                               "bg_color": "#FDF3C8"})
+        f_nowp = wb.add_format({"border": 1, "bold": True,
+                                "num_format": PCT, "bg_color": "#FDF3C8"})
+        ws.write(r, 0, "This forecast", f_now)
+        ws.write(r, 1, _frac(area), f_nowp)
+
+    # -- 5. Method ---------------------------------------------------------
+    ws = wb.add_worksheet("Method")
+    ws.set_column(0, 0, 28)
+    ws.set_column(1, 1, 96)
+    ws.write(0, 0, "How this figure was produced", f_title)
+    r = 2
+    for i, (title, body) in enumerate(METHOD_STEPS, start=1):
+        ws.write(r, 0, f"{i}. {title}", f_lbl)
+        ws.write(r, 1, body, f_txt)
+        ws.set_row(r, max(14, 13 * (len(body) // 90 + 1)))
+        r += 1
+
+    wb.close()
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:{_XLSX_MIME};base64,{b64}"
+
+
+def _elnino_empty_state(exposed, sens, threshold):
+    """Explain a zero instead of showing a bare 0.
+
+    At a demanding default (70%) a region can hold a strong signal at 50% and
+    exactly zero at 70% — Zimbabwe is 7.2M children at 50% and 0 at 65%. A
+    lone "0" reads as "no risk here" when it means "nothing clears this bar",
+    so when a lower threshold would return children, say which one.
+    """
+    if exposed:
+        return None
+    hits = sorted(((float(k), v) for k, v in (sens or {}).items() if v),
+                  key=lambda kv: kv[0], reverse=True)
+    if not hits:
+        return html.Div(className="en-empty", children=[
+            "No children fall under this signal at any threshold tested — ",
+            "this region has no clear signal for the selected period, not a ",
+            "missing result.",
+        ])
+    best_thr, best_val = hits[0]
+    return html.Div(className="en-empty", children=[
+        html.Strong("Nothing clears this threshold."),
+        f" No children are in a {int(threshold)}% signal area here. Lowering "
+        f"it to ", html.Strong(f"{int(best_thr)}%"), " would return ",
+        html.Strong(_fmt(int(round(best_val)))),
+        " children — so this is a demanding cutoff, not an absence of signal. "
+        "The row below shows the full range.",
+    ])
+
+
+def _elnino_magnitude_block(meta):
+    """How far from normal, and how much of it looks like El Nino.
+
+    The probability answers "how likely"; these answer "how much" and "how
+    attributable". Both are reported, neither filters the count.
+    """
+    anoms = meta.get("anoms") or {}
+    attrib = meta.get("attrib")
+    rows = []
+
+    mm, pc = anoms.get("anom_mm"), anoms.get("anom_pct")
+    if mm is not None:
+        txt = f"{mm:+,.0f} mm"
+        if pc is not None:
+            txt += f"  ({pc:+.0f}% of normal)"
+        rows.append(html.Div(className="info-row", children=[
+            html.Span("Rainfall vs normal", className="info-lbl"),
+            html.Span(txt, className="info-val"),
+        ]))
+    c = anoms.get("anom_c")
+    if c is not None:
+        rows.append(html.Div(className="info-row", children=[
+            html.Span("Temperature vs normal", className="info-lbl"),
+            html.Span(f"{c:+.1f} °C", className="info-val"),
+        ]))
+    if not rows and not attrib:
+        return None
+
+    kids = []
+    if rows:
+        kids.append(html.Div([
+            html.Span("How unusual is it?"), _en_info("anomaly"),
+        ], className="ps-label"))
+        kids += rows
+        kids.append(html.Div(
+            "Averaged over the signal area, against the model's own "
+            "1993–2016 normal. This is the size of the departure; the "
+            "probability above is only how consistently the ensemble "
+            "predicts it.",
+            className="ps-caption", style={"marginTop": "6px"}))
+
+    if attrib:
+        kids.append(html.Div([
+            html.Span("Historically linked to El Niño"),
+            _en_info("enso_attrib"),
+        ], className="ps-label", style={"marginTop": "12px"}))
+        kids.append(html.Div(className="info-row", children=[
+            html.Span("Children in El Niño-consistent areas",
+                      className="info-lbl"),
+            html.Span(f"{_fmt(attrib['children'])}  ({attrib['pct']:.0f}%)",
+                      className="en-attrib-val"),
+        ]))
+        note = ("Where El Niño has historically pushed rainfall the same "
+                "direction this forecast points. The rest may be unusual "
+                "for other reasons.")
+        if attrib.get("rainfall_only"):
+            note += (" This mask covers rainfall only, so for a combined "
+                     "signal it says nothing about whether the heat is "
+                     "El Niño-related — treat it as the weaker claim.")
+        kids.append(html.Div(note, className="ps-caption",
+                             style={"marginTop": "6px"}))
+
+    return html.Div(className="ps", children=kids)
 
 
 def render_elnino_results(result, meta, history=None):
@@ -6413,9 +7636,37 @@ def render_elnino_results(result, meta, history=None):
             k: int(round(v))
             for k, v in sorted(sens.items(), key=lambda kv: float(kv[0]))},
         "population_grid_m": meta["pop_res"],
+        # Skill travels with the figure so a number cannot be quoted without
+        # the evidence for how much it is worth. It does NOT filter the count.
+        "skill_metric": f"pearson_r_vs_{SKILL_REFERENCE}_{HINDCAST}",
+        "skill_usable_threshold_r": SKILL_USABLE_MIN,
+        "skill_usable_pct_of_signal_area": (meta.get("skill") or {}).get("usable_pct"),
+        "skill_assessed_pct_of_signal_area": (meta.get("skill") or {}).get("assessed_pct"),
+        # No brier_* keys: the Brier score is no longer surfaced (see
+        # elnino_config.EXPLORE_LAYERS). Emitting them as nulls would imply the
+        # measure had been computed and come back empty.
+        "skill_grades": "seasonal mean, not tercile probabilities",
+        # Compound figures are not comparable with single-variable ones, so the
+        # baseline the threshold should be read against travels with the number.
+        # Magnitude and attribution: reported, never applied to the count.
+        "rainfall_anomaly_mm": (meta.get("anoms") or {}).get("anom_mm"),
+        "rainfall_anomaly_pct_of_normal": (meta.get("anoms") or {}).get("anom_pct"),
+        "temperature_anomaly_c": (meta.get("anoms") or {}).get("anom_c"),
+        "children_in_enso_consistent_areas": (meta.get("attrib") or {}).get("children"),
+        "pct_of_signal_attributable_to_enso": (meta.get("attrib") or {}).get("pct"),
+        "enso_mask_covers_rainfall_only": (meta.get("attrib") or {}).get("rainfall_only"),
+        "chance_level_pct": round(
+            COMPOUND_CHANCE_LEVEL if is_compound(meta["signal"])
+            else CHANCE_LEVEL, 1),
         "computed_utc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "caveats": CAVEATS,
     }
+    if is_compound(meta["signal"]):
+        export["compound_method"] = "member-wise joint ensemble count"
+        export["compound_note"] = (
+            "Counted per ensemble member, not as a product of marginal "
+            "probabilities. Threshold is not comparable with a "
+            "single-variable one.")
     safe = re.sub(r"[^a-zA-Z0-9]", "_",
                   f"{meta['region']}_{meta['period']}_{meta['signal']}")
 
@@ -6444,6 +7695,12 @@ def render_elnino_results(result, meta, history=None):
                 html.Div("Threshold", className="metric-lbl"),
             ]),
         ]),
+
+        _elnino_empty_state(exposed, sens, meta["threshold"]),
+
+        _elnino_skill_note(meta.get("skill")),
+
+        _elnino_magnitude_block(meta),
 
         html.Div(className="ps", children=[
             html.Div(f"{sig.get('label', '')} — {period_label(meta['period'])}",
@@ -6482,8 +7739,10 @@ def render_elnino_results(result, meta, history=None):
 
         # Sensitivity — the honest framing of a single number.
         html.Div(className="ps", children=[
-            html.Div("How much does the threshold matter?",
-                     className="ps-label"),
+            html.Div([
+                html.Span("How much does the probability threshold matter?"),
+                _en_info("sensitivity"),
+            ], className="ps-label"),
             html.Div(className="en-sens", children=[
                 html.Div(className=("en-sens-cell active"
                                     if abs(float(k) - meta["threshold"]) < 1e-9
@@ -6495,9 +7754,7 @@ def render_elnino_results(result, meta, history=None):
                              className="en-sens-pct"),
                 ]) for k, v in sorted(sens.items(), key=lambda kv: float(kv[0]))
             ]),
-            html.Div("With 51 ensemble members, probability moves in steps of "
-                     "about 2 points, so cells near the cutoff flip on "
-                     "arbitrary grounds. Quote the range, not one figure.",
+            html.Div("Quote the range, not a single figure.",
                      className="ps-caption", style={"marginTop": "8px"}),
         ]),
 
@@ -6528,13 +7785,24 @@ def render_elnino_results(result, meta, history=None):
 
         html.Div(className="ps", children=[
             html.A(
-                "⬇  Download result (JSON)",
+                "⬇  Download Excel workbook",
+                href=build_elnino_xlsx(meta, result, history, export),
+                download=f"gchd_elnino_{safe}.xlsx",
+                className="ps-btn",
+                style={"display": "block", "textAlign": "center",
+                       "textDecoration": "none", "padding": "9px 16px"},
+            ),
+            # JSON kept as the machine-readable form. Secondary styling: the
+            # workbook is what a person wants, this is what a script wants.
+            html.A(
+                "⬇  JSON (for scripts)",
                 href="data:application/json;charset=utf-8,"
                      + _json.dumps(export, indent=2),
                 download=f"gchd_elnino_{safe}.json",
                 className="ps-btn-ghost",
                 style={"display": "block", "textAlign": "center",
-                       "textDecoration": "none", "padding": "9px 16px"},
+                       "textDecoration": "none", "padding": "7px 16px",
+                       "marginTop": "6px", "fontSize": "0.7rem"},
             ),
         ]),
     ])
