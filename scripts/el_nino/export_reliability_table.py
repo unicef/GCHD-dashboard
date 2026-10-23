@@ -570,20 +570,42 @@ def write_xlsx(rows, path, period, thr_rain, thr_compound):
         top[col - 1] = sig["label"]
         sub += list(per_sig)
         col += len(per_sig)
+    # Banner BEFORE the headers. The single most likely misreading of this
+    # sheet is to sum or compare the rainfall and combined blocks, which use
+    # different thresholds for a real reason (different baselines) — India
+    # reads 0 children dry at 70% and 332M hot-and-dry at 25%, which looks
+    # like a contradiction and is not. Said here because a reader who sums a
+    # column will not have read the Method sheet first.
+    ws.append([
+        f"WARNING: rainfall signals are read at {thr_rain}% and combined "
+        f"signals at {thr_compound}%. These blocks are NOT comparable and "
+        f"must not be summed together — see the 'Threshold %' column in each "
+        f"block and the Method sheet. A single-variable and a joint signal "
+        f"have different no-information baselines (1/3 vs 1/9)."])
+    ws.append([])
     ws.append(top)
     ws.append(sub)
 
+    # Header rows are now 3 (signal names) and 4 (column labels).
+    HDR_TOP, HDR_SUB = 3, 4
+    warn = ws.cell(1, 1)
+    warn.font = Font(bold=True, color="9C0006")
+    warn.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.merge_cells(start_row=1, start_column=1,
+                   end_row=1, end_column=min(len(top), 16))
+    ws.row_dimensions[1].height = 46
+
     bold = Font(bold=True)
     for c in range(1, len(top) + 1):
-        ws.cell(1, c).font = bold
-        ws.cell(2, c).font = bold
-        ws.cell(2, c).alignment = Alignment(horizontal="center",
-                                            wrap_text=True, vertical="bottom")
+        ws.cell(HDR_TOP, c).font = bold
+        ws.cell(HDR_SUB, c).font = bold
+        ws.cell(HDR_SUB, c).alignment = Alignment(
+            horizontal="center", wrap_text=True, vertical="bottom")
     col = len(lead) + 1
     for sig in SIGNALS:
-        ws.merge_cells(start_row=1, start_column=col,
-                       end_row=1, end_column=col + len(per_sig) - 1)
-        ws.cell(1, col).alignment = Alignment(horizontal="center")
+        ws.merge_cells(start_row=HDR_TOP, start_column=col,
+                       end_row=HDR_TOP, end_column=col + len(per_sig) - 1)
+        ws.cell(HDR_TOP, col).alignment = Alignment(horizontal="center")
         col += len(per_sig)
 
     fills = [PatternFill("solid", fgColor=f) for f in CLASS_FILLS]
@@ -643,8 +665,8 @@ def write_xlsx(rows, path, period, thr_rain, thr_compound):
     # Number formats and widths.
     for c in range(len(lead), len(top) + 1):
         letter = get_column_letter(c)
-        head = ws.cell(2, c).value or ""
-        for cell in ws[letter][2:]:
+        head = ws.cell(HDR_SUB, c).value or ""
+        for cell in ws[letter][HDR_SUB:]:
             if (head.startswith("Children") or head.startswith("Boys")
                     or head.startswith("Girls") or head.startswith("Total")
                     or head == ""):
@@ -662,9 +684,10 @@ def write_xlsx(rows, path, period, thr_rain, thr_compound):
         ws.column_dimensions[letter].width = w
     for c in range(len(lead) + 1, len(top) + 1):
         ws.column_dimensions[get_column_letter(c)].width = 13
-    ws.freeze_panes = ws.cell(3, len(lead) + 1).coordinate
-    ws.auto_filter.ref = f"A2:{get_column_letter(len(top))}{2 + len(rows)}"
-    ws.row_dimensions[2].height = 30
+    ws.freeze_panes = ws.cell(HDR_SUB + 1, len(lead) + 1).coordinate
+    ws.auto_filter.ref = (f"A{HDR_SUB}:{get_column_letter(len(top))}"
+                          f"{HDR_SUB + len(rows)}")
+    ws.row_dimensions[HDR_SUB].height = 30
 
     _write_method_sheet(wb, period, thr_rain, thr_compound, len(rows))
     _write_classes_sheet(wb)
@@ -841,6 +864,34 @@ def _write_method_sheet(wb, period, thr_rain, thr_compound, n_rows):
              "is trustworthy, the heat half is"],
         ["", "                                              not. The weaker "
              "number governs."],
+        [],
+        ["WHY A COUNTRY CAN SHOW 0 IN ONE BLOCK AND MILLIONS IN ANOTHER"],
+        ["", "This is the most confusing thing in the sheet, and it is not an "
+             "error. India reads ZERO children"],
+        ["", "under 'Drier than normal' and 332 million under 'Hotter and "
+             "drier than normal'. A combined"],
+        ["", "signal cannot be commoner than the rainfall signal inside it, "
+             "so what is going on?"],
+        ["", "Two different thresholds. Over India's interpretable land the "
+             "dry probability averages 41% of"],
+        ["", "the 51 ensemble members — well short of the 70% the rainfall "
+             "column demands, so that column"],
+        ["", "is empty. The hot probability averages 92%, because warming "
+             "has made the warmest third"],
+        ["", "near-certain there, so 'dry AND hot' averages 40% — almost "
+             "exactly the dry figure, since the"],
+        ["", "heat condition excludes nearly nothing. 40% clears the 25% bar "
+             "the combined column uses."],
+        ["", "So India is not a hot-and-dry story. It is a moderate dry "
+             "signal that fails a demanding"],
+        ["", "threshold and passes a lenient one, with heat adding almost no "
+             "information."],
+        ["", "AT A MATCHED THRESHOLD the two behave as expected: at 25% "
+             "India reads 310M dry and 332M"],
+        ["", "hot-and-dry; at 70% both read zero. Globally at a common 70%: "
+             "192M dry, 190M hot-and-dry."],
+        ["", "DO NOT sum or compare across blocks without checking the "
+             "'Threshold %' column."],
         [],
         ["THRESHOLDS ARE NOT COMPARABLE ACROSS FAMILIES"],
         ["", "A rainfall tercile has a 1-in-3 no-information baseline; a "
