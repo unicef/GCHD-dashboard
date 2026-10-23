@@ -133,6 +133,7 @@ _HIDE_NON_OFFICIAL = [
     "NFK",   # Norfolk Island
     "PCN",   # Pitcairn
     "SJM",   # Svalbard and Jan Mayen Islands
+    "NIC",  # Nicaragua (Hidden in public app)
 ]
 
 # Sovereignty unsettled (not applicable). Every entry here carries
@@ -160,7 +161,7 @@ HIDE_UCODE_STEMS = set(_HIDE_NON_OFFICIAL + _HIDE_SOVEREIGNTY_UNSETTLED)
 # Insufficient data for all hazards. Kept ISO3-keyed: these are ordinary
 # countries, so the ucode stem and the ISO3 are the same string.
 NO_DATA_ISO3 = [
-    "NIC",   # Nicaragua
+    #"NIC",   # Nicaragua
     "PSE",   # State of Palestine
     "CUB",   # Cuba
     "VAT",   # Holy See
