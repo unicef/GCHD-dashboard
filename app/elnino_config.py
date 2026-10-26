@@ -15,28 +15,19 @@
 # =============================================================================
 
 # ── The uploaded collections ────────────────────────────────────────────────
+# One folder per forecast issue: el_nino/<init>/<collection>/<image>, with
+# collections raw_forecast[_t2m], raw_hindcast[_t2m], terciles[_t2m],
+# compound, skill[_t2m], brier. Shared across issues at the root:
+# chirps_obs, era5_obs (keyed by months) and enso_mask (keyed by season).
 ELNINO_ROOT = "projects/unicef-ccri/assets/el_nino"
 
-TERCILES_COLLECTION    = f"{ELNINO_ROOT}/terciles"
-RAW_FORECAST_COLLECTION = f"{ELNINO_ROOT}/raw_forecast"
-RAW_HINDCAST_COLLECTION = f"{ELNINO_ROOT}/raw_hindcast"
-# Built by scripts/el_nino/build_skill_mask.py. Optional: the tab hides the
-# skill layers and caption if this collection is absent.
-SKILL_COLLECTION       = f"{ELNINO_ROOT}/skill"
-# Built by scripts/el_nino/build_brier_skill.py. Also optional.
-BRIER_COLLECTION       = f"{ELNINO_ROOT}/brier"
 
-# ── Temperature and compound ────────────────────────────────────────────────
-# Parallel collections, deliberately NOT extra bands on the ones above: the
-# precipitation assets are what the tab has always read, and keeping these
-# separate means temperature can be absent and every existing code path is
-# unchanged. Each is probed at runtime and its layers hidden when missing,
-# exactly as skill and brier already are.
-TERCILES_T2M_COLLECTION     = f"{ELNINO_ROOT}/terciles_t2m"
-RAW_FORECAST_T2M_COLLECTION = f"{ELNINO_ROOT}/raw_forecast_t2m"
-RAW_HINDCAST_T2M_COLLECTION = f"{ELNINO_ROOT}/raw_hindcast_t2m"
-COMPOUND_COLLECTION         = f"{ELNINO_ROOT}/compound"
-SKILL_T2M_COLLECTION        = f"{ELNINO_ROOT}/skill_t2m"
+def issue_collection(tag, collection):
+    return f"{ELNINO_ROOT}/{tag}/{collection}"
+
+
+def issue_asset(tag, collection, image):
+    return f"{ELNINO_ROOT}/{tag}/{collection}/{image}"
 
 # ── ENSO attribution mask ───────────────────────────────────────────────────
 # User-supplied raster marking where El Nino has historically pushed OND

@@ -59,8 +59,7 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
 from elnino_config import (            # noqa: E402
-    TERCILES_COLLECTION, SKILL_COLLECTION,
-    TERCILES_T2M_COLLECTION, COMPOUND_COLLECTION, SKILL_T2M_COLLECTION,
+    issue_asset,
     SIGNALS, SIGNAL_MAP,
     HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction, parse_issue, window_suffix,
     ENSO_MASK_DIR as CFG_ENSO_DIR,
@@ -207,7 +206,7 @@ def child_pop(variant="T_U18"):
 
 
 def tercile_image(period):
-    asset = f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "terciles", f"terciles_{INIT_TAG}_{period}")
     names = band_names_of(asset, [
         "p_below", "p_normal", "p_above", "cat",
         "fc_mean_mm", "clim_mean_mm", "anom_mm", "dry_mask"])
@@ -232,7 +231,7 @@ def _on_tercile_grid(img, period):
 
 
 def skill_image(period):
-    asset = f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "skill", f"skill_{INIT_TAG}_{period}")
     img = ee.Image(asset).rename(
         band_names_of(asset, ["skill_r", "skill_p"]))
     return _on_tercile_grid(img, period)
@@ -246,7 +245,7 @@ def skill_t2m_image(period):
     CHIRPS-scored rainfall skill beside it. The Method sheet says so, because
     the two columns sit next to each other and invite direct comparison.
     """
-    asset = f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "skill_t2m", f"skill_t2m_{INIT_TAG}_{period}")
     img = ee.Image(asset).rename(
         band_names_of(asset, ["skill_r", "skill_p"]))
     return _on_tercile_grid(img, period)
@@ -254,7 +253,7 @@ def skill_t2m_image(period):
 
 def tercile_t2m_image(period):
     """Temperature terciles — SEVEN bands, no dry_mask."""
-    asset = f"{TERCILES_T2M_COLLECTION}/terciles_t2m_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "terciles_t2m", f"terciles_t2m_{INIT_TAG}_{period}")
     return ee.Image(asset).rename(band_names_of(
         asset, ["p_below", "p_normal", "p_above", "cat",
                 "fc_mean_c", "clim_mean_c", "anom_c"]))
@@ -262,7 +261,7 @@ def tercile_t2m_image(period):
 
 def compound_image(period):
     """Joint rainfall+temperature probabilities — nine bands."""
-    asset = f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "compound", f"compound_{INIT_TAG}_{period}")
     return ee.Image(asset).rename(band_names_of(
         asset, ["p_hotdry", "p_coolwet", "p_hotwet", "p_cooldry",
                 "cat_compound", "p_dry_marginal", "p_hot_marginal",
@@ -1061,7 +1060,7 @@ def main():
     # Rainfall skill is required; temperature and compound are optional, so a
     # run against a part-built project still produces the rainfall columns
     # rather than failing outright.
-    aid = f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{args.period}"
+    aid = issue_asset(INIT_TAG, "skill", f"skill_{INIT_TAG}_{args.period}")
     try:
         ee.data.getAsset(aid)
     except ee.EEException:
@@ -1069,9 +1068,11 @@ def main():
                  f"scripts/el_nino/build_skill_mask.py")
     for label, aid2 in (
             ("temperature skill",
-             f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{args.period}"),
+             issue_asset(INIT_TAG, "skill_t2m",
+                         f"skill_t2m_{INIT_TAG}_{args.period}")),
             ("combined signals",
-             f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{args.period}")):
+             issue_asset(INIT_TAG, "compound",
+                         f"compound_{INIT_TAG}_{args.period}"))):
         try:
             ee.data.getAsset(aid2)
         except ee.EEException:

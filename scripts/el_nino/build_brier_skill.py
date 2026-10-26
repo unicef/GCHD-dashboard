@@ -72,8 +72,8 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
 from elnino_config import (            # noqa: E402
-    ELNINO_ROOT, RAW_HINDCAST_COLLECTION, HINDCAST, HC_YEARS, SYSTEM,
-    BRIER_COLLECTION, BRIER_BANDS, parse_issue, window_suffix,
+    ELNINO_ROOT, HINDCAST, HC_YEARS, SYSTEM, issue_collection, issue_asset,
+    BRIER_BANDS, parse_issue, window_suffix,
     staged_obs_name,
 )
 
@@ -111,7 +111,7 @@ def band_names_of(asset_id):
 def hindcast_structure():
     """({lead: [bands]}, ordered leads) derived from the band names."""
     names = band_names_of(
-        f"{RAW_HINDCAST_COLLECTION}/hc_{HC_YEARS[0]}{INIT_MONTH:02d}")
+        issue_asset(INIT_TAG, "raw_hindcast", f"hc_{HC_YEARS[0]}{INIT_MONTH:02d}"))
     by_lead = {}
     for nm in names:
         by_lead.setdefault(nm.split("_")[0], []).append(nm)
@@ -138,7 +138,7 @@ def member_totals(year, names, by_lead, leads):
     against a threshold, which is what produces a probability.
     """
     img = ee.Image(
-        f"{RAW_HINDCAST_COLLECTION}/hc_{year}{INIT_MONTH:02d}").rename(names)
+        issue_asset(INIT_TAG, "raw_hindcast", f"hc_{year}{INIT_MONTH:02d}")).rename(names)
     n_members = len(by_lead[leads[0]])
     out = []
     for m in range(n_members):
@@ -197,15 +197,17 @@ def brier_image(period, names, by_lead, lead_keys):
 
 
 def ensure_collection(asset_id):
-    try:
-        ee.data.getAsset(asset_id)
-    except ee.EEException:
-        ee.data.createAsset({"type": "IMAGE_COLLECTION"}, asset_id)
-        print(f"  created image collection {asset_id}")
+    parent = asset_id.rsplit("/", 1)[0]
+    for path, kind in ((parent, "FOLDER"), (asset_id, "IMAGE_COLLECTION")):
+        try:
+            ee.data.getAsset(path)
+        except ee.EEException:
+            ee.data.createAsset({"type": kind}, path)
+            print(f"  created {kind.lower()} {path}")
 
 
 def export_one(period, img, overwrite):
-    asset_id = f"{BRIER_COLLECTION}/brier_{INIT_TAG}_{period}"
+    asset_id = issue_asset(INIT_TAG, "brier", f"brier_{INIT_TAG}_{period}")
     if overwrite:
         try:
             ee.data.deleteAsset(asset_id)
@@ -317,7 +319,7 @@ def main():
                      f"--init {INIT_TAG} --period {period} --stage-obs --wait")
 
     if not args.dry_run:
-        ensure_collection(BRIER_COLLECTION)
+        ensure_collection(issue_collection(INIT_TAG, "brier"))
 
     tasks = []
     for period in periods:

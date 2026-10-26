@@ -56,7 +56,7 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))          # reuse the dashboard's own config
 
 from elnino_config import (            # noqa: E402
-    ELNINO_ROOT, TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION,
+    ELNINO_ROOT, issue_collection, issue_asset,
     HINDCAST, HC_YEARS, SYSTEM,
     parse_issue, window_suffix, obs_months, staged_obs_name,
 )
@@ -126,12 +126,10 @@ DEFAULT_VAR = "prec"
 
 def skill_collection(var):
     """Precipitation keeps the unsuffixed name the dashboard already reads."""
-    return (f"{ELNINO_ROOT}/skill" if var == DEFAULT_VAR
-            else f"{ELNINO_ROOT}/skill_{var}")
+    return issue_collection(
+        INIT_TAG, "skill" if var == DEFAULT_VAR else f"skill_{var}")
 
 
-# Back-compat for anything importing these names.
-SKILL_COLLECTION = skill_collection(DEFAULT_VAR)
 OBS_COLLECTION = OBS[DEFAULT_VAR]["staged"]
 CHIRPS = OBS[DEFAULT_VAR]["collection"]
 
@@ -166,8 +164,8 @@ def band_names_of(asset_id):
 
 def hindcast_collection(var):
     """Raw hindcast collection for a variable (prec keeps the bare name)."""
-    return (RAW_HINDCAST_COLLECTION if var == DEFAULT_VAR
-            else f"{RAW_HINDCAST_COLLECTION}_{var}")
+    return issue_collection(
+        INIT_TAG, "raw_hindcast" if var == DEFAULT_VAR else f"raw_hindcast_{var}")
 
 
 def hindcast_image_id(var, year):
@@ -356,11 +354,13 @@ def skill_image(period, hc_names, by_lead, lead_keys, proj, staged=True,
 
 
 def ensure_collection(asset_id):
-    try:
-        ee.data.getAsset(asset_id)
-    except ee.EEException:
-        ee.data.createAsset({"type": "IMAGE_COLLECTION"}, asset_id)
-        print(f"  created image collection {asset_id}")
+    parent = asset_id.rsplit("/", 1)[0]
+    for path, kind in ((parent, "FOLDER"), (asset_id, "IMAGE_COLLECTION")):
+        try:
+            ee.data.getAsset(path)
+        except ee.EEException:
+            ee.data.createAsset({"type": kind}, path)
+            print(f"  created {kind.lower()} {path}")
 
 
 def export_one(period, img, overwrite, var=DEFAULT_VAR):
@@ -501,7 +501,8 @@ def main():
     # The terciles grid is the target: skill must line up cell-for-cell with the
     # signal it qualifies.
     proj = ee.Image(
-        f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{WINDOW_PERIOD}").projection()
+        issue_asset(INIT_TAG, "terciles",
+                    f"terciles_{INIT_TAG}_{WINDOW_PERIOD}")).projection()
 
     if not args.dry_run:
         ensure_collection(skill_collection(var))

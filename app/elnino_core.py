@@ -20,15 +20,14 @@ from cachetools import TTLCache, cached as _ttl_cached
 
 from config import ADMIN_DATA, POP_VIS
 from elnino_config import (
-    TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION, SKILL_COLLECTION,
+    ISSUES, issue_collection, issue_asset,
     TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, is_window, HC_YEARS,
     SIGNAL_MAP, EXPLORE_MAP,
     PROB_DEFAULT, SENSITIVITY_THRESHOLDS, to_fraction,
     SKILL_BANDS, SKILL_USABLE_MIN, SKILL_MODERATE_MIN,
-    BRIER_COLLECTION, BRIER_BANDS, BSS_USEFUL_MIN, BSS_GOOD_MIN,
+    BRIER_BANDS, BSS_USEFUL_MIN, BSS_GOOD_MIN,
     NINO34_BOX, OISST_COLLECTION, OISST_SCALE, NINO34_MONTHS,
     ENSO_EVENT_MIN, ENSO_STRONG_MIN, ENSO_YEARS,
-    TERCILES_T2M_COLLECTION, COMPOUND_COLLECTION, SKILL_T2M_COLLECTION,
     TERCILE_T2M_BANDS, COMPOUND_BANDS, is_compound,
     PROB_COMPOUND_DEFAULT, SENSITIVITY_COMPOUND,
     ENSO_MASK_ASSET, ENSO_MASK_BAND, ENSO_MASK_DIR,
@@ -85,17 +84,19 @@ def _period(period):
     return p
 
 
-def _asset(collection, stem, period):
+def _asset(collection, period):
     p = _period(period)
-    return f"{collection}/{stem}_{p['init']}_{p['suffix']}"
+    return issue_asset(p["init"], collection,
+                       f"{collection}_{p['init']}_{p['suffix']}")
 
 
 def _hindcast_ids(init):
-    return [f"{RAW_HINDCAST_COLLECTION}/hc_{y}{init[4:]}" for y in HC_YEARS]
+    return [issue_asset(init, "raw_hindcast", f"hc_{y}{init[4:]}")
+            for y in HC_YEARS]
 
 
 def tercile_asset(period):
-    return _asset(TERCILES_COLLECTION, "terciles", period)
+    return _asset("terciles", period)
 
 
 def _tercile_image(period):
@@ -113,7 +114,7 @@ def _tercile_image(period):
 
 
 def tercile_t2m_asset(period):
-    return _asset(TERCILES_T2M_COLLECTION, "terciles_t2m", period)
+    return _asset("terciles_t2m", period)
 
 
 def _tercile_t2m_image(period):
@@ -127,7 +128,7 @@ def _tercile_t2m_image(period):
 
 
 def compound_asset(period):
-    return _asset(COMPOUND_COLLECTION, "compound", period)
+    return _asset("compound", period)
 
 
 def _compound_image(period):
@@ -152,11 +153,11 @@ def _dry_mask_for(period):
 
 
 def skill_asset(period):
-    return _asset(SKILL_COLLECTION, "skill", period)
+    return _asset("skill", period)
 
 
 def skill_t2m_asset(period):
-    return _asset(SKILL_T2M_COLLECTION, "skill_t2m", period)
+    return _asset("skill_t2m", period)
 
 
 def _skill_t2m_image(period):
@@ -185,7 +186,7 @@ def _skill_image(period):
 
 
 def brier_asset(period):
-    return _asset(BRIER_COLLECTION, "brier", period)
+    return _asset("brier", period)
 
 
 def _brier_image(period):
@@ -222,7 +223,7 @@ def _hindcast_season_mean(year, init, names, by_lead, lead_keys):
     monthly mean and compare one month against a multi-month quantity.
     """
     img = ee.Image(
-        f"{RAW_HINDCAST_COLLECTION}/hc_{year}{init[4:]}").rename(names)
+        issue_asset(init, "raw_hindcast", f"hc_{year}{init[4:]}")).rename(names)
     per_lead = [img.select(by_lead[k]).reduce(ee.Reducer.mean())
                 for k in lead_keys]
     total = per_lead[0]
@@ -815,6 +816,11 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
 # Skill
 # ---------------------------------------------------------------------------
 
+def _any_issue_has(collection):
+    return any(ee.ImageCollection(issue_collection(t, collection))
+               .size().getInfo() > 0 for t in ISSUES)
+
+
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def brier_available():
     """Whether the Brier collection exists and holds images.
@@ -823,7 +829,7 @@ def brier_available():
     layers and caption rather than erroring.
     """
     try:
-        return ee.ImageCollection(BRIER_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("brier")
     except Exception:
         return False
 
@@ -834,8 +840,7 @@ def brier_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def t2m_available():
     try:
-        return ee.ImageCollection(
-            TERCILES_T2M_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("terciles_t2m")
     except Exception:
         return False
 
@@ -843,7 +848,7 @@ def t2m_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def compound_available():
     try:
-        return ee.ImageCollection(COMPOUND_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("compound")
     except Exception:
         return False
 
@@ -851,7 +856,7 @@ def compound_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def skill_t2m_available():
     try:
-        return ee.ImageCollection(SKILL_T2M_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("skill_t2m")
     except Exception:
         return False
 
@@ -901,7 +906,7 @@ def skill_available():
     script — so the tab hides the skill layers and caption rather than erroring.
     """
     try:
-        return ee.ImageCollection(SKILL_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("skill")
     except Exception:
         return False
 
@@ -1219,14 +1224,17 @@ def elnino_available():
     created under a personal account by the upload script, so "not shared with
     the service account" is the expected first-run failure and is named as such.
     """
-    try:
-        n = ee.ImageCollection(TERCILES_COLLECTION).size().getInfo()
-    except Exception as e:
-        return False, (
-            f"The El Niño assets are not readable ({str(e)[:100]}). They are "
-            f"created under the uploader's own Earth Engine account, so the "
-            f"app's service account needs read access to {TERCILES_COLLECTION}.")
-    if not n:
-        return False, (f"{TERCILES_COLLECTION} is empty — run "
+    missing = []
+    for tag in ISSUES:
+        coll = issue_collection(tag, "terciles")
+        try:
+            if not ee.ImageCollection(coll).size().getInfo():
+                missing.append(coll)
+        except Exception as e:
+            return False, (
+                f"The El Niño assets are not readable ({str(e)[:100]}). The "
+                f"app's service account needs read access to {coll}.")
+    if missing:
+        return False, (f"{', '.join(missing)} empty — run "
                        f"scripts/el_nino/download_ecmwf_prec.py.")
-    return True, f"{n} period(s) available."
+    return True, f"{len(ISSUES)} forecast issue(s) available."

@@ -230,6 +230,10 @@ def set_init(tag):
     INIT_TAG, INIT_YEAR, INIT_MONTH = tag, int(tag[:4]), int(tag[4:])
 
 
+def issue_root():
+    return f"{GEE_ROOT}/{INIT_TAG}"
+
+
 def default_out():
     return HERE / "data" / f"seas5_{INIT_TAG}"
 
@@ -832,8 +836,8 @@ def ensure_collections(cols):
         print("   geeup will create the destinations itself; carry on.")
         return
 
-    for path, kind in [(GEE_ROOT, "FOLDER")] + [
-            (f"{GEE_ROOT}/{c}", "IMAGE_COLLECTION") for c in cols]:
+    for path, kind in [(GEE_ROOT, "FOLDER"), (issue_root(), "FOLDER")] + [
+            (f"{issue_root()}/{c}", "IMAGE_COLLECTION") for c in cols]:
         try:
             ee.data.getAsset(path)
         except ee.EEException:
@@ -1041,9 +1045,9 @@ def main():
     failed = []
     for col in cols:
         n = sum(1 for c, _, _, _ in images if c == col)
-        print(f"\n=== {col}: {n} image(s) -> {GEE_ROOT}/{col} ===")
+        print(f"\n=== {col}: {n} image(s) -> {issue_root()}/{col} ===")
         staging = stage(out, images, col)
-        rc = run_geeup(staging, metas[col], f"{GEE_ROOT}/{col}",
+        rc = run_geeup(staging, metas[col], f"{issue_root()}/{col}",
                        args.user, args.overwrite, args.dry_run, args.workers)
         if rc != 0:
             failed.append((col, rc))

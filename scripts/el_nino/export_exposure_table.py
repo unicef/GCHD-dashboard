@@ -42,7 +42,7 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))          # reuse the dashboard's own config/core
 
 from elnino_config import (            # noqa: E402
-    TERCILES_COLLECTION, SIGNALS, SIGNAL_MAP,
+    issue_asset, SIGNALS, SIGNAL_MAP,
     HINDCAST, SYSTEM, to_fraction, parse_issue, window_suffix,
 )
 
@@ -104,7 +104,7 @@ def tercile_image(period):
     geeup's manifest carries no band names, so Earth Engine stores b1..b8 in
     file order; the names ride along in the `band_names` property.
     """
-    asset = f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "terciles", f"terciles_{INIT_TAG}_{period}")
     img = ee.Image(asset)
     names = [b.strip() for b in
              str(ee.Image(asset).get("band_names").getInfo()).split(",")
