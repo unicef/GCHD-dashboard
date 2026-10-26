@@ -723,6 +723,43 @@ CAVEATS = [
     "varying one does not.",
 ]
 
+# ── Download disclaimer ─────────────────────────────────────────────────────
+# Shown in a dialog the user must accept before EVERY Excel or JSON download,
+# and written into the file itself (first sheet / "disclaimer" key) so it
+# travels with any number lifted out of it. One source for all three so the
+# wording cannot drift. Deliberately short: CAVEATS holds the detail.
+DOWNLOAD_DISCLAIMER_TITLE = "Before you download"
+
+
+def download_disclaimer(period_label, issue_label):
+    """The disclaimer for ONE result: names the forecast period and issue.
+
+    Without the period, the only dates in the text were the 1993–2016
+    baseline, which readers took to be the data. The grid size is stated in
+    degrees: 1° is ~111 km north–south but shrinks east–west with latitude
+    (~79 km at 45°), so a flat "100 km" overstates the precision of the
+    description, not of the data.
+    """
+    return [
+        "These figures are a seasonal FORECAST, not a measured impact.",
+        f"They come from the ECMWF SEAS5 forecast issued {issue_label} for "
+        f"{period_label}. They count children (under 18) living where that "
+        "forecast leans towards a drier, wetter, hotter or cooler season "
+        "than normal. “Normal” is the model's own re-forecasts of "
+        f"{HINDCAST.replace('-', '–')}, used only as a baseline.",
+        "They do not predict drought, flooding or harm, and do not reflect "
+        "vulnerability or capacity to cope.",
+        "Forecast skill varies by region, and the forecast grid is 1° (about "
+        "110 km at the equator), so figures are not precise below district "
+        "level. Quote the range across thresholds and the forecast issue "
+        "date — suggested wording below.",
+    ]
+
+
+
+DOWNLOAD_DISCLAIMER_ACK = ("I understand these are forecast estimates, "
+                           "not measured impacts.")
+
 SOURCE_URL = ("https://cds.climate.copernicus.eu/datasets/"
               "seasonal-monthly-single-levels")
 

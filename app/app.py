@@ -69,6 +69,7 @@ from elnino_config import (
     SIGNAL_GROUPS, is_compound, threshold_contract,
     EN_INFO, ENSO_MASK_DIR,
     PROB_COMPOUND_DEFAULT, COMPOUND_CHANCE_LEVEL,
+    DOWNLOAD_DISCLAIMER_TITLE, download_disclaimer, DOWNLOAD_DISCLAIMER_ACK,
 )
 from elnino_core import (
     ElNinoError, compute_elnino_exposure, hindcast_area_share,
@@ -1608,6 +1609,9 @@ def tab_elnino():
         dcc.Store(id="elnino-extra-on", data=False),
         dcc.Store(id="store-elnino-extra", data=None),
         dcc.Store(id="store-elnino-result",  data=None),
+        # Inputs for the downloads ({meta, history, export}), written on
+        # compute. Files are built from it on demand — never on every compute.
+        dcc.Store(id="store-elnino-export",  data=None),
         dcc.Store(id="store-elnino-viz",     data=None),
         # Previewed layer + its vis, so the legend can describe the global map
         # that is on screen before any region has been computed.
@@ -2025,6 +2029,35 @@ app.layout = html.Div(id="app-root", children=[
     # opens, which is exactly the moment the switch must NOT happen.
     dcc.Store(id="store-leave-dest",  data=None),
     dcc.Store(id="store-pending-tab", data=None),
+
+    # ── El Niño download disclaimer ────────────────────────────────────────
+    # Stands between EVERY download click and the file. The download buttons
+    # only open this; the file is built by elnino_download, which listens to
+    # the confirm button alone, so there is no path to a file that skips it.
+    html.Div(id="elnino-dl-gate", style={"display": "none"}, children=[
+        html.Div(className="embargo-card leave-card en-dl-card", children=[
+            html.Div(DOWNLOAD_DISCLAIMER_TITLE, className="embargo-title"),
+            # Filled by elnino_dl_gate from the result being downloaded: the
+            # wording names that result's forecast period and issue.
+            html.Div(id="elnino-dl-body", className="embargo-body"),
+            dcc.Checklist(
+                id="elnino-dl-ack",
+                options=[{"label": " " + DOWNLOAD_DISCLAIMER_ACK,
+                          "value": "yes"}],
+                value=[], className="embargo-check en-dl-ack",
+            ),
+            html.Div(className="leave-btns", children=[
+                html.Button("Cancel", id="elnino-dl-cancel",
+                            className="leave-btn-ghost", n_clicks=0),
+                html.Button("Download", id="elnino-dl-confirm",
+                            className="embargo-btn leave-btn-go",
+                            n_clicks=0, disabled=True),
+            ]),
+        ]),
+    ]),
+    # Which file the open dialog will produce ("xlsx" | "json").
+    dcc.Store(id="store-elnino-dl-kind", data=None),
+    dcc.Download(id="elnino-download"),
 
     # ── Add-your-own-data dialog (Infra tab) ───────────────────────────────
     html.Div(id="co-template-gate", style={"display": "none"}, children=[
@@ -6895,6 +6928,7 @@ def elnino_toggle_compute(level, ucode, clicked, tab):
     Output("store-elnino-result", "data"),
     Output("elnino-results-panel", "children"),
     Output("store-elnino-viz",    "data"),
+    Output("store-elnino-export", "data"),
     Input("elnino-compute-btn",   "n_clicks"),
     State("elnino-period",        "value"),
     State("elnino-signal",        "data"),
@@ -6914,10 +6948,10 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
                    level_sel):
     level = level_sel or level_store
     if not level:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     target = ucode if level == "adm0 (Country)" else clicked
     if not target:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     region_name = country if level == "adm0 (Country)" else (clicked_name
                                                              or target)
     apply_mask = "on" in (dry_mask or [])
@@ -6930,9 +6964,10 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
         result = compute_elnino_exposure(period, signal, thr, target, level,
                                          apply_mask)
     except ElNinoError as ex:
-        return None, _elnino_error(str(ex)), None
+        return None, _elnino_error(str(ex)), None, None
     except Exception as ex:
-        return None, _elnino_error(f"Computation failed: {str(ex)[:200]}"), None
+        return (None, _elnino_error(f"Computation failed: {str(ex)[:200]}"),
+                None, None)
 
     # Historical context is best-effort — the numbers stand without it.
     # Both sides must be AREA shares: the panel's headline percentage is a
@@ -6986,7 +7021,10 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
     # what the highlighted area amounts to.
     meta["exposed"] = int(round(result.get("exposed", 0) or 0))
     meta["total"] = int(round(result.get("total_population", 0) or 0))
-    return result, render_elnino_results(result, meta, history), meta
+    payload = {"meta": meta, "history": history,
+               "export": _elnino_export_payload(result, meta)}
+    return (result, render_elnino_results(result, meta, history), meta,
+            payload)
 
 
 @app.callback(
@@ -7309,7 +7347,7 @@ def build_elnino_xlsx(meta, result, history, export):
     out of this file without them is the failure mode the whole module is
     written against.
     """
-    import io, base64
+    import io
     import xlsxwriter
 
     buf = io.BytesIO()
@@ -7336,11 +7374,13 @@ def build_elnino_xlsx(meta, result, history, export):
     f_pct   = wb.add_format({"border": 1, "num_format": PCT})
     f_spct  = wb.add_format({"border": 1, "num_format": PCT_SIGNED})
     f_year  = wb.add_format({"border": 1, "num_format": "0"})
-    f_dec   = wb.add_format({"border": 1, "num_format": "0.0"})
     f_sdec  = wb.add_format({"border": 1, "num_format": "+0.0;-0.0;0.0"})
     f_wrap  = wb.add_format({"text_wrap": True, "valign": "top"})
     f_note  = wb.add_format({"font_size": 9, "font_color": "#595959",
                              "text_wrap": True, "valign": "top"})
+    f_quote = wb.add_format({"text_wrap": True, "valign": "top",
+                             "bg_color": "#FDF3C8", "border": 1,
+                             "border_color": "#E0C96B"})
 
     sig = SIGNAL_MAP.get(meta["signal"], {})
     anoms = meta.get("anoms") or {}
@@ -7375,8 +7415,30 @@ def build_elnino_xlsx(meta, result, history, export):
     # -- 1. Read me first --------------------------------------------------
     ws = wb.add_worksheet("Read me first")
     ws.set_column(0, 0, 112)
-    ws.write(0, 0, "Read this before quoting any number in this file", f_title)
-    r = 2
+    # The disclaimer the downloader accepted comes first, verbatim, so it
+    # stays attached to the numbers wherever this file is forwarded.
+    disclaimer = export.get("disclaimer") or download_disclaimer(
+        period_label(meta["period"]), INIT_LABEL)
+    ws.write(0, 0, disclaimer[0], f_title)
+    r = 1
+    for c in disclaimer[1:]:
+        ws.write(r, 0, "• " + c, f_wrap)
+        ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
+        r += 1
+    if export.get("disclaimer_accepted_utc"):
+        ws.write(r, 0, "Accepted by the person downloading this file on "
+                       f"{export['disclaimer_accepted_utc']}.", f_note)
+        r += 1
+    quote = export.get("suggested_citation")
+    if quote:
+        r += 1
+        ws.write(r, 0, "Suggested wording when quoting this figure", f_h2)
+        ws.write(r + 1, 0, quote, f_quote)
+        ws.set_row(r + 1, 15 * (len(quote) // 100 + 2))
+        r += 2
+    r += 1
+    ws.write(r, 0, "Read this before quoting any number in this file", f_title)
+    r += 2
     for c in CAVEATS:
         ws.write(r, 0, "• " + c, f_wrap)
         ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
@@ -7490,6 +7552,13 @@ def build_elnino_xlsx(meta, result, history, export):
                        "El Niño-related, so read it as the weaker claim.",
                        f_note)
         ws.set_row(r, 30)
+        r += 1
+    if export.get("suggested_citation"):
+        r += 1
+        ws.write(r, 0, "HOW TO QUOTE THIS", f_h2)
+        ws.merge_range(r + 1, 0, r + 1, 2, export["suggested_citation"],
+                       f_quote)
+        ws.set_row(r + 1, 15 * (len(export["suggested_citation"]) // 120 + 2))
     _print_setup(ws)
 
     # -- 3. Sensitivity ----------------------------------------------------
@@ -7570,8 +7639,7 @@ def build_elnino_xlsx(meta, result, history, export):
     _print_setup(ws)
 
     wb.close()
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return f"data:{_XLSX_MIME};base64,{b64}"
+    return buf.getvalue()
 
 
 def _elnino_empty_state(exposed, sens, threshold):
@@ -7668,33 +7736,22 @@ def _elnino_magnitude_block(meta):
     return html.Div(className="ps", children=kids)
 
 
-def render_elnino_results(result, meta, history=None):
-    """Exposure, the threshold sensitivity, and the caveats that must travel.
+def _elnino_export_payload(result, meta):
+    """The machine-readable record of one El Nino result.
 
-    The sensitivity row is the important part. With 51 members, probability
-    moves in steps of about 2 points, so a single figure implies a precision the
-    ensemble does not have — showing 40/50/60% alongside it is what keeps the
-    headline number honest.
+    Shared by the JSON download and the workbook (which reads its figures from
+    here), so the two files cannot disagree. Built on compute and kept in
+    store-elnino-export; the files themselves are built only on download.
     """
-    if not result:
-        return _elnino_error("No result.")
-
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
-    # Boys/girls are the breakdown of `exposed` (children UNDER THE SIGNAL);
-    # the region-wide splits travel separately and are labelled as such.
     male    = int(round(result.get("exposed_male", 0) or 0))
     fema    = int(round(result.get("exposed_female", 0) or 0))
     male_t  = int(round(result.get("total_population_male", 0) or 0))
     fema_t  = int(round(result.get("total_population_female", 0) or 0))
     masked  = int(round(result.get("masked_population", 0) or 0))
     pct     = (exposed / total * 100) if total else 0
-
-    def _share(part, whole):
-        return (part / whole * 100) if whole else 0
-
     sig = SIGNAL_MAP.get(meta["signal"], {})
-    colour = sig.get("color", "#e31a1c")
     sens = result.get("_sensitivity") or {}
 
     export = {
@@ -7751,8 +7808,102 @@ def render_elnino_results(result, meta, history=None):
             "Counted per ensemble member, not as a product of marginal "
             "probabilities. Threshold is not comparable with a "
             "single-variable one.")
+    export["disclaimer"] = download_disclaimer(period_label(meta["period"]),
+                                               INIT_LABEL)
+    export["suggested_citation"] = _elnino_quote(export)
+    return export
+
+
+def _round_people(n):
+    """Readable, honestly-rounded count: 538,628 -> "539,000", 4.1M -> "4.1 million".
+
+    Three significant figures at most — a 1° forecast does not support the
+    last digits of a population sum, and a quoted "538,628" implies it does.
+    """
+    n = int(round(n or 0))
+    if n == 0:
+        return "0"
+    if n >= 1_000_000:
+        return f"{n / 1e6:.3g} million"
+    if n < 1000:
+        return f"{n:,}"
+    digits = len(str(n)) - 3
+    return f"{round(n, -digits):,}"
+
+
+def _elnino_quote(export):
+    """One sentence a reader can paste into a report, with its qualifiers.
+
+    People rarely write caveats themselves; they do copy a ready sentence. So
+    the sentence carries the issue date, the probability, the range across
+    thresholds and "a forecast, not a measured impact" — the minimum for the
+    figure to be read correctly out of context.
+    """
+    sig = SIGNAL_MAP.get(export["signal"], {})
+    phrase = ("an area forecast to be either drier or wetter than normal"
+              if sig.get("union_of") else sig.get("area_phrase", "a signal area"))
+    thr = int(round(export["probability_threshold"]))
+    n = export["children_exposed"]
+    when = (export.get("computed_utc") or "")[:10]
+    head = (f"According to the ECMWF SEAS5 seasonal forecast issued "
+            f"{export['init']}, ")
+    if n:
+        head += (f"about {_round_people(n)} children "
+                 f"({export['pct_children_exposed']:.1f}% of all children) in "
+                 f"{export['region']} live in {phrase} for "
+                 f"{export['period_label']}, forecast with at least {thr}% "
+                 f"probability.")
+    else:
+        head += (f"no children in {export['region']} live in {phrase} for "
+                 f"{export['period_label']} at a forecast probability of "
+                 f"{thr}% or more.")
+    sens = export.get("sensitivity_children_exposed_by_threshold_pct") or {}
+    rng = ""
+    if len(sens) > 1:
+        lo_t, hi_t = min(sens, key=float), max(sens, key=float)
+        rng = (f" Depending on the probability required, the figure ranges "
+               f"from {_round_people(sens[hi_t])} (at {int(float(hi_t))}%) to "
+               f"{_round_people(sens[lo_t])} (at {int(float(lo_t))}%).")
+    return (head + rng + " This is a forecast, not a measured impact. "
+            f"Source: UNICEF Global Child Hazard Database (GCHD), computed "
+            f"{when}.")
+
+
+def _elnino_filename(meta, ext):
     safe = re.sub(r"[^a-zA-Z0-9]", "_",
                   f"{meta['region']}_{meta['period']}_{meta['signal']}")
+    return f"gchd_elnino_{safe}.{ext}"
+
+
+def render_elnino_results(result, meta, history=None):
+    """Exposure, the threshold sensitivity, and the caveats that must travel.
+
+    The sensitivity row is the important part. With 51 members, probability
+    moves in steps of about 2 points, so a single figure implies a precision the
+    ensemble does not have — showing 40/50/60% alongside it is what keeps the
+    headline number honest.
+    """
+    if not result:
+        return _elnino_error("No result.")
+
+    exposed = int(round(result.get("exposed", 0) or 0))
+    total   = int(round(result.get("total_population", 0) or 0))
+    # Boys/girls are the breakdown of `exposed` (children UNDER THE SIGNAL);
+    # the region-wide splits travel separately and are labelled as such.
+    male    = int(round(result.get("exposed_male", 0) or 0))
+    fema    = int(round(result.get("exposed_female", 0) or 0))
+    male_t  = int(round(result.get("total_population_male", 0) or 0))
+    fema_t  = int(round(result.get("total_population_female", 0) or 0))
+    masked  = int(round(result.get("masked_population", 0) or 0))
+    pct     = (exposed / total * 100) if total else 0
+
+    def _share(part, whole):
+        return (part / whole * 100) if whole else 0
+
+    sig = SIGNAL_MAP.get(meta["signal"], {})
+    colour = sig.get("color", "#e31a1c")
+    sens = result.get("_sensitivity") or {}
+
 
     # The history chart is AREA-based on both sides. `pct` above is a share of
     # CHILDREN and is NOT interchangeable with it — see forecast_area_share.
@@ -7873,29 +8024,171 @@ def render_elnino_results(result, meta, history=None):
             ], className="ps-caption", style={"lineHeight": "1.7"}),
         ]),
 
+        # Buttons, not data-URI links: a link carries the finished file, so a
+        # click would save it with no chance to show the disclaimer. These
+        # only open #elnino-dl-gate; elnino_download builds the file.
         html.Div(className="ps", children=[
-            html.A(
+            html.Button(
                 "⬇  Download Excel workbook",
-                href=build_elnino_xlsx(meta, result, history, export),
-                download=f"gchd_elnino_{safe}.xlsx",
+                id="elnino-dl-xlsx-btn", n_clicks=0,
                 className="ps-btn",
-                style={"display": "block", "textAlign": "center",
-                       "textDecoration": "none", "padding": "9px 16px"},
+                style={"display": "block", "width": "100%",
+                       "textAlign": "center", "padding": "9px 16px"},
             ),
             # JSON kept as the machine-readable form. Secondary styling: the
             # workbook is what a person wants, this is what a script wants.
-            html.A(
+            html.Button(
                 "⬇  JSON (for scripts)",
-                href="data:application/json;charset=utf-8,"
-                     + _json.dumps(export, indent=2),
-                download=f"gchd_elnino_{safe}.json",
+                id="elnino-dl-json-btn", n_clicks=0,
                 className="ps-btn-ghost",
-                style={"display": "block", "textAlign": "center",
-                       "textDecoration": "none", "padding": "7px 16px",
+                style={"display": "block", "width": "100%",
+                       "textAlign": "center", "padding": "7px 16px",
                        "marginTop": "6px", "fontSize": "0.7rem"},
             ),
         ]),
     ])
+
+
+@app.callback(
+    Output("elnino-dl-gate",       "style"),
+    Output("store-elnino-dl-kind", "data"),
+    Output("elnino-dl-ack",        "value"),
+    Output("elnino-dl-body",       "children"),
+    Input("elnino-dl-xlsx-btn",    "n_clicks"),
+    Input("elnino-dl-json-btn",    "n_clicks"),
+    Input("elnino-dl-cancel",      "n_clicks"),
+    Input("elnino-dl-confirm",     "n_clicks"),
+    State("store-elnino-export",   "data"),
+    prevent_initial_call=True,
+)
+def elnino_dl_gate(_x, _j, _c, _ok, payload):
+    """Open the disclaimer on EVERY download click; close it on either answer.
+
+    The tick is cleared each time the dialog opens, so an earlier acceptance
+    never carries over to the next file. The body is rebuilt from the result
+    being downloaded, so it names that result's period and forecast issue and
+    offers the sentence to quote.
+    """
+    trig = ctx.triggered_id
+    # The results panel is re-rendered on each compute, which mounts fresh
+    # buttons; ignore that mount (n_clicks 0/None) rather than opening.
+    if not (ctx.triggered and ctx.triggered[0].get("value")):
+        raise dash.exceptions.PreventUpdate
+    if trig in ("elnino-dl-xlsx-btn", "elnino-dl-json-btn"):
+        if not payload:
+            raise dash.exceptions.PreventUpdate
+        exp = payload["export"]
+        lines = exp["disclaimer"]
+        body = [
+            html.P(html.Strong(lines[0])),
+            html.Ul([html.Li(t) for t in lines[1:]]),
+            html.Div("Suggested wording when quoting this figure",
+                     className="en-dl-quote-head"),
+            # Clamped to two lines so the dialog fits a laptop screen without
+            # scrolling; the copy button and the hover title both carry the
+            # FULL sentence (line-clamp is visual only).
+            html.Div(className="en-dl-quote", children=[
+                html.Span(exp["suggested_citation"], id="elnino-dl-quote",
+                          className="en-dl-quote-text",
+                          title=exp["suggested_citation"]),
+                # Not dcc.Clipboard: it renders NOTHING unless the page is
+                # a secure context (navigator.clipboard), so it vanished on
+                # http://<ip> and the HTTP deploy. See the clientside copy
+                # callback below for the fallback.
+                html.Button(id="elnino-dl-copy", n_clicks=0,
+                            className="en-dl-copy",
+                            title="Copy the full sentence",
+                            children=[html.Span(className="en-dl-copy-ico"),
+                                      html.Span("Copy",
+                                                className="en-dl-copy-lbl")]),
+            ]),
+        ]
+        kind = "xlsx" if trig == "elnino-dl-xlsx-btn" else "json"
+        return {"display": "flex"}, kind, [], body
+    return {"display": "none"}, no_update, [], no_update
+
+
+# Copy the suggested wording. Selects the whole sentence (so the user sees what
+# was taken), then copies via the async Clipboard API where the page is a
+# secure context, falling back to execCommand("copy") on plain-http origins,
+# where navigator.clipboard does not exist. Pure DOM: the "Copied" state is a
+# class flipped for 2 s, so no server round trip and no extra store.
+app.clientside_callback(
+    """
+    function(n) {
+        if (!n) { return window.dash_clientside.no_update; }
+        var el  = document.getElementById("elnino-dl-quote");
+        var btn = document.getElementById("elnino-dl-copy");
+        if (!el || !btn) { return window.dash_clientside.no_update; }
+        var text = el.innerText || el.textContent || "";
+        var sel = window.getSelection(), range = document.createRange();
+        range.selectNodeContents(el);
+        sel.removeAllRanges(); sel.addRange(range);
+        function done(ok) {
+            var lbl = btn.querySelector(".en-dl-copy-lbl");
+            btn.classList.toggle("copied", ok);
+            btn.classList.toggle("failed", !ok);
+            if (lbl) { lbl.textContent = ok ? "Copied" : "Press Ctrl+C"; }
+            clearTimeout(btn._t);
+            btn._t = setTimeout(function () {
+                btn.classList.remove("copied", "failed");
+                if (lbl) { lbl.textContent = "Copy"; }
+            }, 2000);
+        }
+        function legacy() {
+            var ok = false;
+            try { ok = document.execCommand("copy"); } catch (e) {}
+            done(ok);
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(
+                function () { done(true); }, legacy);
+        } else {
+            legacy();      // the sentence is already selected above
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("elnino-dl-copy", "title"),
+    Input("elnino-dl-copy",  "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
+@app.callback(
+    Output("elnino-dl-confirm", "disabled"),
+    Input("elnino-dl-ack",      "value"),
+)
+def elnino_dl_ack(ack):
+    return "yes" not in (ack or [])
+
+
+@app.callback(
+    Output("elnino-download",      "data"),
+    Input("elnino-dl-confirm",     "n_clicks"),
+    State("elnino-dl-ack",         "value"),
+    State("store-elnino-dl-kind",  "data"),
+    State("store-elnino-export",   "data"),
+    State("store-elnino-result",   "data"),
+    prevent_initial_call=True,
+)
+def elnino_download(n, ack, kind, payload, result):
+    """Build the chosen file, only after the disclaimer has been accepted.
+
+    The ack is re-checked here, not just trusted from the disabled button:
+    this callback is the only route to a file, so it enforces the rule itself.
+    """
+    if not n or "yes" not in (ack or []) or not payload or not result:
+        raise dash.exceptions.PreventUpdate
+    meta, history = payload["meta"], payload.get("history") or []
+    export = dict(payload["export"],
+                  disclaimer_accepted_utc=dt.datetime.utcnow().isoformat(
+                      timespec="seconds") + "Z")
+    if kind == "json":
+        return dcc.send_string(_json.dumps(export, indent=2, ensure_ascii=False),
+                               _elnino_filename(meta, "json"))
+    return dcc.send_bytes(build_elnino_xlsx(meta, result, history, export),
+                          _elnino_filename(meta, "xlsx"))
 
 
 # ---------------------------------------------------------------------------
