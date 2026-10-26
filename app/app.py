@@ -7351,66 +7351,123 @@ def build_elnino_xlsx(meta, result, history, export):
         """Percent -> fraction for Excel's % number format, or None."""
         return None if v is None else v / 100.0
 
+    def _pct(part, whole):
+        """part/whole as 0-100, or None when either side is missing."""
+        if part is None or not whole:
+            return None
+        return part / whole * 100.0
+
+    sig_label = sig.get("label", meta["signal"])
+    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", meta["level"] or "")
+    pop_txt = (f"WorldPop 2025, children under 18, "
+               f"{meta.get('pop_res', 1000):,} m grid")
+    generated = export.get("computed_utc", "")
+
+    def _print_setup(ws, header_rows=None):
+        """Landscape, one page wide; repeat the table header when printed."""
+        ws.set_landscape()
+        ws.fit_to_pages(1, 0)
+        ws.set_paper(9)                       # A4
+        if header_rows is not None:
+            ws.repeat_rows(header_rows)
+            ws.freeze_panes(header_rows + 1, 0)
+
     # -- 1. Read me first --------------------------------------------------
     ws = wb.add_worksheet("Read me first")
     ws.set_column(0, 0, 112)
     ws.write(0, 0, "Read this before quoting any number in this file", f_title)
     r = 2
     for c in CAVEATS:
-        ws.write(r, 0, "- " + c, f_wrap)
+        ws.write(r, 0, "• " + c, f_wrap)
         ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
         r += 1
     r += 1
-    ws.write(r, 0, f"Source: ECMWF SEAS5 system {ELNINO_SYSTEM}, initialised "
-                   f"{INIT_LABEL}, hindcast {HINDCAST}. "
-                   f"Generated {export.get('computed_utc', '')}.", f_note)
+    ws.write(r, 0, f"Forecast: ECMWF SEAS5 system {ELNINO_SYSTEM}, issued "
+                   f"{INIT_LABEL}, compared against its own {HINDCAST} "
+                   f"hindcast. Population: {pop_txt}. "
+                   f"Generated {generated}.", f_note)
+    _print_setup(ws)
 
     # -- 2. Summary --------------------------------------------------------
+    # A third column says what each figure means, so the sheet can be read
+    # cold by someone who has never opened the dashboard.
     ws = wb.add_worksheet("Summary")
-    ws.set_column(0, 0, 42)
-    ws.set_column(1, 1, 30)
-    ws.write(0, 0, f"{meta['region']} - {period_label(meta['period'])}",
-             f_title)
+    ws.set_column(0, 0, 40)
+    ws.set_column(1, 1, 26)
+    ws.set_column(2, 2, 70)
+    ws.write(0, 0, f"{meta['region']} – {sig_label} – "
+                   f"{period_label(meta['period'])}", f_title)
+    ws.write(1, 0, "Children living where the seasonal forecast leans "
+                   "towards this outcome. A forecast, not a measured impact.",
+             f_note)
+    chance = export.get("chance_level_pct")
     rows = [
-        ("WHAT WAS ASKED", None, None),
-        ("Region", meta["region"], f_txt),
-        ("Administrative level", meta["level"], f_txt),
-        ("Period", period_label(meta["period"]), f_txt),
-        ("Signal", sig.get("label", meta["signal"]), f_txt),
-        ("Probability threshold", _frac(meta["threshold"]), f_pct),
-        ("No-information baseline",
-         _frac(export.get("chance_level_pct")), f_pct),
-        ("Arid areas excluded", "yes" if meta["dry_mask"] else "no", f_txt),
-        ("THE ANSWER", None, None),
-        ("Children in signal area", export.get("children_exposed"), f_int),
-        ("Total children in region", export.get("total_children"), f_int),
+        ("WHAT WAS ASKED", None, None, None),
+        ("Region", meta["region"], f_txt, None),
+        ("Administrative level", level_txt, f_txt, None),
+        ("Period", period_label(meta["period"]), f_txt, None),
+        ("Signal", sig_label, f_txt, sig.get("blurb")),
+        ("Probability threshold", _frac(meta["threshold"]), f_pct,
+         "Share of the 51 forecast ensemble members that must agree "
+         "before an area counts."),
+        ("No-information baseline", _frac(chance), f_pct,
+         "What the probability would be by chance alone. The threshold "
+         "should sit well above it."),
+        ("Arid areas excluded", "yes" if meta["dry_mask"] else "no", f_txt,
+         "Areas too dry in a normal season for 'drier' or 'wetter' to mean "
+         "anything are left out of the count."),
+        ("Forecast issued", INIT_LABEL, f_txt,
+         f"ECMWF SEAS5 system {ELNINO_SYSTEM}; normal = its own {HINDCAST} "
+         f"hindcast."),
+        ("Population data", pop_txt, f_txt, None),
+        ("THE ANSWER", None, None, None),
+        ("Children in signal area", export.get("children_exposed"), f_int,
+         "Children (under 18) living in areas that meet the threshold."),
+        ("Total children in region", export.get("total_children"), f_int,
+         None),
         ("Share of children", _frac(export.get("pct_children_exposed")),
-         f_pct),
-        ("Boys", export.get("male"), f_int),
-        ("Girls", export.get("female"), f_int),
+         f_pct, "Children in signal area ÷ total children in region."),
+        ("   of which boys", export.get("boys_exposed"), f_int,
+         "Boys under 18 in the signal area."),
+        ("   of which girls", export.get("girls_exposed"), f_int,
+         "Girls under 18 in the signal area."),
+        ("Share of boys", _frac(_pct(export.get("boys_exposed"),
+                                     export.get("total_boys"))), f_pct,
+         "Boys in signal area ÷ all boys in region."),
+        ("Share of girls", _frac(_pct(export.get("girls_exposed"),
+                                      export.get("total_girls"))), f_pct,
+         "Girls in signal area ÷ all girls in region."),
         ("Children in excluded arid areas",
-         export.get("children_in_excluded_arid_areas"), f_int),
-        ("HOW UNUSUAL", None, None),
+         export.get("children_in_excluded_arid_areas"), f_int,
+         "Not counted above, and not evidence of 'no signal'."),
+        ("HOW UNUSUAL", None, None, None),
         ("Rainfall anomaly (mm vs model normal)", anoms.get("anom_mm"),
-         f_sdec),
+         f_sdec, "Forecast minus normal season rainfall, averaged over the "
+                 "signal area."),
         ("Rainfall anomaly (% of normal)", _frac(anoms.get("anom_pct")),
-         f_spct),
-        ("Temperature anomaly (degC vs model normal)", anoms.get("anom_c"),
-         f_sdec),
-        ("ATTRIBUTION", None, None),
-        ("Children in El Nino-consistent areas", attrib.get("children"),
-         f_int),
-        ("Share of signal area attributable", _frac(attrib.get("pct")),
-         f_pct),
-        ("RELIABILITY", None, None),
+         f_spct, None),
+        ("Temperature anomaly (°C vs model normal)", anoms.get("anom_c"),
+         f_sdec, "Forecast minus normal mean temperature, averaged over the "
+                 "signal area."),
+        ("ATTRIBUTION", None, None, None),
+        ("Children in El Niño-consistent areas", attrib.get("children"),
+         f_int, "Children in signal areas where El Niño has historically "
+                "pushed rainfall in the same direction."),
+        ("Share of signal attributable", _frac(attrib.get("pct")), f_pct,
+         "Of the children in the signal area. The rest may be unusual for "
+         "other reasons. Consistency with El Niño is not proof of cause."),
+        ("RELIABILITY", None, None, None),
         ("Signal area with usable skill", _frac(skill.get("usable_pct")),
-         f_pct),
+         f_pct, f"Share of the signal area where the model's past forecasts "
+                f"correlated with {SKILL_REFERENCE} observations at "
+                f"r ≥ {SKILL_USABLE_MIN} ({HINDCAST}). A generous measure."),
         ("Signal area that could be scored",
-         _frac(skill.get("assessed_pct")), f_pct),
-        ("Skill metric", export.get("skill_metric"), f_txt),
+         _frac(skill.get("assessed_pct")), f_pct,
+         f"{SKILL_REFERENCE} covers land between 50°N and 50°S only."),
     ]
+    ws.write(2, 2, "What it means", f_h2)
     r = 2
-    for label, val, fmt in rows:
+    for label, val, fmt, note in rows:
         if val is None and fmt is None:          # section heading
             ws.write(r, 0, label, f_h2)
             r += 1
@@ -7420,16 +7477,20 @@ def build_elnino_xlsx(meta, result, history, export):
             ws.write(r, 1, "not available", f_txt)
         else:
             ws.write(r, 1, val, fmt)
+        if note:
+            ws.write(r, 2, note, f_txt)
+            ws.set_row(r, max(15, 15 * (len(note) // 80 + 1)))
         r += 1
     if attrib.get("rainfall_only"):
         r += 1
-        ws.merge_range(r, 0, r, 1,
-                       "Attribution note: the El Nino mask covers rainfall "
-                       "only. For a combined rainfall+temperature signal it "
+        ws.merge_range(r, 0, r, 2,
+                       "Attribution note: the El Niño mask covers rainfall "
+                       "only. For a combined rainfall + temperature signal it "
                        "says nothing about whether the heat component is "
-                       "El Nino-related, so read it as the weaker claim.",
+                       "El Niño-related, so read it as the weaker claim.",
                        f_note)
-        ws.set_row(r, 42)
+        ws.set_row(r, 30)
+    _print_setup(ws)
 
     # -- 3. Sensitivity ----------------------------------------------------
     ws = wb.add_worksheet("Sensitivity")
@@ -7460,12 +7521,15 @@ def build_elnino_xlsx(meta, result, history, export):
         ws.write(4 + i, 1, int(round(v)), f_v)
         ws.write(4 + i, 2, (v / total) if total else 0, f_p)
     ws.write(4 + len(ordered) + 1, 0,
-             f"Bold row = the {int(meta['threshold'])}% threshold used for "
-             f"the Summary sheet.", f_note)
+             f"{meta['region']}, {sig_label.lower()}, "
+             f"{period_label(meta['period'])}. Bold row = the "
+             f"{int(meta['threshold'])}% threshold used on the Summary sheet.",
+             f_note)
+    _print_setup(ws, header_rows=3)
 
     # -- 4. Historical context ---------------------------------------------
     ws = wb.add_worksheet("Historical")
-    ws.set_column(0, 0, 16)
+    ws.set_column(0, 0, 22)
     ws.set_column(1, 1, 28)
     ws.write(0, 0, "This forecast against the model's own hindcast", f_title)
     ws.merge_range(1, 0, 1, 1,
@@ -7475,7 +7539,7 @@ def build_elnino_xlsx(meta, result, history, export):
                    "percentages differ from the Summary sheet's share of "
                    "children.", f_note)
     ws.set_row(1, 44)
-    ws.write(3, 0, "Season", f_hdr)
+    ws.write(3, 0, "Hindcast season (year)", f_hdr)
     ws.write(3, 1, "Share of area under signal", f_hdr)
     r = 4
     for h in (history or []):
@@ -7488,8 +7552,9 @@ def build_elnino_xlsx(meta, result, history, export):
                                "bg_color": "#FDF3C8"})
         f_nowp = wb.add_format({"border": 1, "bold": True,
                                 "num_format": PCT, "bg_color": "#FDF3C8"})
-        ws.write(r, 0, "This forecast", f_now)
+        ws.write(r, 0, f"This forecast ({INIT_LABEL})", f_now)
         ws.write(r, 1, _frac(area), f_nowp)
+    _print_setup(ws, header_rows=3)
 
     # -- 5. Method ---------------------------------------------------------
     ws = wb.add_worksheet("Method")
@@ -7502,6 +7567,7 @@ def build_elnino_xlsx(meta, result, history, export):
         ws.write(r, 1, body, f_txt)
         ws.set_row(r, max(14, 13 * (len(body) // 90 + 1)))
         r += 1
+    _print_setup(ws)
 
     wb.close()
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
@@ -7615,10 +7681,17 @@ def render_elnino_results(result, meta, history=None):
 
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
-    male    = int(round(result.get("total_population_male", 0) or 0))
-    fema    = int(round(result.get("total_population_female", 0) or 0))
+    # Boys/girls are the breakdown of `exposed` (children UNDER THE SIGNAL);
+    # the region-wide splits travel separately and are labelled as such.
+    male    = int(round(result.get("exposed_male", 0) or 0))
+    fema    = int(round(result.get("exposed_female", 0) or 0))
+    male_t  = int(round(result.get("total_population_male", 0) or 0))
+    fema_t  = int(round(result.get("total_population_female", 0) or 0))
     masked  = int(round(result.get("masked_population", 0) or 0))
     pct     = (exposed / total * 100) if total else 0
+
+    def _share(part, whole):
+        return (part / whole * 100) if whole else 0
 
     sig = SIGNAL_MAP.get(meta["signal"], {})
     colour = sig.get("color", "#e31a1c")
@@ -7633,7 +7706,10 @@ def render_elnino_results(result, meta, history=None):
         "dry_mask_applied": meta["dry_mask"],
         "region": meta["region"], "admin_level": meta["level"],
         "children_exposed": exposed, "total_children": total,
-        "male": male, "female": fema,
+        # Explicit names: a bare "male"/"female" was the region total and read
+        # as the breakdown of children_exposed.
+        "boys_exposed": male, "girls_exposed": fema,
+        "total_boys": male_t, "total_girls": fema_t,
         # Two different denominators, both reported so neither is mistaken for
         # the other: children under the signal vs interpretable area under it.
         "pct_children_exposed": round(pct, 2),
@@ -7733,15 +7809,21 @@ def render_elnino_results(result, meta, history=None):
                 html.Span("└ Boys", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{male:,}", className="info-val",
-                          style={"fontSize": "0.85em"}),
+                html.Span([
+                    html.Span(f"{male:,}", className="info-val"),
+                    html.Span(f" ({_share(male, male_t):.1f}% of boys)",
+                              className="info-pct"),
+                ], style={"fontSize": "0.85em"}),
             ]),
             html.Div(className="info-row", children=[
                 html.Span("└ Girls", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{fema:,}", className="info-val",
-                          style={"fontSize": "0.85em"}),
+                html.Span([
+                    html.Span(f"{fema:,}", className="info-val"),
+                    html.Span(f" ({_share(fema, fema_t):.1f}% of girls)",
+                              className="info-pct"),
+                ], style={"fontSize": "0.85em"}),
             ]),
         ]),
 

@@ -613,6 +613,11 @@ def _exposure_stats(period, signal, threshold, feature_ucode, admin_level,
     exposed = childpop.updateMask(mask).rename("exposed")
     combined = (
         ee.Image.cat([exposed])
+        # Boys/girls UNDER THE SIGNAL — the breakdown of `exposed`, which is
+        # what the panel and workbook present. The region-wide totals below
+        # are kept for the denominator, but were once shown in their place.
+        .addBands(pop["childpop_m"].updateMask(mask).rename("exposed_male"))
+        .addBands(pop["childpop_f"].updateMask(mask).rename("exposed_female"))
         .addBands(childpop.rename("total_population"))
         .addBands(pop["childpop_m"].rename("total_population_male"))
         .addBands(pop["childpop_f"].rename("total_population_female"))
