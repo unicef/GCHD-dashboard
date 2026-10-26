@@ -910,7 +910,8 @@ def check_cookies(jar):
                  f"       Refresh it:  cd {COOKIE_JAR.parent} && geeup cookie_setup")
 
 
-def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1):
+def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1,
+               pyramiding="MEAN", nodata=NODATA):
     """Upload one collection. Returns a process-style status (0 = success).
 
     Driven in-process rather than by shelling out to the geeup CLI, so the
@@ -942,8 +943,8 @@ def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1):
             source_path=source,
             destination_path=dest,
             metadata_path=metadata,
-            pyramiding="MEAN",
-            nodata_value=int(NODATA),
+            pyramiding=pyramiding,
+            nodata_value=None if nodata is None else int(nodata),
             overwrite=bool(overwrite),
             dry_run=bool(dry_run),
             workers=max(1, int(workers or 1)),
