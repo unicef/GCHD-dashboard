@@ -902,20 +902,17 @@ body {
 .leave-btn-ghost:hover { background: var(--panel-h); color: var(--hi); }
 .leave-btn-go { flex: 1; width: auto; padding: 12px; font-size: 0.84rem; }
 
-/* ── El Niño download disclaimer ───────────────────────────────────────────
-   Same overlay and card as the leave dialog; a little wider for the bullets.
-   Above the leave gate so it can never open underneath it. */
+/* ── El Niño download disclaimer ── */
 #elnino-dl-gate {
   position: fixed; inset: 0; z-index: 9999;
   background: rgba(17,24,39,0.72);
   align-items: center; justify-content: center;
   backdrop-filter: blur(3px);
 }
-/* Compact variant of the leave card: the shared .embargo-body line-height
-   (1.75) and 30px padding made this taller than a laptop viewport. */
+/* Compact so it fits a laptop screen without scrolling. */
 .en-dl-card {
   max-width: 600px; padding: 22px 26px 18px;
-  max-height: 96vh; overflow-y: auto;      /* fallback for very short screens */
+  max-height: 96vh; overflow-y: auto;
 }
 .en-dl-card .embargo-title { margin-bottom: 8px; }
 .en-dl-card .embargo-body {
@@ -933,8 +930,6 @@ body {
   margin: 10px 0 5px; font-size: 0.68rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em; color: var(--lo);
 }
-/* Two lines + ellipsis, copy icon at the end. Clamping is visual only, so
-   the clipboard still copies the whole sentence. */
 .en-dl-quote {
   display: flex; align-items: flex-end; gap: 8px;
   background: #FDF3C8; border: 1px solid #E0C96B; border-radius: 6px;
@@ -955,7 +950,6 @@ body {
 .en-dl-copy:hover { background: #FFFBEA; }
 .en-dl-copy.copied { color: #1a7f37; border-color: #1a7f37; }
 .en-dl-copy.failed { color: var(--mid); }
-/* Icon drawn with a CSS mask so it takes the button's text colour. */
 .en-dl-copy-ico {
   width: 13px; height: 13px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='9' width='13' height='13' rx='2'/><path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/></svg>") center / contain no-repeat;

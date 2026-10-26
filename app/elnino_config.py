@@ -723,23 +723,12 @@ CAVEATS = [
     "varying one does not.",
 ]
 
-# ── Download disclaimer ─────────────────────────────────────────────────────
-# Shown in a dialog the user must accept before EVERY Excel or JSON download,
-# and written into the file itself (first sheet / "disclaimer" key) so it
-# travels with any number lifted out of it. One source for all three so the
-# wording cannot drift. Deliberately short: CAVEATS holds the detail.
+# ── Download disclaimer (dialog, workbook and JSON) ─────────────────────────
 DOWNLOAD_DISCLAIMER_TITLE = "Before you download"
 
 
 def download_disclaimer(period_label, issue_label):
-    """The disclaimer for ONE result: names the forecast period and issue.
-
-    Without the period, the only dates in the text were the 1993–2016
-    baseline, which readers took to be the data. The grid size is stated in
-    degrees: 1° is ~111 km north–south but shrinks east–west with latitude
-    (~79 km at 45°), so a flat "100 km" overstates the precision of the
-    description, not of the data.
-    """
+    """Disclaimer lines for one result, naming its period and issue."""
     return [
         "These figures are a seasonal FORECAST, not a measured impact.",
         f"They come from the ECMWF SEAS5 forecast issued {issue_label} for "
