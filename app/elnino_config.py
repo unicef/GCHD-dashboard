@@ -172,6 +172,31 @@ def period_issue_label(period):
     return PERIOD_MAP.get(period, {}).get("issue_label", "")
 
 
+# ── Used by scripts/el_nino (--init) ─────────────────────────────────────────
+def parse_issue(tag):
+    """Validate --init; (tag, label, {suffix: period}) for that issue."""
+    if len(tag) != 6 or not tag.isdigit() or not 1 <= int(tag[4:]) <= 12:
+        raise SystemExit(f"ERROR: --init must be YYYYMM, got {tag!r}")
+    return tag, issue_label(tag), {p["suffix"]: p for p in issue_periods(tag)}
+
+
+def obs_months(tag, suffix):
+    """(first, n) observed months; first counts from Jan of the init year,
+    so 13 is January of the following year."""
+    lead = 0 if suffix == window_suffix() else int(suffix.split("_")[0][1:])
+    first = LEADS[0] if lead == 0 else lead
+    return int(tag[4:]) + first - 1, (len(LEADS) if lead == 0 else 1)
+
+
+def staged_obs_name(stem, tag, suffix, year):
+    """Staged observations are keyed by the months they cover, so issues can
+    share them and never pick up another season's under the same period name."""
+    if tag == "202609":            # staged before month-keyed names existed
+        return f"{stem}_{suffix}_{year}"
+    first, n = obs_months(tag, suffix)
+    return f"{stem}_m{first:02d}x{n}_{year}"
+
+
 # ── Signals ─────────────────────────────────────────────────────────────────
 # What "exposed" means. Each maps to a probability band and a direction.
 #

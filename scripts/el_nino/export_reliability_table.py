@@ -42,9 +42,9 @@ build_brier_skill.py).
 
 Requirements:  pip install earthengine-api openpyxl
 Usage:
-    python scripts/el_nino/export_reliability_table.py
-    python scripts/el_nino/export_reliability_table.py --period L3_Nov
-    python scripts/el_nino/export_reliability_table.py --threshold 50
+    python scripts/el_nino/export_reliability_table.py --init 202609
+    python scripts/el_nino/export_reliability_table.py --init 202609 --period L3_Nov
+    python scripts/el_nino/export_reliability_table.py --init 202609 --threshold 50
 """
 import argparse
 import datetime as dt
@@ -61,8 +61,8 @@ sys.path.insert(0, str(APP))
 from elnino_config import (            # noqa: E402
     TERCILES_COLLECTION, SKILL_COLLECTION,
     TERCILES_T2M_COLLECTION, COMPOUND_COLLECTION, SKILL_T2M_COLLECTION,
-    PERIOD_MAP, WINDOW_PERIOD, SIGNALS, SIGNAL_MAP,
-    INIT_TAG, INIT_LABEL, HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction,
+    SIGNALS, SIGNAL_MAP,
+    HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction, parse_issue, window_suffix,
     ENSO_MASK_DIR as CFG_ENSO_DIR,
 )
 
@@ -136,6 +136,11 @@ JENKS_BREAKS = {
 # saturated colour on every row would compete with the numbers.
 CLASS_FILLS = ["F4C7C3", "FADBC8", "FDF3C8", "DDEFD5", "CCE5D9"]
 
+
+# Set from --init in main().
+INIT_TAG = INIT_LABEL = None
+PERIOD_MAP = {}
+WINDOW_PERIOD = window_suffix()
 
 def classify(value, breaks):
     """Index 0..4 for a value against four ascending break points."""
@@ -1019,10 +1024,14 @@ def _write_classes_sheet(wb):
 
 
 def main():
+    global INIT_TAG, INIT_LABEL, PERIOD_MAP
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--period", default=WINDOW_PERIOD, choices=list(PERIOD_MAP))
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
+    ap.add_argument("--period", default=WINDOW_PERIOD,
+                    help="window_L2_L4 or L<lead>_<Mon>, e.g. L3_Dec")
     ap.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
                     help=f"signal probability cutoff in %% "
                          f"(default {DEFAULT_THRESHOLD})")
@@ -1034,6 +1043,10 @@ def main():
                          f"no-information baseline is 1/9, not 1/3")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    INIT_TAG, INIT_LABEL, PERIOD_MAP = parse_issue(args.init)
+    if args.period not in PERIOD_MAP:
+        sys.exit(f"ERROR: {args.period} not in issue {INIT_TAG}: "
+                 f"{list(PERIOD_MAP)}")
 
     out = Path(args.out) if args.out else (
         HERE / f"elnino_exposure_reliability_{INIT_TAG}_{args.period}"

@@ -55,9 +55,9 @@ Requires the staged CHIRPS observations from build_skill_mask.py --stage-obs.
 
 Requirements:  pip install earthengine-api
 Usage:
-    python scripts/el_nino/build_brier_skill.py --dry-run
-    python scripts/el_nino/build_brier_skill.py --period window_L2_L4 --wait
-    python scripts/el_nino/build_brier_skill.py --wait
+    python scripts/el_nino/build_brier_skill.py --init 202609 --dry-run
+    python scripts/el_nino/build_brier_skill.py --init 202609 --period window_L2_L4 --wait
+    python scripts/el_nino/build_brier_skill.py --init 202609 --wait
 """
 import argparse
 import json
@@ -72,13 +72,17 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
 from elnino_config import (            # noqa: E402
-    ELNINO_ROOT, RAW_HINDCAST_COLLECTION, PERIOD_MAP, WINDOW_PERIOD,
-    INIT_TAG, HINDCAST, SYSTEM, BRIER_COLLECTION, BRIER_BANDS,
+    ELNINO_ROOT, RAW_HINDCAST_COLLECTION, HINDCAST, HC_YEARS, SYSTEM,
+    BRIER_COLLECTION, BRIER_BANDS, parse_issue, window_suffix,
+    staged_obs_name,
 )
 
+# Set from --init in main().
+INIT_TAG = INIT_MONTH = None
+PERIOD_MAP = {}
+WINDOW_PERIOD = window_suffix()
+
 OBS_COLLECTION = f"{ELNINO_ROOT}/chirps_obs"
-HC_YEARS = list(range(1993, 2017))
-INIT_MONTH = int(INIT_TAG[4:])
 
 # The two terciles scored, as (name, comparison). "dry" is the lower third.
 TERCILES = [("dry", 33), ("wet", 67)]
@@ -146,7 +150,8 @@ def member_totals(year, names, by_lead, leads):
 
 
 def observed(period, year):
-    return ee.Image(f"{OBS_COLLECTION}/obs_{period}_{year}").rename("o")
+    return ee.Image(f"{OBS_COLLECTION}/"
+                    f"{staged_obs_name('obs', INIT_TAG, period, year)}").rename("o")
 
 
 def brier_image(period, names, by_lead, lead_keys):
@@ -262,19 +267,28 @@ def wait_for(tasks, poll=20, timeout=7200):
 
 
 def main():
+    global INIT_TAG, INIT_MONTH, PERIOD_MAP
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--period", action="append", choices=list(PERIOD_MAP),
-                    default=None, help="only these periods (default: all)")
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
+    ap.add_argument("--period", action="append", default=None,
+                    help="only these periods (default: all); window_L2_L4 or L<lead>_<Mon>, e.g. L3_Dec")
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--wait", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    INIT_TAG, _, PERIOD_MAP = parse_issue(args.init)
+    INIT_MONTH = int(INIT_TAG[4:])
 
-    periods = args.period or [p["period"] for p in
+    periods = args.period or [p["suffix"] for p in
                               sorted(PERIOD_MAP.values(),
                                      key=lambda p: p["lead"])]
+    unknown = set(periods) - set(PERIOD_MAP)
+    if unknown:
+        sys.exit(f"ERROR: {sorted(unknown)} not in issue {INIT_TAG}: "
+                 f"{list(PERIOD_MAP)}")
 
     print(f"Brier skill — SEAS5 {INIT_TAG} tercile probabilities vs CHIRPS, "
           f"hindcast {HINDCAST}")
@@ -295,12 +309,12 @@ def main():
         staged = set()
     for period in periods:
         missing = [y for y in HC_YEARS
-                   if f"obs_{period}_{y}" not in staged]
+                   if staged_obs_name("obs", INIT_TAG, period, y) not in staged]
         if missing:
             sys.exit(f"ERROR: {len(missing)} staged observation(s) missing for "
-                     f"{period} (e.g. obs_{period}_{missing[0]}).\n"
+                     f"{period} (e.g. year {missing[0]}).\n"
                      f"       Run: python scripts/el_nino/build_skill_mask.py "
-                     f"--period {period} --stage-obs --wait")
+                     f"--init {INIT_TAG} --period {period} --stage-obs --wait")
 
     if not args.dry_run:
         ensure_collection(BRIER_COLLECTION)

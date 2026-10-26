@@ -38,10 +38,10 @@ supported path for all of them.
 
 Requirements:  pip install earthengine-api
 Usage:
-    python scripts/el_nino/build_skill_mask.py --dry-run
-    python scripts/el_nino/build_skill_mask.py --stage-obs --wait   # phase 1
-    python scripts/el_nino/build_skill_mask.py --wait               # phase 2
-    python scripts/el_nino/build_skill_mask.py --period window_L2_L4 --overwrite
+    python scripts/el_nino/build_skill_mask.py --init 202610 --dry-run
+    python scripts/el_nino/build_skill_mask.py --init 202610 --stage-obs --wait   # phase 1
+    python scripts/el_nino/build_skill_mask.py --init 202610 --wait               # phase 2
+    python scripts/el_nino/build_skill_mask.py --init 202610 --period window_L2_L4 --overwrite
 """
 import argparse
 import json
@@ -57,9 +57,14 @@ sys.path.insert(0, str(APP))          # reuse the dashboard's own config
 
 from elnino_config import (            # noqa: E402
     ELNINO_ROOT, TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION,
-    PERIODS, PERIOD_MAP, WINDOW_PERIOD,
-    INIT_TAG, HINDCAST, SYSTEM,
+    HINDCAST, HC_YEARS, SYSTEM,
+    parse_issue, window_suffix, obs_months, staged_obs_name,
 )
+
+# Set from --init in main().
+INIT_TAG = INIT_MONTH = None
+PERIOD_MAP = {}                    # suffix -> period, for that issue
+WINDOW_PERIOD = window_suffix()
 
 SKILL_BANDS = ["skill_r", "skill_p"]
 
@@ -130,8 +135,6 @@ SKILL_COLLECTION = skill_collection(DEFAULT_VAR)
 OBS_COLLECTION = OBS[DEFAULT_VAR]["staged"]
 CHIRPS = OBS[DEFAULT_VAR]["collection"]
 
-HC_YEARS = list(range(1993, 2017))     # must match the hindcast that was uploaded
-INIT_MONTH = int(INIT_TAG[4:])         # "202609" -> 9
 
 
 def init_ee():
@@ -206,15 +209,8 @@ def leads_for_period(period, lead_keys):
 
 
 def months_for_period(period):
-    """(start_month, n_months) in the valid year, for the CHIRPS window.
-
-    lead 1 is the init month, so lead L covers month INIT_MONTH + L - 1.
-    """
-    if period == WINDOW_PERIOD:
-        leads = [p["lead"] for p in PERIODS if p["lead"] != 0]
-        first, last = min(leads), max(leads)
-        return INIT_MONTH + first - 1, last - first + 1
-    return INIT_MONTH + PERIOD_MAP[period]["lead"] - 1, 1
+    """(start_month, n_months); start > 12 rolls into the next year."""
+    return obs_months(INIT_TAG, period)
 
 
 def _combine(images, how):
@@ -288,7 +284,7 @@ def observed_season_total(year, start_month, n_months, proj, var=DEFAULT_VAR):
 
 def obs_asset(period, year, var=DEFAULT_VAR):
     cfg = OBS[var]
-    return f"{cfg['staged']}/{cfg['stem']}_{period}_{year}"
+    return f"{cfg['staged']}/{staged_obs_name(cfg['stem'], INIT_TAG, period, year)}"
 
 
 def stage_observations(period, proj, overwrite=False, var=DEFAULT_VAR):
@@ -309,7 +305,7 @@ def stage_observations(period, proj, overwrite=False, var=DEFAULT_VAR):
 
     tasks, skipped = [], 0
     for y in HC_YEARS:
-        name = f"{cfg['stem']}_{period}_{y}"
+        name = staged_obs_name(cfg["stem"], INIT_TAG, period, y)
         if name in have and not overwrite:
             skipped += 1
             continue
@@ -453,12 +449,15 @@ def wait_for(tasks, poll=20, timeout=5400):
 
 
 def main():
+    global INIT_TAG, INIT_MONTH, PERIOD_MAP
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--period", action="append", choices=list(PERIOD_MAP),
-                    default=None,
-                    help="only these periods (default: all four)")
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
+    ap.add_argument("--period", action="append", default=None,
+                    help="only these periods (default: all four); "
+                         "window_L2_L4 or L<lead>_<Mon>, e.g. L3_Dec")
     ap.add_argument("--overwrite", action="store_true",
                     help="replace assets that already exist")
     ap.add_argument("--wait", action="store_true",
@@ -476,8 +475,14 @@ def main():
                     help=f"variable to score (default {DEFAULT_VAR}). "
                          f"prec scores against CHIRPS, t2m against ERA5-Land")
     args = ap.parse_args()
+    INIT_TAG, _, PERIOD_MAP = parse_issue(args.init)
+    INIT_MONTH = int(INIT_TAG[4:])
 
-    periods = args.period or [p["period"] for p in PERIODS]
+    periods = args.period or list(PERIOD_MAP)
+    unknown = set(periods) - set(PERIOD_MAP)
+    if unknown:
+        sys.exit(f"ERROR: {sorted(unknown)} not in issue {INIT_TAG}: "
+                 f"{list(PERIOD_MAP)}")
     var = args.var
     cfg = OBS[var]
 

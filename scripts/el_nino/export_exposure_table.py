@@ -24,9 +24,9 @@ global 1 km reduction inside Earth Engine's limits.
 
 Requirements:  pip install earthengine-api openpyxl
 Usage:
-    python scripts/el_nino/export_exposure_table.py
-    python scripts/el_nino/export_exposure_table.py --period L2_Oct
-    python scripts/el_nino/export_exposure_table.py --out my_table.xlsx
+    python scripts/el_nino/export_exposure_table.py --init 202609
+    python scripts/el_nino/export_exposure_table.py --init 202609 --period L2_Oct
+    python scripts/el_nino/export_exposure_table.py --init 202609 --out my_table.xlsx
 """
 import argparse
 import datetime as dt
@@ -42,8 +42,8 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))          # reuse the dashboard's own config/core
 
 from elnino_config import (            # noqa: E402
-    TERCILES_COLLECTION, PERIOD_MAP, WINDOW_PERIOD, SIGNALS, SIGNAL_MAP,
-    INIT_TAG, INIT_LABEL, HINDCAST, SYSTEM, to_fraction,
+    TERCILES_COLLECTION, SIGNALS, SIGNAL_MAP,
+    HINDCAST, SYSTEM, to_fraction, parse_issue, window_suffix,
 )
 
 # Thresholds reported, in percent. 70 is the agreed operational cutoff for
@@ -66,6 +66,11 @@ POP_1KM = "projects/unicef-ccri/assets/population/worldpop_T_U18_2025_CN_1km"
 POP_SCALE = 1000
 POP_NATIVE = 92.76624232772798
 
+
+# Set from --init in main().
+INIT_TAG = INIT_LABEL = None
+PERIOD_MAP = {}
+WINDOW_PERIOD = window_suffix()
 
 def init_ee():
     """Authenticate as the app's service account, falling back to a personal login."""
@@ -446,15 +451,22 @@ def write_xlsx(rows, path, period):
 
 
 def main():
+    global INIT_TAG, INIT_LABEL, PERIOD_MAP
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
     ap.add_argument("--period", default=WINDOW_PERIOD,
-                    choices=list(PERIOD_MAP),
-                    help=f"which period to export (default {WINDOW_PERIOD})")
+                    help=f"which period to export (default {WINDOW_PERIOD}); "
+                         f"window_L2_L4 or L<lead>_<Mon>, e.g. L3_Dec")
     ap.add_argument("--out", default=None,
                     help="output .xlsx path (default alongside this script)")
     args = ap.parse_args()
+    INIT_TAG, INIT_LABEL, PERIOD_MAP = parse_issue(args.init)
+    if args.period not in PERIOD_MAP:
+        sys.exit(f"ERROR: {args.period} not in issue {INIT_TAG}: "
+                 f"{list(PERIOD_MAP)}")
 
     out = Path(args.out) if args.out else (
         HERE / f"elnino_exposure_{INIT_TAG}_{args.period}.xlsx")
