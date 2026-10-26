@@ -7315,8 +7315,12 @@ def build_elnino_xlsx(meta, result, history, export):
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"in_memory": True})
 
-    PCT = '0.0"%"'
-    PCT0 = '0"%"'
+    # Excel-native percent formats: the cell holds a FRACTION (0.7) and Excel
+    # displays it x100 (70.0%). A literal '0.0"%"' suffix would show 0.7%.
+    # Every percentage in this file goes through _frac() first.
+    PCT = "0.0%"
+    PCT0 = "0%"
+    PCT_SIGNED = "+0.0%;-0.0%;0.0%"
 
     f_title = wb.add_format({"bold": True, "font_size": 13})
     f_h2    = wb.add_format({"bold": True, "font_size": 11,
@@ -7330,7 +7334,10 @@ def build_elnino_xlsx(meta, result, history, export):
     f_txt   = wb.add_format({"border": 1, "text_wrap": True, "valign": "top"})
     f_int   = wb.add_format({"border": 1, "num_format": "#,##0"})
     f_pct   = wb.add_format({"border": 1, "num_format": PCT})
+    f_spct  = wb.add_format({"border": 1, "num_format": PCT_SIGNED})
+    f_year  = wb.add_format({"border": 1, "num_format": "0"})
     f_dec   = wb.add_format({"border": 1, "num_format": "0.0"})
+    f_sdec  = wb.add_format({"border": 1, "num_format": "+0.0;-0.0;0.0"})
     f_wrap  = wb.add_format({"text_wrap": True, "valign": "top"})
     f_note  = wb.add_format({"font_size": 9, "font_color": "#595959",
                              "text_wrap": True, "valign": "top"})
@@ -7384,11 +7391,12 @@ def build_elnino_xlsx(meta, result, history, export):
         ("Children in excluded arid areas",
          export.get("children_in_excluded_arid_areas"), f_int),
         ("HOW UNUSUAL", None, None),
-        ("Rainfall anomaly (mm vs model normal)", anoms.get("anom_mm"), f_dec),
+        ("Rainfall anomaly (mm vs model normal)", anoms.get("anom_mm"),
+         f_sdec),
         ("Rainfall anomaly (% of normal)", _frac(anoms.get("anom_pct")),
-         f_pct),
+         f_spct),
         ("Temperature anomaly (degC vs model normal)", anoms.get("anom_c"),
-         f_dec),
+         f_sdec),
         ("ATTRIBUTION", None, None),
         ("Children in El Nino-consistent areas", attrib.get("children"),
          f_int),
@@ -7471,7 +7479,7 @@ def build_elnino_xlsx(meta, result, history, export):
     ws.write(3, 1, "Share of area under signal", f_hdr)
     r = 4
     for h in (history or []):
-        ws.write(r, 0, h.get("year"), f_int)
+        ws.write(r, 0, h.get("year"), f_year)   # not #,##0 -> "1,993"
         ws.write(r, 1, _frac(h.get("share") or 0), f_pct)
         r += 1
     area = meta.get("area_share")
