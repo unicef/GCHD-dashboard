@@ -723,6 +723,32 @@ CAVEATS = [
     "varying one does not.",
 ]
 
+# ── Download disclaimer (dialog, workbook and JSON) ─────────────────────────
+DOWNLOAD_DISCLAIMER_TITLE = "Before you download"
+
+
+def download_disclaimer(period_label, issue_label):
+    """Disclaimer lines for one result, naming its period and issue."""
+    return [
+        "These figures are a seasonal FORECAST, not a measured impact.",
+        f"They come from the ECMWF SEAS5 forecast issued {issue_label} for "
+        f"{period_label}. They count children (under 18) living where that "
+        "forecast leans towards a drier, wetter, hotter or cooler season "
+        "than normal. “Normal” is the model's own re-forecasts of "
+        f"{HINDCAST.replace('-', '–')}, used only as a baseline.",
+        "They do not predict drought, flooding or harm, and do not reflect "
+        "vulnerability or capacity to cope.",
+        "Forecast skill varies by region, and the forecast grid is 1° (about "
+        "110 km at the equator), so figures are not precise below district "
+        "level. Quote the range across thresholds and the forecast issue "
+        "date — suggested wording below.",
+    ]
+
+
+
+DOWNLOAD_DISCLAIMER_ACK = ("I understand these are forecast estimates, "
+                           "not measured impacts.")
+
 SOURCE_URL = ("https://cds.climate.copernicus.eu/datasets/"
               "seasonal-monthly-single-levels")
 
