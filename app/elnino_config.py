@@ -60,12 +60,13 @@ ENSO_MASK_DIR = {"dry": -1, "wet": 1,
                  "hotdry": -1, "cooldry": -1,
                  "hotwet": 1, "coolwet": 1}
 
-# The forecast issue currently published. Bumping this (after re-running the
-# download script for a new init month) is the only change needed here.
-INIT_TAG   = "202609"
-INIT_LABEL = "September 2026"
-HINDCAST   = "1993-2016"
-SYSTEM     = "51"
+# Published forecast issues (init YYYYMM), oldest first. Append the new tag each
+# month after running the scripts for it; see scripts/el_nino/CLAUDE.md.
+ISSUES   = ["202609"]
+LEADS    = (2, 3, 4)          # lead 1 is the init month itself, always excluded
+HINDCAST = "1993-2016"
+HC_YEARS = list(range(int(HINDCAST[:4]), int(HINDCAST[-4:]) + 1))
+SYSTEM   = "51"
 
 # ── Band order contract ─────────────────────────────────────────────────────
 # geeup's ingestion manifest carries no `bands` key, so Earth Engine names every
@@ -95,35 +96,80 @@ COMPOUND_BANDS = [
 ]
 
 # ── Periods ─────────────────────────────────────────────────────────────────
-# `lead` is numeric across the whole collection (0 = the aggregate window):
-# Earth Engine requires one type per property, and a string "window" alongside
-# integer months makes ingestion of the odd one out fail.
-#
-# September (lead 1) is deliberately absent. It is the initialisation month,
-# partly determined by conditions already observed at launch, so it behaves
-# unlike a true forecast month; the team's season is OND.
-PERIODS = [
-    {"period": "window_L2_L4", "lead": 0, "label": "Oct–Dec 2026 (OND season)",
-     "short": "OND", "dry_mask_mm": 50, "default": True,
-     "note": "The three-month total — the team's reference season."},
-    {"period": "L2_Oct", "lead": 2, "label": "October 2026", "short": "Oct",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-    {"period": "L3_Nov", "lead": 3, "label": "November 2026", "short": "Nov",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-    {"period": "L4_Dec", "lead": 4, "label": "December 2026", "short": "Dec",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-]
+# Derived from ISSUES: one season (leads 2-4 summed/averaged) per issue, plus
+# each calendar month taken from the LATEST issue that covers it.
+# `id` is "<init>_<suffix>"; `suffix` is the asset-name part the scripts write
+# (window_L2_L4, L3_Nov, ...). `lead` 0 = the season (EE needs one type).
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"]
+SEASON_DRY_MASK_MM = 50
+MONTH_DRY_MASK_MM  = 10
 
-PERIOD_MAP = {p["period"]: p for p in PERIODS}
-DEFAULT_PERIOD = next(p["period"] for p in PERIODS if p.get("default"))
 
-# The aggregate season, identified by lead 0 rather than by name: the name
-# encodes the leads (window_L2_L4) and changes whenever the season does.
-WINDOW_PERIOD = next(p["period"] for p in PERIODS if p["lead"] == 0)
+def issue_label(tag):
+    return f"{_MONTHS_LONG[int(tag[4:]) - 1]} {tag[:4]}"
+
+
+def lead_month(tag, lead):
+    """(year, month) of a lead; lead 1 is the init month."""
+    m0 = int(tag[4:]) - 1 + (lead - 1)
+    return int(tag[:4]) + m0 // 12, m0 % 12 + 1
+
+
+def season_code(tag):
+    return "".join(_MONTHS[lead_month(tag, l)[1] - 1][0] for l in LEADS)
+
+
+def window_suffix():
+    return f"window_L{LEADS[0]}_L{LEADS[-1]}"
+
+
+def issue_periods(tag):
+    """The season plus each lead month of one issue."""
+    (y0, m0), (y1, m1) = lead_month(tag, LEADS[0]), lead_month(tag, LEADS[-1])
+    span = (f"{_MONTHS[m0 - 1]}–{_MONTHS[m1 - 1]} {y1}" if y0 == y1 else
+            f"{_MONTHS[m0 - 1]} {y0}–{_MONTHS[m1 - 1]} {y1}")
+    out = [{"suffix": window_suffix(), "lead": 0, "month": None,
+            "label": f"{span} ({season_code(tag)} season)",
+            "short": season_code(tag), "dry_mask_mm": SEASON_DRY_MASK_MM}]
+    for l in LEADS:
+        y, m = lead_month(tag, l)
+        out.append({"suffix": f"L{l}_{_MONTHS[m - 1]}", "lead": l,
+                    "month": (y, m), "label": f"{_MONTHS_LONG[m - 1]} {y}",
+                    "short": _MONTHS[m - 1], "dry_mask_mm": MONTH_DRY_MASK_MM})
+    for p in out:
+        p.update(id=f"{tag}_{p['suffix']}", init=tag,
+                 issue_label=issue_label(tag))
+    return out
+
+
+def _build_periods():
+    seasons, months = [], {}
+    for tag in sorted(ISSUES):
+        ps = issue_periods(tag)
+        seasons.append(ps[0])
+        for p in ps[1:]:
+            months[p["month"]] = p          # later issue overwrites
+    return seasons + [months[k] for k in sorted(months)]
+
+
+PERIODS = _build_periods()
+PERIOD_MAP = {p["id"]: p for p in PERIODS}
+DEFAULT_PERIOD = [p for p in PERIODS if p["lead"] == 0][-1]["id"]   # newest season
+
+
+def is_window(period):
+    return PERIOD_MAP.get(period, {}).get("lead") == 0
 
 
 def period_label(period):
     return PERIOD_MAP.get(period, {}).get("label", period)
+
+
+def period_issue_label(period):
+    return PERIOD_MAP.get(period, {}).get("issue_label", "")
 
 
 # ── Signals ─────────────────────────────────────────────────────────────────
@@ -632,11 +678,11 @@ DEFAULT_EXPLORE = next(l["name"] for l in EXPLORE_LAYERS if l.get("default"))
 # decided AND why, because every one of them is a defensible-but-arguable call.
 METHOD_STEPS = [
     ("The forecast",
-     f"ECMWF SEAS5 (system {SYSTEM}), initialised {INIT_LABEL}, 51 ensemble "
-     f"members, lead months 2–4 (Oct, Nov, Dec). Each member is one plausible "
-     f"version of the season; their spread is the uncertainty. September, the "
-     f"initialisation month, is excluded: it is partly fixed by conditions "
-     f"already present at launch, so it behaves unlike a forecast month."),
+     f"ECMWF SEAS5 (system {SYSTEM}), issued monthly, 51 ensemble members, "
+     f"the 2nd to 4th months after the issue month (e.g. issued September → "
+     f"Oct, Nov, Dec). Each member is one plausible version of the season; "
+     f"their spread is the uncertainty. The issue month itself is excluded: "
+     f"it is partly fixed by conditions already present at launch."),
     ("The baseline",
      f"The same model re-run over {HINDCAST} — 24 years × 25 members = 600 "
      f"values per grid cell. Terciles are cut from THIS, the model's own "
@@ -697,8 +743,9 @@ CAVEATS = [
     "has support; where it does not, it does not.",
     "The forecast grid is 1° (~111 km). A national total is a sum over coarse "
     "cells and should not be read at sub-district precision.",
-    "This is one forecast issue, not a monitored product. It does not update; "
-    "it is replaced when a new initialisation is published.",
+    "Each period comes from one monthly forecast issue, named with it. A "
+    "newer issue replaces an older one for any month both cover, so figures "
+    "for the same month can change from one issue to the next.",
     "A compound probability is counted per ensemble MEMBER — the fraction of "
     "members where both conditions hold at once — not the product of the two "
     "separate probabilities. Dry and hot go together physically (drier soil "

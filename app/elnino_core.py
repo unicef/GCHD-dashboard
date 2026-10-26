@@ -21,9 +21,9 @@ from cachetools import TTLCache, cached as _ttl_cached
 from config import ADMIN_DATA, POP_VIS
 from elnino_config import (
     TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION, SKILL_COLLECTION,
-    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, WINDOW_PERIOD,
+    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, is_window, HC_YEARS,
     SIGNAL_MAP, EXPLORE_MAP,
-    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, INIT_TAG, to_fraction,
+    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, to_fraction,
     SKILL_BANDS, SKILL_USABLE_MIN, SKILL_MODERATE_MIN,
     BRIER_COLLECTION, BRIER_BANDS, BSS_USEFUL_MIN, BSS_GOOD_MIN,
     NINO34_BOX, OISST_COLLECTION, OISST_SCALE, NINO34_MONTHS,
@@ -78,10 +78,24 @@ def _band_names(asset_id):
     return list(TERCILE_BANDS)
 
 
-def tercile_asset(period):
-    if period not in PERIOD_MAP:
+def _period(period):
+    p = PERIOD_MAP.get(period)
+    if not p:
         raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{period}"
+    return p
+
+
+def _asset(collection, stem, period):
+    p = _period(period)
+    return f"{collection}/{stem}_{p['init']}_{p['suffix']}"
+
+
+def _hindcast_ids(init):
+    return [f"{RAW_HINDCAST_COLLECTION}/hc_{y}{init[4:]}" for y in HC_YEARS]
+
+
+def tercile_asset(period):
+    return _asset(TERCILES_COLLECTION, "terciles", period)
 
 
 def _tercile_image(period):
@@ -99,9 +113,7 @@ def _tercile_image(period):
 
 
 def tercile_t2m_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{TERCILES_T2M_COLLECTION}/terciles_t2m_{INIT_TAG}_{period}"
+    return _asset(TERCILES_T2M_COLLECTION, "terciles_t2m", period)
 
 
 def _tercile_t2m_image(period):
@@ -115,9 +127,7 @@ def _tercile_t2m_image(period):
 
 
 def compound_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{period}"
+    return _asset(COMPOUND_COLLECTION, "compound", period)
 
 
 def _compound_image(period):
@@ -142,15 +152,11 @@ def _dry_mask_for(period):
 
 
 def skill_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{period}"
+    return _asset(SKILL_COLLECTION, "skill", period)
 
 
 def skill_t2m_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{period}"
+    return _asset(SKILL_T2M_COLLECTION, "skill_t2m", period)
 
 
 def _skill_t2m_image(period):
@@ -179,9 +185,7 @@ def _skill_image(period):
 
 
 def brier_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{BRIER_COLLECTION}/brier_{INIT_TAG}_{period}"
+    return _asset(BRIER_COLLECTION, "brier", period)
 
 
 def _brier_image(period):
@@ -194,7 +198,7 @@ def _brier_image(period):
     return ee.Image(asset).rename(names)
 
 
-def _hindcast_structure():
+def _hindcast_structure(init):
     """({lead_key: [band names]}, ordered lead keys) for the hindcast images.
 
     Derived from the band names, never hardcoded: the collection was 4x25 when
@@ -202,7 +206,7 @@ def _hindcast_structure():
     lead that no longer exists. Shared by the historical context and the ENSO
     composite so they cannot disagree about the structure.
     """
-    names = _band_names(f"{RAW_HINDCAST_COLLECTION}/hc_1993{INIT_TAG[4:]}")
+    names = _band_names(_hindcast_ids(init)[0])
     by_lead = {}
     for nm in names:
         by_lead.setdefault(nm.split("_")[0], []).append(nm)
@@ -210,7 +214,7 @@ def _hindcast_structure():
     return names, by_lead, keys
 
 
-def _hindcast_season_mean(year, names, by_lead, lead_keys):
+def _hindcast_season_mean(year, init, names, by_lead, lead_keys):
     """Ensemble-mean season total for one hindcast year, mm.
 
     Each band is a MONTHLY total, so the season total is the sum over leads of
@@ -218,7 +222,7 @@ def _hindcast_season_mean(year, names, by_lead, lead_keys):
     monthly mean and compare one month against a multi-month quantity.
     """
     img = ee.Image(
-        f"{RAW_HINDCAST_COLLECTION}/hc_{year}{INIT_TAG[4:]}").rename(names)
+        f"{RAW_HINDCAST_COLLECTION}/hc_{year}{init[4:]}").rename(names)
     per_lead = [img.select(by_lead[k]).reduce(ee.Reducer.mean())
                 for k in lead_keys]
     total = per_lead[0]
@@ -441,12 +445,13 @@ def _d_enso_composite(img, ctx):
     lead as bands, and the monthly periods would need a different selection.
     Returns a fully masked image for those rather than a misleading one.
     """
-    if ctx.get("period") != WINDOW_PERIOD:
+    if not is_window(ctx.get("period")):
         return ee.Image(0).selfMask().rename("value")
-    names, by_lead, lead_keys = _hindcast_structure()
-    warm = [_hindcast_season_mean(y, names, by_lead, lead_keys)
+    init = _period(ctx["period"])["init"]
+    names, by_lead, lead_keys = _hindcast_structure(init)
+    warm = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
             for y in ENSO_YEARS["elnino"]]
-    cold = [_hindcast_season_mean(y, names, by_lead, lead_keys)
+    cold = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
             for y in ENSO_YEARS["neutral"]]
     warm_mean = ee.ImageCollection(warm).mean()
     cold_mean = ee.ImageCollection(cold).mean()
@@ -737,8 +742,9 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     lead month as bands, so a per-month variant would need a different band
     selection and is left out rather than guessed at.
     """
-    if period != WINDOW_PERIOD:
+    if not is_window(period):
         return []
+    init = _period(period)["init"]
 
     cfg = SIGNAL_MAP.get(signal)
     if not cfg:
@@ -755,7 +761,7 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     # and members from them rather than hardcoding: this collection was 4x25
     # when the season was Sep-Dec and is 3x25 now, and a stale constant would
     # select a lead that no longer exists.
-    hc_names, by_lead, lead_keys = _hindcast_structure()
+    hc_names, by_lead, lead_keys = _hindcast_structure(init)
     if not lead_keys:
         print(f"[elnino] hindcast bands unrecognised: {hc_names[:4]}", flush=True)
         return []
@@ -784,7 +790,8 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
         return ee.Feature(None, {"year": ee.Image(img).get("year"),
                                  "share": share})
 
-    coll = ee.ImageCollection(RAW_HINDCAST_COLLECTION)
+    # This issue's images only: the collection holds every issue.
+    coll = ee.ImageCollection([ee.Image(i) for i in _hindcast_ids(init)])
 
     try:
         rows = ee.FeatureCollection(coll.map(year_share)).getInfo()
