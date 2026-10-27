@@ -43,6 +43,12 @@ REDUCERS = {
 #   scale             nominalScale in m (verified, used for tile stretch only —
 #                     the exposure reduction always runs at the population grid)
 #   filters           [{"prop","op","value"}] applied before reduction
+#   run               forecast datasets only: {"init", "valid", "init_ms"} — the
+#                     init-time and valid-time properties. One run is reduced
+#                     (forecast_core._select_run); without it every overlapping
+#                     run and its full horizon would be mixed.
+#   accumulated       values are amounts per step: the window is (start, end] so
+#                     a step ending at 00:00 belongs to the previous day
 #   transform         key into forecast_core._TRANSFORMS for derived bands
 #   note              caveat shown under the dataset in the panel
 
@@ -57,11 +63,13 @@ FORECAST_DATASETS = [
         "threshold": 50, "min": 0, "max": 400, "units": "mm",
         "palette": ["#cfe8ff", "#8fcbff", "#1d7bff", "#0654be", "#00357d"],
         "scale": 27830,
-        # forecast_hours=0 is the analysis image and carries NO precipitation
-        # band; selecting across it fails outright. Values are per-interval
-        # amounts (verified non-monotonic across forecast hours), so summing the
-        # window is correct and does not double-count a running total.
-        "filters": [{"prop": "forecast_hours", "op": "gt", "value": 0}],
+        # Precipitation accumulates within each 6-hour block and resets
+        # (verified: 0.25, 0.5 ... 2.38 at h6, then 1.06 at h7). Only block
+        # ends (h % 6 == 0) are summed; h0 is the analysis and has no rain band.
+        "filters": [{"prop": "forecast_hours", "op": "in",
+                     "value": list(range(6, 385, 6))}],
+        "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
+        "accumulated": True,
         "note": "GFS runs 4x daily out to 16 days. Rainfall is accumulated over "
                 "the selected window.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
@@ -96,6 +104,7 @@ FORECAST_DATASETS = [
         # hypot(u10, v10) from the two components.
         "transform": "wind_speed",
         "filters": [{"prop": "forecast_hours", "op": "gt", "value": 0}],
+        "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
         "note": "10 m wind speed derived from U/V components. 17.5 m/s matches "
                 "the tropical-storm threshold used in the static catalog.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
@@ -114,6 +123,7 @@ FORECAST_DATASETS = [
         # Already °C in this collection (verified 13.7-38.9 over Kenya) — no
         # Kelvin conversion, unlike MODIS LST below.
         "filters": [{"prop": "forecast_hours", "op": "gt", "value": 0}],
+        "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
         "note": "2 m air temperature, already in °C. 35 °C matches the static "
                 "extreme-heat threshold.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
@@ -193,6 +203,7 @@ FORECAST_DATASETS = [
         "id": "ECMWF/CAMS/NRT", "name": "cams_pm25",
         "label": "PM2.5 forecast (CAMS)", "topic": "Air Pollution",
         "kind": "forecast", "band": "particulate_matter_d_less_than_25_um_surface",
+        "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
         "threshold": 15, "min": 0, "max": 250, "units": "µg/m³",
@@ -209,6 +220,7 @@ FORECAST_DATASETS = [
         "id": "ECMWF/CAMS/NRT", "name": "cams_pm10",
         "label": "PM10 forecast (CAMS)", "topic": "Air Pollution",
         "kind": "forecast", "band": "particulate_matter_d_less_than_10_um_surface",
+        "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
         "threshold": 45, "min": 0, "max": 600, "units": "µg/m³",
@@ -224,6 +236,7 @@ FORECAST_DATASETS = [
         "id": "ECMWF/CAMS/NRT", "name": "cams_dust_aod",
         "label": "Dust forecast (CAMS)", "topic": "Sand and Dust Storm",
         "kind": "forecast", "band": "dust_aerosol_optical_depth_at_550nm_surface",
+        "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
         "threshold": 0.5, "min": 0, "max": 2.5, "units": "AOD",

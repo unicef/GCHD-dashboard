@@ -54,7 +54,7 @@ from forecast_core import (
     ForecastError, default_window, clamp_window,
     compute_forecast_exposure, probe_custom_asset,
     get_forecast_intensity_tile, get_forecast_exposed_tile,
-    get_forecast_preview_tile,
+    get_forecast_preview_tile, forecast_run_label,
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
 from elnino_config import (
@@ -6116,8 +6116,11 @@ def forecast_preview(dataset, start, end, reducer, asset, viz):
         return "", 0, f"Preview failed: {str(ex)[:160]}", err, None
 
     units = cfg.get("units", "")
-    msg = (f"Previewing {n:,} image(s) · {vis['min']:g}–{vis['max']:g} "
-           f"{units}".strip() + " — select a region below to compute exposure.")
+    run = forecast_run_label(cfg["name"], s)
+    msg = (f"Previewing {n:,} image(s)"
+           + (f" from the {run} run" if run else "")
+           + f" · {vis['min']:g}–{vis['max']:g} {units}".rstrip()
+           + " — select a region below to compute exposure.")
     # Drives the map legend so the preview is readable rather than an
     # unlabelled colour wash.
     preview = {"vis": vis, "units": units, "label": cfg["label"],
@@ -6260,6 +6263,7 @@ def forecast_compute(_n, dataset, asset, start, end, reducer, threshold,
             "start": s, "end": e, "reducer": reducer, "threshold": thr,
             "region": region_name, "level": level,
             "n_images": result.get("_n_images", 0),
+            "run": result.get("_run"),
             "dataset": cfg["name"],
             "pop_res": result.get("_pop_resolution_m", 100),
             "asset_id": cfg.get("custom_id"), "band": cfg.get("custom_band")}
@@ -6347,6 +6351,7 @@ def render_forecast_results(result, meta):
         "window_start": meta["start"], "window_end": meta["end"],
         "aggregation": meta["reducer"], "threshold": meta["threshold"],
         "threshold_units": units, "images_in_window": meta["n_images"],
+        "model_run": meta.get("run"),
         "children_exposed": exposed, "total_children": total,
         "boys_exposed": male, "girls_exposed": fema,
         "total_boys": male_t, "total_girls": fema_t,
@@ -6427,6 +6432,8 @@ def render_forecast_results(result, meta):
                 html.Div(f"Dataset: {meta['label']}"),
                 html.Div(f"Window: {meta['start']} → {meta['end']} "
                          f"({meta['n_images']:,} images)"),
+                (html.Div(f"Model run: {meta['run']} (one run, by valid time)")
+                 if meta.get("run") else None),
                 html.Div(f"Aggregation: {REDUCERS.get(meta['reducer'], meta['reducer'])}"),
                 html.Div(f"Exposed where value > {thr_txt}"),
                 html.Div(f"Region: {meta['region']} · {meta['level']}"),
