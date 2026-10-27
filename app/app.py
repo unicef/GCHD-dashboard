@@ -46,7 +46,7 @@ from gee_core import (
     get_topic_tile_url_clipped, get_feature_bounds,
 )
 from forecast_config import (
-    FORECAST_DATASETS, FORECAST_MAP, REDUCERS, DAILY_REDUCERS,
+    FORECAST_DATASETS, FORECAST_MAP, REDUCERS, DAILY_REDUCERS, threshold_for,
     CUSTOM_NAME, CUSTOM_PALETTE,
     KIND_LABELS, KIND_BLURBS, active_datasets, forecast_groups,
 )
@@ -1171,6 +1171,7 @@ def fc_controls():
                 html.Div("Children are counted where the aggregated value is "
                          "strictly greater than this threshold.",
                          className="ps-caption"),
+                html.Div(id="forecast-threshold-source", className="ps-caption"),
             ]),
         ]),
 
@@ -5912,16 +5913,54 @@ def forecast_dataset_params(dataset, asset):
             min_d, max_d = "2015-01-01", today.isoformat()
 
     lo, hi = cfg.get("min", 0), cfg.get("max", 100)
-    default_thr = cfg.get("threshold", 0)
+    first = (cfg.get("reducers") or ["mean"])[0]
+    default_thr = threshold_for(cfg, first)[0]
     step, marks = _thr_step_marks(lo, hi)
     reducers = [{"label": REDUCERS.get(r, r), "value": r}
                 for r in cfg.get("reducers") or ["mean"]]
     note = cfg.get("note", "")
 
     return ({"display": "block"}, note, start, end, min_d, max_d,
-            reducers, (cfg.get("reducers") or ["mean"])[0],
+            reducers, first,
             default_thr, lo, hi, step, lo, hi, default_thr, step, marks,
             cfg.get("units", ""))
+
+
+@app.callback(
+    Output("forecast-threshold",        "value", allow_duplicate=True),
+    Output("forecast-threshold-slider", "value", allow_duplicate=True),
+    Input("forecast-reducer",           "value"),
+    State("forecast-dataset-select",    "value"),
+    State("store-forecast-asset",       "data"),
+    prevent_initial_call=True,
+)
+def forecast_reducer_threshold(reducer, dataset, asset):
+    """Each aggregation has its own default threshold (e.g. wettest day vs
+    average daily rainfall)."""
+    cfg = _forecast_cfg(dataset, asset)
+    if not cfg or reducer not in (cfg.get("reducers") or []):
+        raise PreventUpdate
+    thr = threshold_for(cfg, reducer)[0]
+    return thr, thr
+
+
+@app.callback(
+    Output("forecast-threshold-source", "children"),
+    Input("forecast-reducer",           "value"),
+    Input("forecast-dataset-select",    "value"),
+    Input("store-forecast-asset",       "data"),
+)
+def forecast_threshold_source(reducer, dataset, asset):
+    cfg = _forecast_cfg(dataset, asset)
+    if not cfg:
+        return ""
+    if reducer not in (cfg.get("reducers") or []):
+        reducer = (cfg.get("reducers") or ["mean"])[0]
+    value, source = threshold_for(cfg, reducer)
+    if not source:
+        return ""
+    units = cfg.get("units", "")
+    return f"Default {value:g}{' ' + units if units else ''}: {source}"
 
 
 # ── Observed / Forecast: one control block, reset per tab ────────────────────
