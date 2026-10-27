@@ -52,11 +52,14 @@ COLUMNS = [
     ("App Default Threshold", 16),
     ("Slider Min", 10),
     ("Slider Max", 10),
+    ("Range Basis", 34),
+    ("Thresholds by Aggregation", 46),
     ("Reference Threshold", 30),
     ("Reference Source", 34),
     ("Threshold Basis", 18),
     ("Processing / Transform", 46),
     ("Collection Filters", 30),
+    ("Model Run", 30),
     ("Observed Range (probe)", 34),
     ("Coverage", 14),
     ("Provider", 16),
@@ -69,6 +72,7 @@ COLUMNS = [
 
 V  = "2026-08-19"  # probe date — original 12 datasets verified against live GEE
 V2 = "2026-08-31"  # CAMS probe date (bands, forecast horizon, PM value ranges)
+V3 = "2026-10-27"  # model-run fix, daily rainfall, ranges re-probed on populated land
 
 # ---------------------------------------------------------------------------
 # Rows. Order: Implemented (by topic) -> Candidate -> Rejected.
@@ -84,28 +88,27 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "NOAA/GFS0P25",
         "Band(s) Used": "total_precipitation_surface",
-        "Native Resolution": "27.8 km",
-        "Temporal Resolution": "1-hourly steps",
         "Forecast Horizon": "16 days",
         "Data Latency": "~5 h",
         "Update Cadence": "4x daily (6-hourly)",
         "Actionable Lead Time": "1-10 days",
-        "Default Window (days)": 3, "Max Window (days)": 10,
-        "Aggregation Options": "sum, max", "Default Aggregation": "sum",
-        "Units (app)": "mm", "App Default Threshold": 50,
-        "Slider Min": 0, "Slider Max": 400,
-        "Reference Threshold": "WMO heavy rain: >=50 mm / 24 h",
-        "Reference Source": "WMO Severe Weather Information Centre",
+        "Reference Threshold": "WMO heavy rain: >=50 mm / 24 h (wettest day); "
+                               "ETCCDI R20mm: >=20 mm (average day)",
+        "Reference Source": "WMO Severe Weather Information Centre; ETCCDI",
         "Threshold Basis": "Matches WMO",
-        "Processing / Transform": "Sum of per-interval accumulations over window",
-        "Collection Filters": "forecast_hours > 0",
-        "Observed Range (probe)": "3d sum 0.6-188 mm (Kenya)",
+        "Processing / Transform": "6-hour block totals summed per UTC day; wettest day = max "
+                                  "of daily totals, average = mean of daily totals",
+        "Collection Filters": "forecast_hours in 6, 12 ... 384 (6-hour block ends)",
+        "Observed Range (probe)": "Wettest day on populated land, 4 seasons 2026: p99.9 "
+                                  "89-109 mm/day, max 381",
         "Coverage": "Global", "Provider": "NOAA NCEP",
         "Licence / Access": "Public domain",
-        "Known Caveats": "forecast_hours=0 (analysis step) carries NO precipitation band and is "
-                         "filtered out. Values are per-interval, not run-cumulative (verified "
-                         "non-monotonic across steps), so summing is correct. Coarse 28 km grid "
-                         "under-resolves convective cells and small catchments.",
+        "Known Caveats": "Precipitation accumulates within each 6-hour block and resets, so "
+                         "only block ends are summed; forecast_hours=0 has no precipitation band. "
+                         "Before 27 Oct 2026 the app mixed every run and summed every hour "
+                         "(~15x too high). Coarse 28 km grid under-resolves convective cells "
+                         "and small catchments: country means matched IMERG within ~1 mm, but "
+                         "local peaks run low.",
         "Status Notes": "Primary rainfall forecast layer.",
         "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
         "Verified On": V}),
@@ -118,22 +121,20 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "NASA/GPM_L3/IMERG_V07",
         "Band(s) Used": "precipitation",
-        "Native Resolution": "11.1 km",
-        "Temporal Resolution": "30-minute",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~2 days",
         "Update Cadence": "Half-hourly",
         "Actionable Lead Time": "Nowcast / post-event",
-        "Default Window (days)": 7, "Max Window (days)": 30,
-        "Aggregation Options": "sum, max", "Default Aggregation": "sum",
-        "Units (app)": "mm", "App Default Threshold": 100,
-        "Slider Min": 0, "Slider Max": 800,
-        "Reference Threshold": "WMO heavy rain: >=50 mm / 24 h",
-        "Reference Source": "WMO Severe Weather Information Centre",
-        "Threshold Basis": "Probed default (multi-day window)",
-        "Processing / Transform": "Band is mm/hr on half-hourly images: x0.5 per image, then sum",
+        "Reference Threshold": "WMO heavy rain: >=50 mm / 24 h (wettest day); "
+                               "ETCCDI R20mm: >=20 mm (average day)",
+        "Reference Source": "WMO Severe Weather Information Centre; ETCCDI",
+        "Threshold Basis": "Matches WMO",
+        "Processing / Transform": "mm/hr x0.5 per half-hour; a day's total = mean half-hour "
+                                  "amount x 48, so missing half-hours are filled at the day's "
+                                  "mean rate",
         "Collection Filters": "-",
-        "Observed Range (probe)": "7d sum 0-249 mm (Kenya)",
+        "Observed Range (probe)": "Wettest day on populated land, 4 seasons 2026: p99.9 "
+                                  "99-162 mm/day, max 795",
         "Coverage": "60N-60S", "Provider": "NASA / JAXA",
         "Licence / Access": "Open",
         "Known Caveats": "V07 band is 'precipitation' — V06's 'precipitationCal' does not exist "
@@ -152,23 +153,19 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "NOAA/GFS0P25",
         "Band(s) Used": "u_component_of_wind_10m_above_ground + v_component_of_wind_10m_above_ground",
-        "Native Resolution": "27.8 km",
-        "Temporal Resolution": "1-hourly steps",
         "Forecast Horizon": "16 days",
         "Data Latency": "~5 h",
         "Update Cadence": "4x daily (6-hourly)",
         "Actionable Lead Time": "1-10 days",
-        "Default Window (days)": 3, "Max Window (days)": 10,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "m/s", "App Default Threshold": 17.5,
-        "Slider Min": 0, "Slider Max": 80,
         "Reference Threshold": "WMO tropical storm: 34-63 kt (17.5-32.4 m/s); "
-                               "hurricane force >64 kt (>33 m/s)",
+                               "hurricane force >64 kt (>33 m/s); mean: Beaufort 6 "
+                               ">=10.8 m/s",
         "Reference Source": "WMO Classification of Tropical Cyclones",
         "Threshold Basis": "Matches WMO + static catalog",
         "Processing / Transform": "Derived wind speed = hypot(u10, v10) per image, then max",
         "Collection Filters": "forecast_hours > 0",
-        "Observed Range (probe)": "u10 3d max -9.2 to 8.7 m/s (Kenya, calm period)",
+        "Observed Range (probe)": "3-day max on populated land, 4 seasons 2026: p99.9 "
+                                  "19-21 m/s, max 38",
         "Coverage": "Global", "Provider": "NOAA NCEP",
         "Licence / Access": "Public domain",
         "Known Caveats": "GFS0P25 has NO gust band — this is sustained 10 m wind, so peak gusts "
@@ -186,58 +183,50 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "NOAA/GFS0P25",
         "Band(s) Used": "temperature_2m_above_ground",
-        "Native Resolution": "27.8 km",
-        "Temporal Resolution": "1-hourly steps",
         "Forecast Horizon": "16 days",
         "Data Latency": "~5 h",
         "Update Cadence": "4x daily (6-hourly)",
         "Actionable Lead Time": "1-10 days",
-        "Default Window (days)": 3, "Max Window (days)": 10,
-        "Aggregation Options": "max, mean, min", "Default Aggregation": "max",
-        "Units (app)": "degC", "App Default Threshold": 35,
-        "Slider Min": -20, "Slider Max": 55,
-        "Reference Threshold": "No single global standard — WMO heatwave definitions are "
-                               "local/percentile-based; 35 degC is a common fixed criterion",
-        "Reference Source": "WMO Extreme Heat topic; UNDRR HIPS MH0501",
-        "Threshold Basis": "Matches static catalog",
+        "Reference Threshold": "ET-SCI TXge35: max >=35 degC; ETCCDI TR: min >20 degC; "
+                               "mean 30 degC has no standard. WMO heatwave definitions are "
+                               "local/percentile-based",
+        "Reference Source": "WMO ETCCDI / ET-SCI climate indices; WMO Extreme Heat topic",
+        "Threshold Basis": "Matches WMO index (max, min); dashboard choice (mean)",
         "Processing / Transform": "Direct — already degC in this collection (no K conversion)",
         "Collection Filters": "forecast_hours > 0",
-        "Observed Range (probe)": "3d max 13.7-38.9 degC (Kenya)",
+        "Observed Range (probe)": "Populated land, 4 seasons 2026: max p99.9 44-48 degC; "
+                                  "min p0.1 -46 degC",
         "Coverage": "Global", "Provider": "NOAA NCEP",
         "Licence / Access": "Public domain",
         "Known Caveats": "WMO defines heatwaves relative to LOCAL climatology and duration "
                          "(2-3+ consecutive days), not an absolute cutoff — a fixed 35 degC "
                          "threshold over-flags hot climates and under-flags temperate ones. "
                          "Dry-bulb only: no humidity, so no heat-index/WBGT effect.",
-        "Status Notes": "Threshold matches the static extreme_heat layer (days over 35 degC).",
+        "Status Notes": "Shares range and thresholds with era5_air_temp. 35 degC is also the "
+                        "hot-day definition of the static extreme_heat layer (days over 35 degC).",
         "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
         "Verified On": V}),
 
     dict(Status="Implemented", **{
-        "Hazard Topic": "Heatwave",
+        "Hazard Topic": "Extreme Heat",
         "Layer Name": "Land surface temperature (MODIS)",
         "Layer ID (app)": "modis_lst",
         "Type": "Satellite thermal observation",
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "MODIS/061/MOD11A1",
         "Band(s) Used": "LST_Day_1km",
-        "Native Resolution": "1 km",
-        "Temporal Resolution": "Daily",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~2-3 days",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Post-event / situational",
-        "Default Window (days)": 8, "Max Window (days)": 30,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "degC", "App Default Threshold": 40,
-        "Slider Min": -20, "Slider Max": 70,
         "Reference Threshold": "No direct standard — LST is not air temperature; "
                                "health thresholds are defined on 2 m air temperature",
         "Reference Source": "WMO Extreme Heat topic",
         "Threshold Basis": "Probed default — needs expert review",
         "Processing / Transform": "Scaled uint16 Kelvin: raw x0.02 - 273.15 -> degC",
         "Collection Filters": "-",
-        "Observed Range (probe)": "raw 13932-16112 = 5.5-48.1 degC (Kenya)",
+        "Observed Range (probe)": "Populated land, 4 seasons 2026: p0.1 -41 degC to "
+                                  "p99.9 56 degC",
         "Coverage": "Global", "Provider": "NASA LP DAAC",
         "Licence / Access": "Open",
         "Known Caveats": "Land SURFACE temperature runs well above 2 m air temperature (often "
@@ -256,25 +245,19 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "ECMWF/ERA5_LAND/HOURLY",
         "Band(s) Used": "temperature_2m",
-        "Native Resolution": "~11 km",
-        "Temporal Resolution": "Hourly",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~6 days",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Post-event / situational",
-        "Default Window (days)": 8, "Max Window (days)": 30,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "degC", "App Default Threshold": 35,
-        "Slider Min": -30, "Slider Max": 55,
-        "Reference Threshold": "Health heat thresholds are defined on 2 m air temperature; "
-                               "35 degC matches the static extreme-heat layer",
-        "Reference Source": "WMO Extreme Heat topic; UNDRR HIPS MH0501",
-        "Threshold Basis": "Matches static catalog",
+        "Reference Threshold": "ET-SCI TXge35: max >=35 degC; mean 30 degC has no standard. "
+                               "Health heat thresholds are defined on 2 m air temperature",
+        "Reference Source": "WMO ETCCDI / ET-SCI climate indices; WMO Extreme Heat topic",
+        "Threshold Basis": "Matches WMO index (max); dashboard choice (mean)",
         "Processing / Transform": "Plain Kelvin: raw - 273.15 -> degC (no scale factor, "
                                   "unlike MODIS LST)",
         "Collection Filters": "-",
-        "Observed Range (probe)": "8d max 27.6-29.5 degC (Malawi, Sep 2026); "
-                                  "208 hourly images in the default window",
+        "Observed Range (probe)": "Populated land, 4 seasons 2026: max p99.9 42-49 degC; "
+                                  "mean p0.1 -40 degC",
         "Coverage": "Global land", "Provider": "ECMWF / Copernicus",
         "Licence / Access": "Open (Copernicus)",
         "Known Caveats": "Reanalysis, not a station observation — it assimilates observations "
@@ -294,23 +277,18 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "FIRMS",
         "Band(s) Used": "T21",
-        "Native Resolution": "1 km",
-        "Temporal Resolution": "Daily composite",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~2-3 days (GEE ingest)",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "K", "App Default Threshold": 330,
-        "Slider Min": 300, "Slider Max": 500,
         "Reference Threshold": "MODIS C6 algorithm uses 360 K day / 320 K night in its "
                                "internal fire tests (not a user-facing severity threshold)",
         "Reference Source": "MODIS Collection 6 Active Fire Product User Guide",
         "Threshold Basis": "Probed default — needs expert review",
         "Processing / Transform": "Direct T21 brightness temperature, max over window",
         "Collection Filters": "-",
-        "Observed Range (probe)": "14d max 300-392 K (Kenya)",
+        "Observed Range (probe)": "Populated land, 4 seasons 2026: median 316-321 K, "
+                                  "p99.9 382-500 K (saturation)",
         "Coverage": "Global", "Provider": "NASA FIRMS",
         "Licence / Access": "Open",
         "Known Caveats": "FIRMS pixels are ALREADY algorithm-confirmed detections, so a T21 "
@@ -329,22 +307,16 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "FIRMS",
         "Band(s) Used": "T21 (presence mask)",
-        "Native Resolution": "1 km",
-        "Temporal Resolution": "Daily composite",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~2-3 days (GEE ingest)",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast / trend",
-        "Default Window (days)": 30, "Max Window (days)": 60,
-        "Aggregation Options": "sum", "Default Aggregation": "sum",
-        "Units (app)": "days", "App Default Threshold": 1,
-        "Slider Min": 0, "Slider Max": 60,
         "Reference Threshold": "n/a — derived persistence metric",
         "Reference Source": "-",
-        "Threshold Basis": "Derived metric (>=1 day = any fire)",
+        "Threshold Basis": "Derived metric (>1 day = more than a single day)",
         "Processing / Transform": "Per image: mask presence -> 1/0, summed over window = days with fire",
         "Collection Filters": "-",
-        "Observed Range (probe)": "31 images in a 30d window (Kenya)",
+        "Observed Range (probe)": "30-day count on populated land: p99.9 1-2, max 12",
         "Coverage": "Global", "Provider": "NASA FIRMS",
         "Licence / Access": "Open",
         "Known Caveats": "Counts DAYS WITH A DETECTION, not fire count or burned area. Cloud "
@@ -363,23 +335,17 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "ECMWF/CAMS/NRT",
         "Band(s) Used": "particulate_matter_d_less_than_25_um_surface",
-        "Native Resolution": "44 km",
-        "Temporal Resolution": "3-hourly steps",
         "Forecast Horizon": "5 days",
         "Data Latency": "~0 (forecast)",
         "Update Cadence": "2 runs/day (00z, 12z)",
         "Actionable Lead Time": "1-5 days",
-        "Default Window (days)": 3, "Max Window (days)": 5,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "ug/m3", "App Default Threshold": 15,
-        "Slider Min": 0, "Slider Max": 250,
         "Reference Threshold": "WHO 2021 AQG PM2.5: 15 ug/m3 (24-h mean)",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
         "Threshold Basis": "Matches WHO",
         "Processing / Transform": "kg/m3 x 1e9 -> ug/m3",
         "Collection Filters": "-",
-        "Observed Range (probe)": "3d max p50 10.8 / p98 54.4 ug/m3 (Kenya); "
-                                  "p50 57.3 / p98 173.8 (N. India)",
+        "Observed Range (probe)": "3-day max on populated land, 4 seasons 2026: p99.9 "
+                                  "294-375 ug/m3",
         "Coverage": "Global", "Provider": "ECMWF / Copernicus (CAMS)",
         "Licence / Access": "Open (Copernicus); attribution required",
         "Known Caveats": "SURFACE concentration, so unlike the Sentinel-5P columns it IS "
@@ -399,23 +365,17 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "ECMWF/CAMS/NRT",
         "Band(s) Used": "particulate_matter_d_less_than_10_um_surface",
-        "Native Resolution": "44 km",
-        "Temporal Resolution": "3-hourly steps",
         "Forecast Horizon": "5 days",
         "Data Latency": "~0 (forecast)",
         "Update Cadence": "2 runs/day (00z, 12z)",
         "Actionable Lead Time": "1-5 days",
-        "Default Window (days)": 3, "Max Window (days)": 5,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "ug/m3", "App Default Threshold": 45,
-        "Slider Min": 0, "Slider Max": 600,
         "Reference Threshold": "WHO 2021 AQG PM10: 45 ug/m3 (24-h mean)",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
         "Threshold Basis": "Matches WHO",
         "Processing / Transform": "kg/m3 x 1e9 -> ug/m3",
         "Collection Filters": "-",
-        "Observed Range (probe)": "3d max p50 15.3 / p98 55.8 ug/m3 (Kenya); "
-                                  "p50 147.1 / p98 1183.6 (N. India)",
+        "Observed Range (probe)": "3-day max on populated land, 4 seasons 2026: p99.9 "
+                                  "1,738-2,888 ug/m3 (dust)",
         "Coverage": "Global", "Provider": "ECMWF / Copernicus (CAMS)",
         "Licence / Access": "Open (Copernicus); attribution required",
         "Known Caveats": "Includes wind-blown dust, so it spikes far above PM2.5 during dust "
@@ -433,24 +393,18 @@ ROWS = [
         "EW Role": "Forecast",
         "GEE Asset ID": "ECMWF/CAMS/NRT",
         "Band(s) Used": "dust_aerosol_optical_depth_at_550nm_surface",
-        "Native Resolution": "44 km",
-        "Temporal Resolution": "3-hourly steps",
         "Forecast Horizon": "5 days",
         "Data Latency": "~0 (forecast)",
         "Update Cadence": "2 runs/day (00z, 12z)",
         "Actionable Lead Time": "1-5 days",
-        "Default Window (days)": 3, "Max Window (days)": 5,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "AOD", "App Default Threshold": 0.5,
-        "Slider Min": 0, "Slider Max": 2.5,
-        "Reference Threshold": "No formal warning standard; probed Sahara/Sahel median 0.58, "
-                               "p90 1.02 vs Kenya median 0.016",
-        "Reference Source": "Probed against known dust source regions",
+        "Reference Threshold": "No formal warning standard; 0.5 sits near the top 1% of "
+                               "populated land (p99 0.5-0.8)",
+        "Reference Source": "Probe of populated land (dashboard choice)",
         "Threshold Basis": "Probed default",
         "Processing / Transform": "Direct AOD value, max over window",
         "Collection Filters": "-",
-        "Observed Range (probe)": "3d max: Sahara/Sahel p50 0.58 p98 1.37; Arabian p50 0.42; "
-                                  "Kenya p50 0.016 (~36x contrast)",
+        "Observed Range (probe)": "3-day max on populated land, 4 seasons 2026: p99 0.5-0.8, "
+                                  "p99.9 0.7-1.4",
         "Coverage": "Global", "Provider": "ECMWF / Copernicus (CAMS)",
         "Licence / Access": "Open (Copernicus); attribution required",
         "Known Caveats": "Models dust as its own aerosol species, so unlike the Sentinel-5P "
@@ -458,7 +412,7 @@ ROWS = [
                          "column measure — high AOD does not always mean high ground-level "
                          "dust concentration; pair with cams_pm10 for surface impact.",
         "Status Notes": "Forward-looking dust layer; s5p_aer_ai retained alongside it for "
-                        "higher-resolution (1.1 km) observed dust.",
+                        "higher-resolution (~5.5 x 3.5 km) observed dust.",
         "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_CAMS_NRT",
         "Verified On": V2}),
 
@@ -471,16 +425,10 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "COPERNICUS/S5P/NRTI/L3_NO2",
         "Band(s) Used": "NO2_column_number_density",
-        "Native Resolution": "1.1 km (resampled)",
-        "Temporal Resolution": "Daily overpass",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~5 h",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "mean, max", "Default Aggregation": "mean",
-        "Units (app)": "umol/m2", "App Default Threshold": 60,
-        "Slider Min": 0, "Slider Max": 400,
         "Reference Threshold": "WHO 2021 AQG NO2: 25 ug/m3 (24-h mean) — SURFACE concentration, "
                                "NOT directly convertible to a satellite total column",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
@@ -507,16 +455,10 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "COPERNICUS/S5P/NRTI/L3_SO2",
         "Band(s) Used": "SO2_column_number_density",
-        "Native Resolution": "1.1 km (resampled)",
-        "Temporal Resolution": "Daily overpass",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~20 h",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "mean, max", "Default Aggregation": "mean",
-        "Units (app)": "umol/m2", "App Default Threshold": 200,
-        "Slider Min": -500, "Slider Max": 2000,
         "Reference Threshold": "WHO 2021 AQG SO2: 40 ug/m3 (24-h mean) — SURFACE concentration, "
                                "NOT directly convertible to a satellite total column",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
@@ -542,16 +484,10 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "COPERNICUS/S5P/NRTI/L3_CO",
         "Band(s) Used": "CO_column_number_density",
-        "Native Resolution": "1.1 km (resampled)",
-        "Temporal Resolution": "Daily overpass",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~3 h",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "mean, max", "Default Aggregation": "mean",
-        "Units (app)": "mmol/m2", "App Default Threshold": 40,
-        "Slider Min": 0, "Slider Max": 200,
         "Reference Threshold": "WHO 2021 AQG CO: 4 mg/m3 (24-h mean) — SURFACE concentration, "
                                "NOT directly convertible to a satellite total column",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
@@ -577,16 +513,10 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "COPERNICUS/S5P/NRTI/L3_O3",
         "Band(s) Used": "O3_column_number_density",
-        "Native Resolution": "1.1 km (resampled)",
-        "Temporal Resolution": "Daily overpass",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~20 h",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "mean, max", "Default Aggregation": "mean",
-        "Units (app)": "mmol/m2", "App Default Threshold": 130,
-        "Slider Min": 80, "Slider Max": 200,
         "Reference Threshold": "WHO 2021 AQG O3: 100 ug/m3 (8-h mean) — SURFACE concentration; "
                                "this band is the TOTAL column, dominated by stratospheric ozone",
         "Reference Source": "WHO Global Air Quality Guidelines 2021",
@@ -613,30 +543,25 @@ ROWS = [
         "EW Role": "Monitoring (NRT)",
         "GEE Asset ID": "COPERNICUS/S5P/NRTI/L3_AER_AI",
         "Band(s) Used": "absorbing_aerosol_index",
-        "Native Resolution": "1.1 km (resampled)",
-        "Temporal Resolution": "Daily overpass",
         "Forecast Horizon": "n/a (observed)",
         "Data Latency": "~3 h",
         "Update Cadence": "Daily",
         "Actionable Lead Time": "Nowcast",
-        "Default Window (days)": 14, "Max Window (days)": 30,
-        "Aggregation Options": "max, mean", "Default Aggregation": "max",
-        "Units (app)": "index", "App Default Threshold": 1.0,
-        "Slider Min": -2, "Slider Max": 6,
         "Reference Threshold": "UVAI > ~1.0 commonly used to indicate absorbing aerosols "
                                "(dust / smoke)",
         "Reference Source": "ESA Sentinel-5P L2 Aerosol Index technical guide; EUMETSAT dust guide",
         "Threshold Basis": "Matches published practice",
         "Processing / Transform": "Direct index value, max over window",
         "Collection Filters": "-",
-        "Observed Range (probe)": "14d max -0.76 to 2.43 (Kenya)",
+        "Observed Range (probe)": "14-day max on populated land, 4 seasons 2026: p99.9 "
+                                  "3.7-9.2 (Jul, smoke)",
         "Coverage": "Global", "Provider": "ESA / Copernicus",
         "Licence / Access": "Open (Copernicus)",
         "Known Caveats": "Does not separate DUST from SMOKE — both are UV-absorbing, so a fire "
                          "plume raises this alongside a dust event. Sensitive to aerosol layer "
                          "height; low-altitude dust is under-detected. Column measure: high AAI "
                          "does not always mean high ground-level concentration.",
-        "Status Notes": "Kept ACTIVE alongside cams_dust_aod: at 1.1 km it is ~40x finer than "
+        "Status Notes": "Kept ACTIVE alongside cams_dust_aod: at ~5.5 x 3.5 km it is ~10x finer than "
                         "CAMS (44 km) and is an observation rather than a model, so the two "
                         "complement each other for dust.",
         "Catalog URL": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_AER_AI",
@@ -873,7 +798,7 @@ ROWS = [
         "Layer ID (app)": "-", "Type": "Satellite trace-gas column",
         "EW Role": "Monitoring",
         "GEE Asset ID": "COPERNICUS/S5P/OFFL/L3_*",
-        "Band(s) Used": "same as NRTI", "Native Resolution": "1.1 km",
+        "Band(s) Used": "same as NRTI", "Native Resolution": "~5.5 x 3.5 km",
         "Temporal Resolution": "Daily",
         "Forecast Horizon": "-", "Data Latency": "~222 h", "Update Cadence": "-",
         "Actionable Lead Time": "-",
@@ -898,9 +823,11 @@ FIELD_DEFS = [
     ("Status", "Implemented = live in the Forecast tab. Candidate = evaluated, worth adding, "
                "blocked on access or ingest. Rejected = evaluated and excluded (reason in Known Caveats)."),
     ("Active", "For Implemented rows only: whether the layer is currently shown in the app. "
-               "Read live from forecast_config.py's `active` flag at generation time, so this "
-               "column cannot drift from the code. Set active=False to retire a layer from the "
-               "UI while keeping its verified metadata and the record of why it existed."),
+               "Set active=False to retire a layer from the UI while keeping its verified "
+               "metadata and the record of why it existed. This and every field the app "
+               "config holds (topic, name, resolution, windows, aggregations, units, "
+               "thresholds, ranges) are read live from forecast_config.py at generation "
+               "time, so they cannot drift from the code."),
     ("Hazard Topic", "Maps to the topic vocabulary in config.HAZARD_TOPICS so forecast layers "
                      "sit under the same hazard names as the static catalog."),
     ("Layer Name", "Display label shown in the app's dataset dropdown."),
@@ -911,24 +838,31 @@ FIELD_DEFS = [
                 "This drives whether the date picker allows future dates."),
     ("GEE Asset ID", "Earth Engine collection id, read live from the public catalog."),
     ("Band(s) Used", "Band selected, or the bands combined by a derived transform."),
-    ("Native Resolution", "Nominal pixel size of the source, verified via projection().nominalScale(). "
-                          "NOTE: exposure is always reduced at the 100 m population grid regardless."),
-    ("Temporal Resolution", "Spacing of images within the collection."),
+    ("Native Resolution", "Grid size of the source (from forecast_config `resolution`). "
+                          "NOTE: exposure is always counted on the 1 km child-population grid."),
+    ("Temporal Resolution", "Spacing of images within the collection (from forecast_config "
+                            "`resolution`)."),
     ("Forecast Horizon", "How far ahead the product predicts. 'n/a (observed)' for monitoring layers."),
     ("Data Latency", "Measured age of the newest available image at probe time — the practical "
                      "limit on how current an analysis can be."),
     ("Update Cadence", "How often new imagery is published."),
     ("Actionable Lead Time", "Realistic warning lead time this layer supports operationally."),
-    ("Default Window (days)", "Initial date-range width in the picker. NRT layers end at "
+    ("Default Window (days)", "Initial date-range width in the picker. Observed layers end at "
                               "today minus latency, or the window returns zero images."),
     ("Max Window (days)", "Hard cap enforced by the date picker (forecast_core.clamp_window)."),
     ("Aggregation Options", "Temporal reducers offered for this layer."),
     ("Default Aggregation", "Reducer preselected — chosen to match how the variable is "
-                            "physically meaningful (accumulate rain, peak wind/heat)."),
+                            "physically meaningful (wettest day for rain, peak wind/heat)."),
     ("Units (app)", "Units AFTER the processing transform — what the threshold slider shows."),
     ("App Default Threshold", "Preset exposure threshold. Children are counted where the "
                               "aggregated value is strictly greater than this."),
-    ("Slider Min / Slider Max", "Threshold slider bounds, set from probed value ranges."),
+    ("Slider Min / Slider Max", "Threshold slider bounds and preview colour ramp."),
+    ("Range Basis", "How the slider bounds were set: the highest 99.9th percentile on populated "
+                    "land across four 2026 seasons, rounded outward (forecast_config "
+                    "`range_source`). Same-variable layers share one range."),
+    ("Thresholds by Aggregation", "Default threshold for each aggregation and its source "
+                                  "(forecast_config `thresholds`); the source is shown under "
+                                  "the slider in the app."),
     ("Reference Threshold", "Published warning level from a recognised body, where a comparable "
                             "one exists. Where the satellite quantity is not comparable to the "
                             "standard (column density vs surface concentration), the cell says so."),
@@ -938,6 +872,8 @@ FIELD_DEFS = [
     ("Processing / Transform", "Unit conversion or derivation applied, implemented in "
                                "forecast_core._PRE_TRANSFORMS / _POST_TRANSFORMS."),
     ("Collection Filters", "ee.Filter applied before reduction (e.g. dropping GFS analysis steps)."),
+    ("Model Run", "Forecast layers reduce ONE run — the latest initialised at or before the "
+                  "window start — and select its images by valid time."),
     ("Observed Range (probe)", "Actual values measured during verification, with the test AOI."),
     ("Coverage", "Spatial extent of the product."),
     ("Provider", "Data producer."),
@@ -955,8 +891,17 @@ SOURCES = [
      "tropical-cyclone-programme-tcp/classification-of-tropical-cyclones",
      "Tropical storm 34-63 kt (17.5-32.4 m/s); hurricane force >64 kt (>33 m/s)"),
     ("WMO Severe Weather Information Centre",
-     "https://severeweather.wmo.int/",
-     "Heavy rain defined as >=50 mm in 24 h"),
+     "https://severeweather.wmo.int/observation.html",
+     "Heavy rain/snow: >=50 mm in the past 24 hours"),
+    ("ETCCDI climate change indices (WMO CCl / WCRP)",
+     "https://etccdi.pacificclimate.org/list_27_indices.shtml",
+     "R20mm very heavy precipitation day (>=20 mm); TR tropical night (min >20 degC)"),
+    ("ET-SCI sector-specific indices (WMO CCl), ClimPACT",
+     "https://climpact-sci.org/indices/",
+     "TXge35: days with maximum temperature >=35 degC"),
+    ("Beaufort scale (WMO code tables)",
+     "",
+     "Force 6 strong breeze 10.8-13.8 m/s; force 12 hurricane force >=32.7 m/s"),
     ("WMO Extreme Heat",
      "https://wmo.int/topics/heatwave",
      "Heatwave = 2-3+ consecutive days above locally-defined thresholds; no single global cutoff"),
@@ -1011,8 +956,9 @@ STATUS_FMT = {"Implemented": f_impl, "Candidate": f_cand, "Rejected": f_rej}
 # ── Sheet 1: Forecast Layers ────────────────────────────────────────────────
 ws = wb.add_worksheet("Forecast Layers")
 ws.write(0, 0, "GCHD — Forecast & Early Warning Data Catalog", f_title)
-ws.write(1, 0, f"Layers behind the Forecast & Live tab. Verified against the live GEE catalog "
-               f"on {V}. Objective: early warning / forecasting of child hazard exposure. "
+ws.write(1, 0, f"Layers behind the Observed and Forecast tabs. Verified against the live GEE "
+               f"catalog on {V}; active layers re-checked on {V3}. Objective: early warning / "
+               f"forecasting of child hazard exposure. "
                f"Status column separates implemented layers from candidates and rejected ones.",
          f_sub)
 
@@ -1036,6 +982,43 @@ except ImportError as _e:
     _LIVE = {}
 
 
+def _thresholds_text(cfg):
+    from forecast_config import REDUCERS, threshold_for
+    parts = []
+    for r in cfg.get("reducers") or []:
+        v, src = threshold_for(cfg, r)
+        parts.append(f"{REDUCERS.get(r, r)}: {v:g}" + (f" — {src}" if src else ""))
+    return "; ".join(parts)
+
+
+def _live(row):
+    """Implemented rows take every field the app config holds from the config
+    itself; only descriptive columns are hand-written above."""
+    cfg = _LIVE.get(row.get("Layer ID (app)")) if row["Status"] == "Implemented" else None
+    if not cfg:
+        return row
+    from forecast_config import REDUCERS
+    space, _, time_ = (cfg.get("resolution") or "").partition(" · ")
+    reds = cfg.get("reducers") or []
+    run = cfg.get("run")
+    return {**row,
+        "Hazard Topic": cfg["topic"], "Layer Name": cfg["label"],
+        "Native Resolution": space or row.get("Native Resolution", ""),
+        "Temporal Resolution": time_ or row.get("Temporal Resolution", ""),
+        "Default Window (days)": cfg["default_span_days"],
+        "Max Window (days)": cfg["max_span_days"],
+        "Aggregation Options": ", ".join(REDUCERS.get(r, r) for r in reds),
+        "Default Aggregation": REDUCERS.get(reds[0], reds[0]) if reds else "",
+        "Units (app)": cfg.get("units", ""),
+        "App Default Threshold": cfg.get("threshold", ""),
+        "Slider Min": cfg.get("min", ""), "Slider Max": cfg.get("max", ""),
+        "Range Basis": cfg.get("range_source", "-"),
+        "Thresholds by Aggregation": _thresholds_text(cfg),
+        "Model Run": (f"One run: latest {run['init']} at or before the window start; "
+                      f"images by {run['valid']}") if run else "n/a (observed)",
+        "Verified On": V3 if cfg.get("active", True) else row.get("Verified On", "")}
+
+
 def _active_of(row):
     if row["Status"] != "Implemented":
         return "—"
@@ -1046,6 +1029,7 @@ def _active_of(row):
 
 
 for r, row in enumerate(ROWS, start=HDR_ROW + 1):
+    row = _live(row)
     for c, (name, _) in enumerate(COLUMNS):
         val = _active_of(row) if name == "Active" else row.get(name, "")
         if name == "Status":
@@ -1078,7 +1062,10 @@ ws2.write(start + 1, 0, "Source", f_hdr)
 ws2.write(start + 1, 1, "URL / What it defines", f_hdr)
 for i, (nm, url, what) in enumerate(SOURCES, start=start + 2):
     ws2.write(i, 0, nm, f_defk)
-    ws2.write_url(i, 1, url, f_link, string=f"{url}  —  {what}")
+    if url:
+        ws2.write_url(i, 1, url, f_link, string=f"{url}  —  {what}")
+    else:
+        ws2.write(i, 1, what, f_cell)
     ws2.set_row(i, 30)
 
 note = start + 2 + len(SOURCES) + 1

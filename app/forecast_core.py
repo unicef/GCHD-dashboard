@@ -20,7 +20,7 @@ from cachetools import TTLCache, cached as _ttl_cached
 
 from config import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
 from forecast_config import (
-    FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE,
+    FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS,
 )
 from gee_core import build_core_images, _admin_region
 
@@ -325,7 +325,51 @@ _OPS = {
     "lt": lambda p, v: ee.Filter.lt(p, v),
     "gte": lambda p, v: ee.Filter.gte(p, v),
     "lte": lambda p, v: ee.Filter.lte(p, v),
+    "in":  lambda p, v: ee.Filter.inList(p, v),
 }
+
+
+def _ms(d):
+    """Epoch milliseconds of a date's 00:00 UTC."""
+    return int(dt.datetime(d.year, d.month, d.day,
+                           tzinfo=dt.timezone.utc).timestamp() * 1000)
+
+
+@_ttl_cached(cache=_result_cache(64), lock=_lock)
+def _select_run(name, start):
+    """Init value of the forecast run to use for a window starting `start`.
+
+    The latest run initialised at or before the window start: the freshest run
+    that still covers the whole window. Forecast collections hold several
+    overlapping runs, each with a multi-day horizon; reducing them together
+    counts the same hours many times. None when no run is found.
+    """
+    cfg = FORECAST_MAP.get(name) or {}
+    r = cfg.get("run")
+    if not r:
+        return None
+    s = _to_date(start)
+    # Runs older than a few days cannot be the latest; bound the search.
+    coll = ee.ImageCollection(cfg["id"]).filterDate(
+        (min(s, dt.date.today()) - dt.timedelta(days=4)).isoformat(),
+        (s + dt.timedelta(days=1)).isoformat())
+    limit = _ms(s) if r["init_ms"] else f"{s.isoformat()}T00:00:00"
+    inits = (coll.filter(ee.Filter.lte(r["init"], limit))
+             .aggregate_array(r["init"]).distinct().getInfo())
+    return max(inits) if inits else None
+
+
+def forecast_run_label(name, start):
+    """'2026-10-24 00:00 UTC' for the run used, or None (observed datasets)."""
+    cfg = FORECAST_MAP.get(name) or {}
+    run = _select_run(name, _to_date(start).isoformat()) if cfg.get("run") else None
+    if run is None:
+        return None
+    if cfg["run"]["init_ms"]:
+        t = dt.datetime.fromtimestamp(run / 1000, tz=dt.timezone.utc)
+    else:
+        t = dt.datetime.fromisoformat(str(run)[:19])
+    return t.strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _resolve_cfg(name, custom_id=None, custom_band=None):
@@ -356,6 +400,26 @@ _REDUCER_FNS = {
 }
 
 
+def _daily(coll, cfg, s, e1, reducer):
+    """Mean or max of UTC-day totals. A day's total is its mean step amount ×
+    steps_per_day, so a few missing steps do not read as a drier day."""
+    r = cfg.get("run") or {}
+    prop = r.get("valid", "system:time_start")
+    per_day = cfg["steps_per_day"]
+    days = []
+    for k in range((e1 - s).days):
+        lo = _ms(s + dt.timedelta(days=k))
+        hi = lo + 86_400_000
+        if cfg.get("accumulated"):
+            f = ee.Filter.And(ee.Filter.gt(prop, lo), ee.Filter.lte(prop, hi))
+        else:
+            f = ee.Filter.And(ee.Filter.gte(prop, lo), ee.Filter.lt(prop, hi))
+        day = coll.filter(f)
+        days.append(day.mean().multiply(per_day).set("n", day.size()))
+    totals = ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+    return totals.max() if reducer == "daily_max" else totals.mean()
+
+
 def build_forecast_image(name, start, end, reducer,
                          custom_id=None, custom_band=None):
     """Reduce a dataset over [start, end] to a single ee.Image.
@@ -367,10 +431,33 @@ def build_forecast_image(name, start, end, reducer,
     """
     cfg = _resolve_cfg(name, custom_id, custom_band)
     s, e = _to_date(start), _to_date(end)
-    # filterDate's end is exclusive — add a day so the picker's end date is
-    # inclusive, which is what a user selecting a range expects.
-    coll = ee.ImageCollection(cfg["id"]).filterDate(
-        s.isoformat(), (e + dt.timedelta(days=1)).isoformat())
+    # The picker's end date is inclusive, so the window runs to e + 1 day.
+    e1 = e + dt.timedelta(days=1)
+    r = cfg.get("run")
+    if r:
+        # One run, selected by VALID time (see _select_run).
+        run = _select_run(cfg["name"], s.isoformat())
+        if run is None:
+            raise ForecastError(
+                f"No {cfg['label']} run found covering {s}. Runs publish a "
+                f"few hours after their start time — try a later start date.")
+        coll = ee.ImageCollection(cfg["id"])
+        if r["valid"] == "system:time_start":
+            coll = (coll.filterDate(s.isoformat(), e1.isoformat())
+                    .filter(ee.Filter.eq(r["init"], run)))
+        else:
+            # system:time_start is the init time here: an indexed way in.
+            coll = coll.filterDate(run, run + 1)
+            lo, hi = _ms(s), _ms(e1)
+            if cfg.get("accumulated"):     # a step ending at 00:00 is the day before
+                coll = coll.filter(ee.Filter.gt(r["valid"], lo)).filter(
+                    ee.Filter.lte(r["valid"], hi))
+            else:
+                coll = coll.filter(ee.Filter.gte(r["valid"], lo)).filter(
+                    ee.Filter.lt(r["valid"], hi))
+    else:
+        coll = ee.ImageCollection(cfg["id"]).filterDate(s.isoformat(),
+                                                        e1.isoformat())
 
     for f in cfg.get("filters") or []:
         op = _OPS.get(f.get("op"))
@@ -395,10 +482,13 @@ def build_forecast_image(name, start, end, reducer,
     if pre is not None:
         coll = pre(coll, cfg)
 
-    fn = _REDUCER_FNS.get(reducer)
-    if fn is None:
-        raise ForecastError(f"Unsupported reducer '{reducer}'.")
-    img = fn(coll)
+    if reducer in DAILY_REDUCERS and cfg.get("steps_per_day"):
+        img = _daily(coll, cfg, s, e1, reducer)
+    else:
+        fn = _REDUCER_FNS.get(reducer)
+        if fn is None:
+            raise ForecastError(f"Unsupported reducer '{reducer}'.")
+        img = fn(coll)
 
     post = _POST_TRANSFORMS.get(cfg.get("transform"))
     if post is not None:
@@ -468,6 +558,7 @@ def compute_forecast_exposure(name, start, end, reducer, threshold,
     stats = ee.Dictionary.fromLists(band_names, sums.get("sum")).getInfo()
 
     stats["_n_images"] = n_images
+    stats["_run"] = forecast_run_label(name, start) if name else None
     stats["_pop_resolution_m"] = pop["resolution_m"]
     return stats
 

@@ -46,7 +46,7 @@ from gee_core import (
     get_topic_tile_url_clipped, get_feature_bounds,
 )
 from forecast_config import (
-    FORECAST_DATASETS, FORECAST_MAP, REDUCERS,
+    FORECAST_DATASETS, FORECAST_MAP, REDUCERS, DAILY_REDUCERS, threshold_for,
     CUSTOM_NAME, CUSTOM_PALETTE,
     KIND_LABELS, KIND_BLURBS, active_datasets, forecast_groups,
 )
@@ -54,7 +54,7 @@ from forecast_core import (
     ForecastError, default_window, clamp_window,
     compute_forecast_exposure, probe_custom_asset,
     get_forecast_intensity_tile, get_forecast_exposed_tile,
-    get_forecast_preview_tile,
+    get_forecast_preview_tile, forecast_run_label,
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
 from elnino_config import (
@@ -149,7 +149,8 @@ def _hazard_info_body(info):
     if not isinstance(info, dict):
         return info
     rows = []
-    for label, key in [("Description", "description"), ("Units", "units"), ("Availability", "availability")]:
+    for label, key in [("Description", "description"), ("Units", "units"),
+                       ("Availability", "availability"), ("Resolution", "resolution")]:
         val = info.get(key, "")
         if val:
             rows.append(html.Div([
@@ -1171,6 +1172,7 @@ def fc_controls():
                 html.Div("Children are counted where the aggregated value is "
                          "strictly greater than this threshold.",
                          className="ps-caption"),
+                html.Div(id="forecast-threshold-source", className="ps-caption"),
             ]),
         ]),
 
@@ -5675,7 +5677,8 @@ def _forecast_cfg(dataset, asset):
         return {
             "name": CUSTOM_NAME, "label": asset["asset_id"].split("/")[-1],
             "units": "", "threshold": 0, "min": 0, "max": 100,
-            "reducers": list(REDUCERS), "palette": CUSTOM_PALETTE,
+            "reducers": [r for r in REDUCERS if r not in DAILY_REDUCERS],
+            "palette": CUSTOM_PALETTE,
             "topic": None, "kind": "nrt", "note": "",
             "custom_id": asset["asset_id"], "custom_band": asset.get("band"),
             "is_custom": True,
@@ -5911,16 +5914,54 @@ def forecast_dataset_params(dataset, asset):
             min_d, max_d = "2015-01-01", today.isoformat()
 
     lo, hi = cfg.get("min", 0), cfg.get("max", 100)
-    default_thr = cfg.get("threshold", 0)
+    first = (cfg.get("reducers") or ["mean"])[0]
+    default_thr = threshold_for(cfg, first)[0]
     step, marks = _thr_step_marks(lo, hi)
     reducers = [{"label": REDUCERS.get(r, r), "value": r}
                 for r in cfg.get("reducers") or ["mean"]]
     note = cfg.get("note", "")
 
     return ({"display": "block"}, note, start, end, min_d, max_d,
-            reducers, (cfg.get("reducers") or ["mean"])[0],
+            reducers, first,
             default_thr, lo, hi, step, lo, hi, default_thr, step, marks,
             cfg.get("units", ""))
+
+
+@app.callback(
+    Output("forecast-threshold",        "value", allow_duplicate=True),
+    Output("forecast-threshold-slider", "value", allow_duplicate=True),
+    Input("forecast-reducer",           "value"),
+    State("forecast-dataset-select",    "value"),
+    State("store-forecast-asset",       "data"),
+    prevent_initial_call=True,
+)
+def forecast_reducer_threshold(reducer, dataset, asset):
+    """Each aggregation has its own default threshold (e.g. wettest day vs
+    average daily rainfall)."""
+    cfg = _forecast_cfg(dataset, asset)
+    if not cfg or reducer not in (cfg.get("reducers") or []):
+        raise PreventUpdate
+    thr = threshold_for(cfg, reducer)[0]
+    return thr, thr
+
+
+@app.callback(
+    Output("forecast-threshold-source", "children"),
+    Input("forecast-reducer",           "value"),
+    Input("forecast-dataset-select",    "value"),
+    Input("store-forecast-asset",       "data"),
+)
+def forecast_threshold_source(reducer, dataset, asset):
+    cfg = _forecast_cfg(dataset, asset)
+    if not cfg:
+        return ""
+    if reducer not in (cfg.get("reducers") or []):
+        reducer = (cfg.get("reducers") or ["mean"])[0]
+    value, source = threshold_for(cfg, reducer)
+    if not source:
+        return ""
+    units = cfg.get("units", "")
+    return f"Default {value:g}{' ' + units if units else ''}: {source}"
 
 
 # ── Observed / Forecast: one control block, reset per tab ────────────────────
@@ -6116,8 +6157,11 @@ def forecast_preview(dataset, start, end, reducer, asset, viz):
         return "", 0, f"Preview failed: {str(ex)[:160]}", err, None
 
     units = cfg.get("units", "")
-    msg = (f"Previewing {n:,} image(s) · {vis['min']:g}–{vis['max']:g} "
-           f"{units}".strip() + " — select a region below to compute exposure.")
+    run = forecast_run_label(cfg["name"], s)
+    msg = (f"Previewing {n:,} image(s)"
+           + (f" from the {run} run" if run else "")
+           + f" · {vis['min']:g}–{vis['max']:g} {units}".rstrip()
+           + " — select a region below to compute exposure.")
     # Drives the map legend so the preview is readable rather than an
     # unlabelled colour wash.
     preview = {"vis": vis, "units": units, "label": cfg["label"],
@@ -6260,6 +6304,7 @@ def forecast_compute(_n, dataset, asset, start, end, reducer, threshold,
             "start": s, "end": e, "reducer": reducer, "threshold": thr,
             "region": region_name, "level": level,
             "n_images": result.get("_n_images", 0),
+            "run": result.get("_run"),
             "dataset": cfg["name"],
             "pop_res": result.get("_pop_resolution_m", 100),
             "asset_id": cfg.get("custom_id"), "band": cfg.get("custom_band")}
@@ -6347,6 +6392,7 @@ def render_forecast_results(result, meta):
         "window_start": meta["start"], "window_end": meta["end"],
         "aggregation": meta["reducer"], "threshold": meta["threshold"],
         "threshold_units": units, "images_in_window": meta["n_images"],
+        "model_run": meta.get("run"),
         "children_exposed": exposed, "total_children": total,
         "boys_exposed": male, "girls_exposed": fema,
         "total_boys": male_t, "total_girls": fema_t,
@@ -6427,6 +6473,8 @@ def render_forecast_results(result, meta):
                 html.Div(f"Dataset: {meta['label']}"),
                 html.Div(f"Window: {meta['start']} → {meta['end']} "
                          f"({meta['n_images']:,} images)"),
+                (html.Div(f"Model run: {meta['run']} (one run, by valid time)")
+                 if meta.get("run") else None),
                 html.Div(f"Aggregation: {REDUCERS.get(meta['reducer'], meta['reducer'])}"),
                 html.Div(f"Exposed where value > {thr_txt}"),
                 html.Div(f"Region: {meta['region']} · {meta['level']}"),
