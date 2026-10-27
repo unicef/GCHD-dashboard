@@ -62,7 +62,7 @@ from elnino_config import (            # noqa: E402
     issue_asset,
     SIGNALS, SIGNAL_MAP,
     HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction, parse_issue, window_suffix,
-    ENSO_MASK_DIR as CFG_ENSO_DIR,
+    ENSO_MASK_DIR as CFG_ENSO_DIR, enso_mask_asset,
 )
 
 # Brier is deliberately absent. It is still computed and stored in
@@ -104,8 +104,6 @@ DEFAULT_THRESHOLD_COMPOUND = 25
 #
 # This is the difference between "children under a forecast signal" and
 # "children under a forecast signal that El Nino plausibly caused".
-ENSO_MASK_ASSET = ("projects/unicef-ccri/assets/el_nino/enso_mask/"
-                   "enso_mask_OND_sig90_p50")
 # From elnino_config so a workbook figure and a dashboard figure cannot drift.
 # Compound signals inherit their RAINFALL component's direction; the mask says
 # nothing about temperature, which the Method sheet states.
@@ -301,14 +299,14 @@ def signal_mask(img, sig, pct, period=None):
              .And(img.select("dry_mask").eq(1)))
 
 
-def enso_mask_for(sig):
+def enso_mask_for(sig, period):
     """Cells where El Nino historically shifts rainfall in THIS direction.
 
     Direction-matched: dry against -1, wet against +1. The union has no single
     direction, so it takes either — a cell qualifies if El Nino historically
     moves it at all.
     """
-    m = ee.Image(ENSO_MASK_ASSET).rename("enso_dir")
+    m = ee.Image(enso_mask_asset(PERIOD_MAP[period])).rename("enso_dir")
     if sig.get("union_of"):
         return m.neq(0)
     return m.eq(ENSO_MASK_DIR[sig["name"]])
@@ -365,7 +363,8 @@ def build_stack(period, thr_rain, thr_compound, with_enso=True):
         thr = threshold_for(sig, thr_rain, thr_compound)
         mask = signal_mask(img, sig, thr, period)
         n = sig["name"]
-        attributable = mask.And(enso_mask_for(sig)) if with_enso else None
+        attributable = (mask.And(enso_mask_for(sig, period))
+                        if with_enso else None)
         for sfx, _ in POP_VARIANTS:
             sum_bands.append(
                 pops[sfx].updateMask(mask).rename(f"{n}_children{sfx}"))

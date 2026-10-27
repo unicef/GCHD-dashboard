@@ -21,7 +21,7 @@ from cachetools import TTLCache, cached as _ttl_cached
 from config import ADMIN_DATA, POP_VIS
 from elnino_config import (
     ISSUES, issue_collection, issue_asset,
-    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, is_window, HC_YEARS,
+    TERCILE_BANDS, PERIOD_MAP, is_window, HC_YEARS,
     SIGNAL_MAP, EXPLORE_MAP,
     PROB_DEFAULT, SENSITIVITY_THRESHOLDS, to_fraction,
     SKILL_BANDS, SKILL_USABLE_MIN, SKILL_MODERATE_MIN,
@@ -30,7 +30,7 @@ from elnino_config import (
     ENSO_EVENT_MIN, ENSO_STRONG_MIN, ENSO_YEARS,
     TERCILE_T2M_BANDS, COMPOUND_BANDS, is_compound,
     PROB_COMPOUND_DEFAULT, SENSITIVITY_COMPOUND,
-    ENSO_MASK_ASSET, ENSO_MASK_BAND, ENSO_MASK_DIR,
+    enso_mask_asset, ENSO_MASK_BAND, ENSO_MASK_DIR,
 )
 from gee_core import _admin_region
 from forecast_core import _forecast_pop
@@ -449,11 +449,14 @@ def _d_enso_composite(img, ctx):
     if not is_window(ctx.get("period")):
         return ee.Image(0).selfMask().rename("value")
     init = _period(ctx["period"])["init"]
+    years = ENSO_YEARS.get(init)
+    if not years:
+        return ee.Image(0).selfMask().rename("value")
     names, by_lead, lead_keys = _hindcast_structure(init)
     warm = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
-            for y in ENSO_YEARS["elnino"]]
+            for y in years["elnino"]]
     cold = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
-            for y in ENSO_YEARS["neutral"]]
+            for y in years["neutral"]]
     warm_mean = ee.ImageCollection(warm).mean()
     cold_mean = ee.ImageCollection(cold).mean()
     return warm_mean.subtract(cold_mean).rename("value")
@@ -952,10 +955,10 @@ def signal_skill_share(period, signal, threshold, feature_ucode, admin_level,
         return None
 
 
-@_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
-def enso_mask_available():
+@_ttl_cached(cache=TTLCache(maxsize=16, ttl=600), lock=_lock)
+def enso_mask_available(asset):
     try:
-        return ee.Image(ENSO_MASK_ASSET).bandNames().size().getInfo() > 0
+        return ee.Image(asset).bandNames().size().getInfo() > 0
     except Exception:
         return False
 
@@ -1030,7 +1033,8 @@ def enso_attributable(period, signal, threshold, feature_ucode, admin_level,
 
     Returns {"children", "pct", "rainfall_only"} or None.
     """
-    if not enso_mask_available():
+    asset = enso_mask_asset(_period(period))
+    if not enso_mask_available(asset):
         return None
     direction = ENSO_MASK_DIR.get(signal)
     if direction is None:
@@ -1038,7 +1042,7 @@ def enso_attributable(period, signal, threshold, feature_ucode, admin_level,
     try:
         img = _tercile_image(period)
         mask = _signal_mask(img, signal, threshold, apply_dry_mask, period)
-        enso = ee.Image(ENSO_MASK_ASSET).rename(ENSO_MASK_BAND)
+        enso = ee.Image(asset).rename(ENSO_MASK_BAND)
         consistent = enso.eq(direction)
         region = _admin_region(admin_level, feature_ucode)
         pop = _forecast_pop()["childpop"]

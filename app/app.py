@@ -58,7 +58,8 @@ from forecast_core import (
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
 from elnino_config import (
-    PERIODS, PERIOD_MAP, DEFAULT_PERIOD, period_label, period_issue_label,
+    PERIOD_MAP, active_periods, default_period, is_window,
+    period_label, period_issue_label,
     ISSUES, issue_label,
     SIGNALS, SIGNAL_MAP, DEFAULT_SIGNAL,
     EXPLORE_LAYERS, EXPLORE_MAP, DEFAULT_EXPLORE,
@@ -66,7 +67,7 @@ from elnino_config import (
     SENSITIVITY_THRESHOLDS, CHANCE_LEVEL,
     METHOD_STEPS, CAVEATS, SOURCE_URL,
     HINDCAST, SYSTEM as ELNINO_SYSTEM,
-    SKILL_USABLE_MIN, SKILL_REFERENCE, ENSO_EVENT_MIN, ENSO_YEARS,
+    SKILL_USABLE_MIN, SKILL_REFERENCE, ENSO_EVENT_MIN,
     SIGNAL_GROUPS, is_compound, threshold_contract,
     EN_INFO, ENSO_MASK_DIR,
     PROB_COMPOUND_DEFAULT, COMPOUND_CHANCE_LEVEL,
@@ -192,6 +193,13 @@ def _fmt(v):
     if abs(v) >= 1_000:     return f"{v/1000:.1f}k"
     if isinstance(v, float): return f"{v:.2f}"
     return str(int(v))
+
+
+def _elnino_period_options():
+    multi = len({p["init"] for p in active_periods()}) > 1
+    return [{"label": p["label"] + (f" · issued {p['issue_label']}"
+                                    if multi else ""),
+             "value": p["id"]} for p in active_periods()]
 
 
 # ---------------------------------------------------------------------------
@@ -1440,11 +1448,8 @@ def tab_elnino():
                 html.Div("1. Period", className="ps-label"),
                 dcc.Dropdown(
                     id="elnino-period", className="ps-select",
-                    options=[{"label": p["label"] + (
-                                  f" · issued {p['issue_label']}"
-                                  if len(ISSUES) > 1 else ""),
-                              "value": p["id"]} for p in PERIODS],
-                    value=DEFAULT_PERIOD, clearable=False, searchable=False,
+                    options=_elnino_period_options(),
+                    value=default_period(), clearable=False, searchable=False,
                 ),
                 html.Div(id="elnino-period-note", className="ps-caption"),
             ]),
@@ -6513,6 +6518,21 @@ def elnino_notes(period, signal, layer):
     return p_note, s.get("blurb", ""), l.get("desc", "")
 
 
+# Ended months drop out without a restart: rebuilt whenever the tab opens.
+@app.callback(
+    Output("elnino-period", "options"),
+    Output("elnino-period", "value"),
+    Input("store-tab",      "data"),
+    State("elnino-period",  "value"),
+)
+def elnino_period_refresh(tab, current):
+    if tab != "elnino":
+        raise dash.exceptions.PreventUpdate
+    opts = _elnino_period_options()
+    keep = current in {o["value"] for o in opts}
+    return opts, (no_update if keep else default_period())
+
+
 @app.callback(
     Output("elnino-layer-panel", "style"),
     Output("elnino-layer-rows",  "children"),
@@ -7185,9 +7205,8 @@ def _elnino_enso_block(state):
                         "by ENSO. "),
             "For the empirical check, compare the map against the ",
             html.Em("El Niño rainfall fingerprint"),
-            f" layer — the model's own difference between its "
-            f"{len(ENSO_YEARS['elnino'])} El Niño hindcast seasons and its "
-            f"{len(ENSO_YEARS['neutral'])} neutral ones.",
+            " layer — the model's own difference between its El Niño "
+            "and neutral hindcast seasons.",
         ], className="ps-caption", style={"marginTop": "8px"}),
     ])
 
@@ -7723,6 +7742,9 @@ def _elnino_magnitude_block(meta):
             note += (" This mask covers rainfall only, so for a combined "
                      "signal it says nothing about whether the heat is "
                      "El Niño-related — treat it as the weaker claim.")
+        if not is_window(meta.get("period")):
+            note += (" A single month is read against its forecast issue's "
+                     "seasonal mask, so this is approximate.")
         kids.append(html.Div(note, className="ps-caption",
                              style={"marginTop": "6px"}))
 

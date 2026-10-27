@@ -3,8 +3,8 @@
 #
 # Separate from forecast_config.py for the same reason that one is separate from
 # config.HAZARDS: the layers here are neither a frozen return-period asset nor a
-# date-windowed live collection. They are a SINGLE forecast issue (one init
-# month) whose images are selected by period, not by date range — so the date
+# date-windowed live collection. They are monthly forecast issues (ISSUES)
+# whose images are selected by period, not by date range — so the date
 # picker, reducer and lag machinery of the Forecast tab do not apply at all.
 #
 # No GEE import — same rule as config.py and forecast_config.py, so this loads
@@ -13,6 +13,7 @@
 # Produced by scripts/el_nino/download_ecmwf_prec.py. That script is the single
 # authority for what is in these assets; everything below must agree with it.
 # =============================================================================
+import datetime as _dt
 
 # ── The uploaded collections ────────────────────────────────────────────────
 # One folder per forecast issue: el_nino/<init>/<collection>/<image>, with
@@ -42,7 +43,8 @@ def issue_asset(tag, collection, image):
 # Same asset and the same direction map as
 # scripts/el_nino/export_reliability_table.py, so a dashboard figure and a
 # workbook figure agree.
-ENSO_MASK_ASSET = (f"{ELNINO_ROOT}/enso_mask/enso_mask_OND_sig90_p50")
+# One image per season (scripts/el_nino/build_enso_mask.py). A season period
+# uses its own; a single month uses the 3-month season centred on it.
 ENSO_MASK_BAND  = "enso_dir"
 # Compound signals inherit their RAINFALL component's direction. The mask says
 # nothing about temperature, so "attributable" is a weaker claim for them —
@@ -146,9 +148,25 @@ def _build_periods():
     return seasons + [months[k] for k in sorted(months)]
 
 
-PERIODS = _build_periods()
+PERIODS = _build_periods()          # every period, shown or not
 PERIOD_MAP = {p["id"]: p for p in PERIODS}
-DEFAULT_PERIOD = [p for p in PERIODS if p["lead"] == 0][-1]["id"]   # newest season
+
+
+def _last_month(p):
+    return p["month"] if p["lead"] else lead_month(p["init"], LEADS[-1])
+
+
+def active_periods(today=None):
+    """Periods to offer: drops any whose (last) month has ended."""
+    today = today or _dt.date.today()
+    now = (today.year, today.month)
+    live = [p for p in PERIODS if tuple(_last_month(p)) >= now]
+    return live or [p for p in PERIODS if p["lead"] == 0][-1:]
+
+
+def default_period(today=None):
+    seasons = [p for p in active_periods(today) if p["lead"] == 0]
+    return (seasons or active_periods(today))[-1]["id"]      # newest season
 
 
 def is_window(period):
@@ -161,6 +179,15 @@ def period_label(period):
 
 def period_issue_label(period):
     return PERIOD_MAP.get(period, {}).get("issue_label", "")
+
+
+def mask_season(period):
+    """ENSO mask season: the season of the period's issue, for its months too."""
+    return season_code(period["init"])
+
+
+def enso_mask_asset(period):
+    return f"{ELNINO_ROOT}/enso_mask/enso_mask_{mask_season(period)}_sig90_p50"
 
 
 # ── Used by scripts/el_nino (--init) ─────────────────────────────────────────
@@ -448,14 +475,20 @@ NINO34_MONTHS    = 36                       # how much history the chart shows
 ENSO_EVENT_MIN  = 0.5
 ENSO_STRONG_MIN = 1.5
 
-# Hindcast years classified by their observed OND Nino 3.4 anomaly, used for the
-# El Nino minus neutral composite. Computed from OISST and checked against the
-# historical record: 1997 (+2.27) and 2015 (+2.65) are the strong events, as
-# they should be. Held as a constant so the composite costs no extra round trip.
+# Hindcast years by observed Niño 3.4 over each issue's season (OISST), for the
+# El Niño minus neutral composite. One entry per issue; generate with
+# scripts/el_nino/build_enso_mask.py --init <tag> --classify-years.
 ENSO_YEARS = {
-    "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
-    "lanina": [1995, 1998, 1999, 2000, 2007, 2010, 2011],
-    "neutral": [1993, 1996, 2001, 2003, 2005, 2008, 2012, 2013, 2016],
+    "202609": {  # OND
+        "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
+        "lanina": [1995, 1998, 1999, 2000, 2007, 2010, 2011],
+        "neutral": [1993, 1996, 2001, 2003, 2005, 2008, 2012, 2013, 2016],
+    },
+    "202610": {  # NDJ
+        "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
+        "lanina": [1995, 1998, 1999, 2000, 2005, 2007, 2008, 2010, 2011],
+        "neutral": [1993, 1996, 2001, 2003, 2012, 2013, 2016],
+    },
 }
 
 # ── Explore layers ──────────────────────────────────────────────────────────
@@ -761,7 +794,12 @@ CAVEATS = [
     "cells and should not be read at sub-district precision.",
     "Each period comes from one monthly forecast issue, named with it. A "
     "newer issue replaces an older one for any month both cover, so figures "
-    "for the same month can change from one issue to the next.",
+    "for the same month can change from one issue to the next. Periods are "
+    "withdrawn once their months have passed: past months are observed, not "
+    "forecast.",
+    "The El Niño attribution mask is seasonal. A single month is read "
+    "against its forecast issue's season (e.g. November from the October "
+    "issue against NDJ), so monthly attribution is approximate.",
     "A compound probability is counted per ensemble MEMBER — the fraction of "
     "members where both conditions hold at once — not the product of the two "
     "separate probabilities. Dry and hot go together physically (drier soil "
