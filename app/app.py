@@ -149,7 +149,8 @@ def _hazard_info_body(info):
     if not isinstance(info, dict):
         return info
     rows = []
-    for label, key in [("Description", "description"), ("Units", "units"), ("Availability", "availability")]:
+    for label, key in [("Description", "description"), ("Units", "units"),
+                       ("Availability", "availability"), ("Resolution", "resolution")]:
         val = info.get(key, "")
         if val:
             rows.append(html.Div([

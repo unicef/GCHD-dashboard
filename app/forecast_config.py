@@ -61,6 +61,7 @@ DAILY_REDUCERS = ("daily_mean", "daily_max")
 #                     (a day's total = mean step amount × steps_per_day)
 #   transform         key into forecast_core._TRANSFORMS for derived bands
 #   note              caveat shown under the dataset in the panel
+#   (_META below adds provider, temporal = run cadence, resolution = space · time)
 
 # ── Ranges and thresholds ────────────────────────────────────────────────────
 # RANGE METHOD: value distribution where children live (1 km child population
@@ -423,75 +424,91 @@ FORECAST_DATASETS = [
 # =============================================================================
 
 _META = {
-    "gfs_precip": dict(active=True, provider="NOAA NCEP", temporal="1-hourly steps, 4x daily runs",
+    "gfs_precip": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
+        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
         description="Total accumulated precipitation predicted by the NOAA Global Forecast "
                     "System, a physics-based numerical weather model run four times a day out "
                     "to 16 days. Values are totalled per UTC day."),
-    "imerg_precip": dict(active=True, provider="NASA / JAXA", temporal="30-minute",
+    "imerg_precip": dict(active=True, provider="NASA / JAXA", temporal="",
+        resolution="0.1° (~11 km) · 30-minute",
         description="Satellite-estimated rainfall that has already fallen, from the GPM "
                     "constellation. Use it to see what actually happened; it is not a forecast "
                     "and lags roughly two days."),
-    "gfs_wind": dict(active=True, provider="NOAA NCEP", temporal="1-hourly steps, 4x daily runs",
+    "gfs_wind": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
+        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
         description="Sustained 10 m wind speed predicted by NOAA GFS, derived from the U and V "
                     "wind components. The 17.5 m/s default matches the WMO tropical-storm "
                     "threshold and the static hazard catalog."),
-    "gfs_temp": dict(active=True, provider="NOAA NCEP", temporal="1-hourly steps, 4x daily runs",
+    "gfs_temp": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
+        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
         description="Predicted air temperature 2 m above ground from NOAA GFS — the standard "
                     "height for weather observations, so this is comparable to a thermometer "
                     "reading rather than a surface temperature."),
-    "modis_lst": dict(active=True, provider="NASA LP DAAC", temporal="Daily",
+    "modis_lst": dict(active=True, provider="NASA LP DAAC", temporal="",
+        resolution="1 km · daily (one daytime overpass)",
         description="Daytime temperature of the ground surface measured by MODIS. This runs "
                     "considerably hotter than air temperature and is observed, not forecast."),
-    "era5_air_temp": dict(active=True, provider="ECMWF / Copernicus", temporal="Hourly",
+    "era5_air_temp": dict(active=True, provider="ECMWF / Copernicus", temporal="",
+        resolution="0.1° (~11 km; native ~9 km) · hourly",
         description="Observed air temperature 2 m above ground, from the ERA5-Land reanalysis. "
                     "Health heat thresholds are defined on 2 m air temperature, so this is the "
                     "comparable measure — MODIS land-surface temperature runs considerably "
                     "hotter. Reanalysis fills cloudy days that satellite retrievals miss, at "
                     "the cost of roughly six days' latency."),
-    "firms_brightness": dict(active=True, provider="NASA FIRMS", temporal="Daily composite",
+    "firms_brightness": dict(active=True, provider="NASA FIRMS", temporal="",
+        resolution="1 km · daily",
         description="Brightness temperature of pixels where a fire has already been detected. "
                     "FIRMS pixels are algorithm-confirmed detections, so this grades how intense "
                     "confirmed fires are — it does not detect whether fire is present."),
-    "firms_fire_days": dict(active=True, provider="NASA FIRMS", temporal="Daily composite",
+    "firms_fire_days": dict(active=True, provider="NASA FIRMS", temporal="",
+        resolution="1 km · daily",
         description="Count of days within the window on which a fire was detected at each pixel. "
                     "Distinguishes a single flare-up from a sustained burn. Cloud cover and "
                     "overpass timing cause missed days, so this under-counts."),
     # CAMS — surface concentrations, and forward-looking.
     "cams_pm25": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="3-hourly steps, 2 runs/day",
+        temporal="2 runs a day, to 5 days ahead",
+        resolution="0.4° (~44 km) · 3-hourly",
         description="Fine particulate matter at the surface, forecast up to 5 days ahead by the "
                     "Copernicus Atmosphere Monitoring Service. PM2.5 penetrates deep into the "
                     "lungs and is the pollutant most strongly linked to child respiratory harm. "
                     "Unlike satellite column measurements this is a ground-level concentration, "
                     "so it can be read directly against health guidelines."),
     "cams_pm10": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="3-hourly steps, 2 runs/day",
+        temporal="2 runs a day, to 5 days ahead",
+        resolution="0.4° (~44 km) · 3-hourly",
         description="Coarse particulate matter at the surface, forecast up to 5 days ahead. "
                     "PM10 includes wind-blown dust and so rises sharply during dust events, "
                     "often reaching many times the PM2.5 level."),
     "cams_dust_aod": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="3-hourly steps, 2 runs/day",
+        temporal="2 runs a day, to 5 days ahead",
+        resolution="0.4° (~44 km) · 3-hourly",
         description="Forecast optical thickness of airborne desert dust. Because CAMS models "
                     "dust as its own species, this isolates dust from smoke and other aerosols — "
                     "and it looks days ahead rather than reporting a past satellite overpass."),
 
     # Sentinel-5P — retained but inactive; CAMS supersedes them (see notes).
-    "s5p_no2": dict(active=False, provider="ESA / Copernicus", temporal="Daily overpass",
+    "s5p_no2": dict(active=False, provider="ESA / Copernicus", temporal="",
+        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
         description="Nitrogen dioxide measured as a TOTAL COLUMN through the atmosphere — a "
                     "traffic and combustion marker. This is not a surface concentration and is "
                     "not directly comparable to WHO air quality guidelines."),
-    "s5p_so2": dict(active=False, provider="ESA / Copernicus", temporal="Daily overpass",
+    "s5p_so2": dict(active=False, provider="ESA / Copernicus", temporal="",
+        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
         description="Sulphur dioxide total column, strongest near volcanic plumes and heavy "
                     "industry. Low values are genuinely negative because of retrieval noise. "
                     "Not a surface concentration."),
-    "s5p_co": dict(active=False, provider="ESA / Copernicus", temporal="Daily overpass",
+    "s5p_co": dict(active=False, provider="ESA / Copernicus", temporal="",
+        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
         description="Carbon monoxide total column, a good biomass-burning tracer. Plumes travel "
                     "far, so a high value need not indicate a local source. Not a surface "
                     "concentration."),
-    "s5p_o3": dict(active=False, provider="ESA / Copernicus", temporal="Daily overpass",
+    "s5p_o3": dict(active=False, provider="ESA / Copernicus", temporal="",
+        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
         description="TOTAL ozone column, which is roughly 90% stratospheric. This is not a "
                     "ground-level air quality measure and should not be read as ozone exposure."),
-    "s5p_aer_ai": dict(active=True, provider="ESA / Copernicus", temporal="Daily overpass",
+    "s5p_aer_ai": dict(active=True, provider="ESA / Copernicus", temporal="",
+        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
         description="Index of UV-absorbing aerosols — desert dust and smoke. Values above about "
                     "1 suggest an active dust episode. It does not separate dust from smoke, and "
                     "measures the column rather than ground-level concentration."),
@@ -512,6 +529,7 @@ for _d in FORECAST_DATASETS:
     _d["active"]      = _m.get("active", True)
     _d["provider"]    = _m.get("provider", "")
     _d["temporal"]    = _m.get("temporal", "")
+    _d["resolution"]  = _m.get("resolution", "")
     _d["description"] = _m.get("description", _d.get("note", ""))
     _d["kind_label"]  = KIND_LABELS.get(_d["kind"], _d["kind"])
 

@@ -551,6 +551,8 @@ for _d in _FC_DATASETS:
         "description": _d.get("description") or _d.get("note", ""),
         "units": _d.get("units", ""),
         "availability": _avail,
+        "resolution": (f"{_d['resolution']}. Exposure is counted on the 1 km "
+                       "child-population grid." if _d.get("resolution") else ""),
         "source": _d.get("provider", ""),
         "source_url": _d.get("source_url", ""),
     }
