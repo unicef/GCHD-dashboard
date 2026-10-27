@@ -834,7 +834,7 @@ def download_disclaimer(period_label, issue_label):
         "These figures are a seasonal FORECAST, not a measured impact.",
         f"They come from the ECMWF SEAS5 forecast issued {issue_label} for "
         f"{period_label}. They count children (under 18) living where that "
-        "forecast leans towards a drier, wetter, hotter or cooler season "
+        "forecast leans towards drier, wetter, hotter or cooler conditions "
         "than normal. “Normal” is the model's own re-forecasts of "
         f"{HINDCAST.replace('-', '–')}, used only as a baseline.",
         "They do not predict drought, flooding or harm, and do not reflect "
