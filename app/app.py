@@ -268,8 +268,8 @@ TABS = [
 
 TAB_BY_KEY = {t["key"]: t for t in TABS}
 
-# Observed and Forecast are two tabs over one shared control stack and one set
-# of map layers, so anything keyed on "the forecast tab" must accept either.
+# Observed and Forecast reuse one control block (fc_controls) and one set of
+# map layers, reset on every switch; code serving that block accepts either.
 FORECAST_TABS = ("forecast", "observed")
 
 
@@ -996,13 +996,8 @@ _FC_CAVEAT = (
 
 
 def tab_observed():
-    """Recently observed (near-real-time) hazards.
-
-    Carries only its own dataset list. The window / region / threshold controls
-    and every store live once in tab_forecast() — Dash ids must be unique, so
-    they cannot be duplicated per pane — and are shared by both tabs, with the
-    active tab supplying the dataset `kind`.
-    """
+    """Recently observed (near-real-time) hazards: header and dataset list.
+    The rest of the workflow is fc_controls(), shown below it."""
     return html.Div(id="tab-observed", style={"display": "none"}, children=[
         tab_header("observed"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
@@ -1016,9 +1011,6 @@ def tab_observed():
         html.Div(id="observed-list-wrap", children=[
             html.Div(id="observed-dataset-list", className="layer-list"),
         ]),
-        html.Div("Set the window, region and threshold on the Forecast tab — "
-                 "the controls are shared between both tabs.",
-                 className="ps-caption", style={"padding": "10px 16px"}),
     ])
 
 
@@ -1079,7 +1071,17 @@ def tab_forecast():
                 ]),
             ]),
         ]),
+    ])
 
+
+def fc_controls():
+    """Window, region, threshold, results and stores for Observed AND Forecast.
+
+    One instance (Dash ids are unique), placed after both panes and shown under
+    whichever of the two is open. Switching between them resets it, so each tab
+    starts clean (forecast_reset_on_tab).
+    """
+    return html.Div(id="fc-controls", style={"display": "none"}, children=[
         # Selected-dataset summary — badge, caveat, catalog link.
         html.Div(id="forecast-selected-wrap", style={"display": "none"},
                  children=[
@@ -2167,6 +2169,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_infrastructure(),
             tab_observed(),
             tab_forecast(),
+            fc_controls(),
             tab_elnino(),
             tab_ai(),
         ]),
@@ -2472,11 +2475,6 @@ def leave_guard(*args):
     if not dest or dest == current:
         raise dash.exceptions.PreventUpdate
 
-    # Observed and Forecast share one control stack and one set of layers, so
-    # moving between them loses nothing and needs no confirmation.
-    if {dest, current} <= set(FORECAST_TABS):
-        return dest, None, hidden, no_update
-
     entry = _RESULT_STORES.get(current)
     key = {"observed": "forecast"}.get(current, current)
     if not entry or not live.get(key):
@@ -2540,9 +2538,13 @@ def clear_on_leave(tab):
     Everything else is cleared unconditionally — that is what stops a previous
     section's raster lingering under the new one, and emptying the viz stores
     clears the legend, which is driven from them.
+
+    Observed and Forecast are separate sections over shared layers, so those
+    are always cleared; their preview follows the dataset selection, not
+    store-tab, so there is no race (forecast_reset_on_tab).
     """
     keep_elnino   = tab == "elnino"
-    keep_forecast = tab in FORECAST_TABS
+    keep_forecast = False
     keep_infra    = tab == "infrastructure"
     keep_analysis = tab == "analysis"
     blank = lambda keep: no_update if keep else ""
@@ -2741,7 +2743,7 @@ app.clientside_callback(
 def select_hazard_layer(all_clicks):
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     selected = triggered["index"]
     classes = [
         "layer-item active" if inp["id"]["index"] == selected else "layer-item"
@@ -2874,7 +2876,7 @@ def infra_thr_badge(values, ids, topics):
 def toggle_topic_group(all_clicks):
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     toggled = triggered["index"]
     body_styles    = []
     chevron_styles = []
@@ -3128,6 +3130,9 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
 
     # Dedicated top-level components (forecast-*-tile), shared by both tabs.
     if tab in FORECAST_TABS:
+        # Entering starts clean; the stores still hold the tab being left.
+        if ctx.triggered_id == "store-tab":
+            return layers, []
         return layers, _forecast_legend_specs(forecast_viz, forecast_preview)
 
     # Dedicated top-level components (elnino-*-tile).
@@ -5534,6 +5539,16 @@ def render_map_legend(specs):
     return [_legend_row(s) for s in specs], {"display": "flex"}
 
 
+# Hide the legend the instant the tab changes; the server re-shows it once the
+# new tab's layers are known (two round trips otherwise).
+app.clientside_callback(
+    "function(tab) { return {display: 'none'}; }",
+    Output("map-legend", "style", allow_duplicate=True),
+    Input("store-tab",   "data"),
+    prevent_initial_call=True,
+)
+
+
 # Collapse / expand the legend panel (clientside — no server round-trip).
 app.clientside_callback(
     """
@@ -5906,6 +5921,34 @@ def forecast_dataset_params(dataset, asset):
             reducers, (cfg.get("reducers") or ["mean"])[0],
             default_thr, lo, hi, step, lo, hi, default_thr, step, marks,
             cfg.get("units", ""))
+
+
+# ── Observed / Forecast: one control block, reset per tab ────────────────────
+
+@app.callback(
+    Output("fc-controls", "style"),
+    Input("store-tab",    "data"),
+)
+def forecast_show_controls(tab):
+    return {"display": "block" if tab in FORECAST_TABS else "none"}
+
+
+@app.callback(
+    Output("forecast-dataset-select", "value", allow_duplicate=True),
+    Output("store-forecast-asset",    "data", allow_duplicate=True),
+    Output("store-forecast-result",   "data", allow_duplicate=True),
+    Output("forecast-results-panel",  "children", allow_duplicate=True),
+    Output("forecast-asset-input",    "value"),
+    Input("store-tab",                "data"),
+    prevent_initial_call=True,
+)
+def forecast_reset_on_tab(tab):
+    """Entering Observed or Forecast starts clean, so neither tab inherits the
+    other's dataset, parameters or results. The params section, preview layer
+    and asset status all follow the cleared selection."""
+    if tab not in FORECAST_TABS:
+        raise dash.exceptions.PreventUpdate
+    return None, None, None, None, ""
 
 
 # ── Dataset segment switch + row list ────────────────────────────────────────
@@ -6285,10 +6328,16 @@ def render_forecast_results(result, meta):
 
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
-    male    = int(round(result.get("total_population_male", 0) or 0))
-    fema    = int(round(result.get("total_population_female", 0) or 0))
+    # Boys/girls exposed; *_t are region totals.
+    male    = int(round(result.get("exposed_male", 0) or 0))
+    fema    = int(round(result.get("exposed_female", 0) or 0))
+    male_t  = int(round(result.get("total_population_male", 0) or 0))
+    fema_t  = int(round(result.get("total_population_female", 0) or 0))
     pct     = (exposed / total * 100) if total else 0
     units   = meta.get("units", "")
+
+    def _share(part, whole):
+        return (part / whole * 100) if whole else 0
     thr_txt = f"{meta['threshold']:g}" + (f" {units}" if units else "")
 
     export = {
@@ -6299,7 +6348,8 @@ def render_forecast_results(result, meta):
         "aggregation": meta["reducer"], "threshold": meta["threshold"],
         "threshold_units": units, "images_in_window": meta["n_images"],
         "children_exposed": exposed, "total_children": total,
-        "male": male, "female": fema,
+        "boys_exposed": male, "girls_exposed": fema,
+        "total_boys": male_t, "total_girls": fema_t,
         "pct_exposed": round(pct, 2),
         "population_grid_m": meta["pop_res"],
         "computed_utc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -6350,15 +6400,23 @@ def render_forecast_results(result, meta):
                 html.Span("└ Boys", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{male:,}", className="info-val",
-                          style={"color": "var(--mid)", "fontWeight": "500"}),
+                html.Span([
+                    html.Span(f"{male:,}", className="info-val",
+                              style={"color": "var(--mid)", "fontWeight": "500"}),
+                    html.Span(f" ({_share(male, male_t):.1f}% of boys)",
+                              className="info-pct"),
+                ]),
             ]),
             html.Div(className="info-row", children=[
                 html.Span("└ Girls", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{fema:,}", className="info-val",
-                          style={"color": "var(--mid)", "fontWeight": "500"}),
+                html.Span([
+                    html.Span(f"{fema:,}", className="info-val",
+                              style={"color": "var(--mid)", "fontWeight": "500"}),
+                    html.Span(f" ({_share(fema, fema_t):.1f}% of girls)",
+                              className="info-pct"),
+                ]),
             ]),
         ]),
         # Provenance — the window and image count travel with the number.
@@ -6695,11 +6753,13 @@ def elnino_extra_toggle(picks, eyes, on, eye_ids, current):
     re-renders: without it, rebuilding the rows would silently toggle the
     layer.
     """
+    # PreventUpdate, not no_update: a bare no_update is invalid for the
+    # wildcard (ALL) output in Dash 4.
     if not any(c for c in ((picks or []) + (eyes or [])) if c):
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     t = ctx.triggered_id
     if not t:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     if t.get("type") == "en-layer-eye":
         on = not bool(on) if t["index"] == current else True
     else:
