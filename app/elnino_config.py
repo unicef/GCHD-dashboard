@@ -55,7 +55,7 @@ ENSO_MASK_DIR = {"dry": -1, "wet": 1,
 
 # Published forecast issues (init YYYYMM), oldest first. Append the new tag each
 # month after running the scripts for it; see scripts/el_nino/CLAUDE.md.
-ISSUES   = ["202609"]
+ISSUES   = ["202609", "202610"]
 LEADS    = (2, 3, 4)          # lead 1 is the init month itself, always excluded
 HINDCAST = "1993-2016"
 HC_YEARS = list(range(int(HINDCAST[:4]), int(HINDCAST[-4:]) + 1))
