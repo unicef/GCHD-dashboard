@@ -3,8 +3,8 @@
 #
 # Separate from forecast_config.py for the same reason that one is separate from
 # config.HAZARDS: the layers here are neither a frozen return-period asset nor a
-# date-windowed live collection. They are a SINGLE forecast issue (one init
-# month) whose images are selected by period, not by date range — so the date
+# date-windowed live collection. They are monthly forecast issues (ISSUES)
+# whose images are selected by period, not by date range — so the date
 # picker, reducer and lag machinery of the Forecast tab do not apply at all.
 #
 # No GEE import — same rule as config.py and forecast_config.py, so this loads
@@ -13,30 +13,22 @@
 # Produced by scripts/el_nino/download_ecmwf_prec.py. That script is the single
 # authority for what is in these assets; everything below must agree with it.
 # =============================================================================
+import datetime as _dt
 
 # ── The uploaded collections ────────────────────────────────────────────────
+# One folder per forecast issue: el_nino/<init>/<collection>/<image>, with
+# collections raw_forecast[_t2m], raw_hindcast[_t2m], terciles[_t2m],
+# compound, skill[_t2m], brier. Shared across issues at the root:
+# chirps_obs, era5_obs (keyed by months) and enso_mask (keyed by season).
 ELNINO_ROOT = "projects/unicef-ccri/assets/el_nino"
 
-TERCILES_COLLECTION    = f"{ELNINO_ROOT}/terciles"
-RAW_FORECAST_COLLECTION = f"{ELNINO_ROOT}/raw_forecast"
-RAW_HINDCAST_COLLECTION = f"{ELNINO_ROOT}/raw_hindcast"
-# Built by scripts/el_nino/build_skill_mask.py. Optional: the tab hides the
-# skill layers and caption if this collection is absent.
-SKILL_COLLECTION       = f"{ELNINO_ROOT}/skill"
-# Built by scripts/el_nino/build_brier_skill.py. Also optional.
-BRIER_COLLECTION       = f"{ELNINO_ROOT}/brier"
 
-# ── Temperature and compound ────────────────────────────────────────────────
-# Parallel collections, deliberately NOT extra bands on the ones above: the
-# precipitation assets are what the tab has always read, and keeping these
-# separate means temperature can be absent and every existing code path is
-# unchanged. Each is probed at runtime and its layers hidden when missing,
-# exactly as skill and brier already are.
-TERCILES_T2M_COLLECTION     = f"{ELNINO_ROOT}/terciles_t2m"
-RAW_FORECAST_T2M_COLLECTION = f"{ELNINO_ROOT}/raw_forecast_t2m"
-RAW_HINDCAST_T2M_COLLECTION = f"{ELNINO_ROOT}/raw_hindcast_t2m"
-COMPOUND_COLLECTION         = f"{ELNINO_ROOT}/compound"
-SKILL_T2M_COLLECTION        = f"{ELNINO_ROOT}/skill_t2m"
+def issue_collection(tag, collection):
+    return f"{ELNINO_ROOT}/{tag}/{collection}"
+
+
+def issue_asset(tag, collection, image):
+    return f"{ELNINO_ROOT}/{tag}/{collection}/{image}"
 
 # ── ENSO attribution mask ───────────────────────────────────────────────────
 # User-supplied raster marking where El Nino has historically pushed OND
@@ -51,7 +43,8 @@ SKILL_T2M_COLLECTION        = f"{ELNINO_ROOT}/skill_t2m"
 # Same asset and the same direction map as
 # scripts/el_nino/export_reliability_table.py, so a dashboard figure and a
 # workbook figure agree.
-ENSO_MASK_ASSET = (f"{ELNINO_ROOT}/enso_mask/enso_mask_OND_sig90_p50")
+# One image per season (scripts/el_nino/build_enso_mask.py). A season period
+# uses its own; a single month uses the 3-month season centred on it.
 ENSO_MASK_BAND  = "enso_dir"
 # Compound signals inherit their RAINFALL component's direction. The mask says
 # nothing about temperature, so "attributable" is a weaker claim for them —
@@ -60,12 +53,13 @@ ENSO_MASK_DIR = {"dry": -1, "wet": 1,
                  "hotdry": -1, "cooldry": -1,
                  "hotwet": 1, "coolwet": 1}
 
-# The forecast issue currently published. Bumping this (after re-running the
-# download script for a new init month) is the only change needed here.
-INIT_TAG   = "202609"
-INIT_LABEL = "September 2026"
-HINDCAST   = "1993-2016"
-SYSTEM     = "51"
+# Published forecast issues (init YYYYMM), oldest first. Append the new tag each
+# month after running the scripts for it; see scripts/el_nino/CLAUDE.md.
+ISSUES   = ["202609", "202610"]
+LEADS    = (2, 3, 4)          # lead 1 is the init month itself, always excluded
+HINDCAST = "1993-2016"
+HC_YEARS = list(range(int(HINDCAST[:4]), int(HINDCAST[-4:]) + 1))
+SYSTEM   = "51"
 
 # ── Band order contract ─────────────────────────────────────────────────────
 # geeup's ingestion manifest carries no `bands` key, so Earth Engine names every
@@ -95,35 +89,130 @@ COMPOUND_BANDS = [
 ]
 
 # ── Periods ─────────────────────────────────────────────────────────────────
-# `lead` is numeric across the whole collection (0 = the aggregate window):
-# Earth Engine requires one type per property, and a string "window" alongside
-# integer months makes ingestion of the odd one out fail.
-#
-# September (lead 1) is deliberately absent. It is the initialisation month,
-# partly determined by conditions already observed at launch, so it behaves
-# unlike a true forecast month; the team's season is OND.
-PERIODS = [
-    {"period": "window_L2_L4", "lead": 0, "label": "Oct–Dec 2026 (OND season)",
-     "short": "OND", "dry_mask_mm": 50, "default": True,
-     "note": "The three-month total — the team's reference season."},
-    {"period": "L2_Oct", "lead": 2, "label": "October 2026", "short": "Oct",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-    {"period": "L3_Nov", "lead": 3, "label": "November 2026", "short": "Nov",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-    {"period": "L4_Dec", "lead": 4, "label": "December 2026", "short": "Dec",
-     "dry_mask_mm": 10, "default": False, "note": ""},
-]
+# Derived from ISSUES: one season (leads 2-4 summed/averaged) per issue, plus
+# each calendar month taken from the LATEST issue that covers it.
+# `id` is "<init>_<suffix>"; `suffix` is the asset-name part the scripts write
+# (window_L2_L4, L3_Nov, ...). `lead` 0 = the season (EE needs one type).
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"]
+SEASON_DRY_MASK_MM = 50
+MONTH_DRY_MASK_MM  = 10
 
-PERIOD_MAP = {p["period"]: p for p in PERIODS}
-DEFAULT_PERIOD = next(p["period"] for p in PERIODS if p.get("default"))
 
-# The aggregate season, identified by lead 0 rather than by name: the name
-# encodes the leads (window_L2_L4) and changes whenever the season does.
-WINDOW_PERIOD = next(p["period"] for p in PERIODS if p["lead"] == 0)
+def issue_label(tag):
+    return f"{_MONTHS_LONG[int(tag[4:]) - 1]} {tag[:4]}"
+
+
+def lead_month(tag, lead):
+    """(year, month) of a lead; lead 1 is the init month."""
+    m0 = int(tag[4:]) - 1 + (lead - 1)
+    return int(tag[:4]) + m0 // 12, m0 % 12 + 1
+
+
+def season_code(tag):
+    return "".join(_MONTHS[lead_month(tag, l)[1] - 1][0] for l in LEADS)
+
+
+def window_suffix():
+    return f"window_L{LEADS[0]}_L{LEADS[-1]}"
+
+
+def issue_periods(tag):
+    """The season plus each lead month of one issue."""
+    (y0, m0), (y1, m1) = lead_month(tag, LEADS[0]), lead_month(tag, LEADS[-1])
+    span = (f"{_MONTHS[m0 - 1]}–{_MONTHS[m1 - 1]} {y1}" if y0 == y1 else
+            f"{_MONTHS[m0 - 1]} {y0}–{_MONTHS[m1 - 1]} {y1}")
+    out = [{"suffix": window_suffix(), "lead": 0, "month": None,
+            "label": f"{span} ({season_code(tag)} season)",
+            "short": season_code(tag), "dry_mask_mm": SEASON_DRY_MASK_MM}]
+    for l in LEADS:
+        y, m = lead_month(tag, l)
+        out.append({"suffix": f"L{l}_{_MONTHS[m - 1]}", "lead": l,
+                    "month": (y, m), "label": f"{_MONTHS_LONG[m - 1]} {y}",
+                    "short": _MONTHS[m - 1], "dry_mask_mm": MONTH_DRY_MASK_MM})
+    for p in out:
+        p.update(id=f"{tag}_{p['suffix']}", init=tag,
+                 issue_label=issue_label(tag))
+    return out
+
+
+def _build_periods():
+    seasons, months = [], {}
+    for tag in sorted(ISSUES):
+        ps = issue_periods(tag)
+        seasons.append(ps[0])
+        for p in ps[1:]:
+            months[p["month"]] = p          # later issue overwrites
+    return seasons + [months[k] for k in sorted(months)]
+
+
+PERIODS = _build_periods()          # every period, shown or not
+PERIOD_MAP = {p["id"]: p for p in PERIODS}
+
+
+def _last_month(p):
+    return p["month"] if p["lead"] else lead_month(p["init"], LEADS[-1])
+
+
+def active_periods(today=None):
+    """Periods to offer: drops any whose (last) month has ended."""
+    today = today or _dt.date.today()
+    now = (today.year, today.month)
+    live = [p for p in PERIODS if tuple(_last_month(p)) >= now]
+    return live or [p for p in PERIODS if p["lead"] == 0][-1:]
+
+
+def default_period(today=None):
+    seasons = [p for p in active_periods(today) if p["lead"] == 0]
+    return (seasons or active_periods(today))[-1]["id"]      # newest season
+
+
+def is_window(period):
+    return PERIOD_MAP.get(period, {}).get("lead") == 0
 
 
 def period_label(period):
     return PERIOD_MAP.get(period, {}).get("label", period)
+
+
+def period_issue_label(period):
+    return PERIOD_MAP.get(period, {}).get("issue_label", "")
+
+
+def mask_season(period):
+    """ENSO mask season: the season of the period's issue, for its months too."""
+    return season_code(period["init"])
+
+
+def enso_mask_asset(period):
+    return f"{ELNINO_ROOT}/enso_mask/enso_mask_{mask_season(period)}_sig90_p50"
+
+
+# ── Used by scripts/el_nino (--init) ─────────────────────────────────────────
+def parse_issue(tag):
+    """Validate --init; (tag, label, {suffix: period}) for that issue."""
+    if len(tag) != 6 or not tag.isdigit() or not 1 <= int(tag[4:]) <= 12:
+        raise SystemExit(f"ERROR: --init must be YYYYMM, got {tag!r}")
+    return tag, issue_label(tag), {p["suffix"]: p for p in issue_periods(tag)}
+
+
+def obs_months(tag, suffix):
+    """(first, n) observed months; first counts from Jan of the init year,
+    so 13 is January of the following year."""
+    lead = 0 if suffix == window_suffix() else int(suffix.split("_")[0][1:])
+    first = LEADS[0] if lead == 0 else lead
+    return int(tag[4:]) + first - 1, (len(LEADS) if lead == 0 else 1)
+
+
+def staged_obs_name(stem, tag, suffix, year):
+    """Staged observations are keyed by the months they cover, so issues can
+    share them and never pick up another season's under the same period name."""
+    if tag == "202609":            # staged before month-keyed names existed
+        return f"{stem}_{suffix}_{year}"
+    first, n = obs_months(tag, suffix)
+    return f"{stem}_m{first:02d}x{n}_{year}"
 
 
 # ── Signals ─────────────────────────────────────────────────────────────────
@@ -386,14 +475,20 @@ NINO34_MONTHS    = 36                       # how much history the chart shows
 ENSO_EVENT_MIN  = 0.5
 ENSO_STRONG_MIN = 1.5
 
-# Hindcast years classified by their observed OND Nino 3.4 anomaly, used for the
-# El Nino minus neutral composite. Computed from OISST and checked against the
-# historical record: 1997 (+2.27) and 2015 (+2.65) are the strong events, as
-# they should be. Held as a constant so the composite costs no extra round trip.
+# Hindcast years by observed Niño 3.4 over each issue's season (OISST), for the
+# El Niño minus neutral composite. One entry per issue; generate with
+# scripts/el_nino/build_enso_mask.py --init <tag> --classify-years.
 ENSO_YEARS = {
-    "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
-    "lanina": [1995, 1998, 1999, 2000, 2007, 2010, 2011],
-    "neutral": [1993, 1996, 2001, 2003, 2005, 2008, 2012, 2013, 2016],
+    "202609": {  # OND
+        "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
+        "lanina": [1995, 1998, 1999, 2000, 2007, 2010, 2011],
+        "neutral": [1993, 1996, 2001, 2003, 2005, 2008, 2012, 2013, 2016],
+    },
+    "202610": {  # NDJ
+        "elnino": [1994, 1997, 2002, 2004, 2006, 2009, 2014, 2015],
+        "lanina": [1995, 1998, 1999, 2000, 2005, 2007, 2008, 2010, 2011],
+        "neutral": [1993, 1996, 2001, 2003, 2012, 2013, 2016],
+    },
 }
 
 # ── Explore layers ──────────────────────────────────────────────────────────
@@ -632,11 +727,11 @@ DEFAULT_EXPLORE = next(l["name"] for l in EXPLORE_LAYERS if l.get("default"))
 # decided AND why, because every one of them is a defensible-but-arguable call.
 METHOD_STEPS = [
     ("The forecast",
-     f"ECMWF SEAS5 (system {SYSTEM}), initialised {INIT_LABEL}, 51 ensemble "
-     f"members, lead months 2–4 (Oct, Nov, Dec). Each member is one plausible "
-     f"version of the season; their spread is the uncertainty. September, the "
-     f"initialisation month, is excluded: it is partly fixed by conditions "
-     f"already present at launch, so it behaves unlike a forecast month."),
+     f"ECMWF SEAS5 (system {SYSTEM}), issued monthly, 51 ensemble members, "
+     f"the 2nd to 4th months after the issue month (e.g. issued September → "
+     f"Oct, Nov, Dec). Each member is one plausible version of the season; "
+     f"their spread is the uncertainty. The issue month itself is excluded: "
+     f"it is partly fixed by conditions already present at launch."),
     ("The baseline",
      f"The same model re-run over {HINDCAST} — 24 years × 25 members = 600 "
      f"values per grid cell. Terciles are cut from THIS, the model's own "
@@ -697,8 +792,14 @@ CAVEATS = [
     "has support; where it does not, it does not.",
     "The forecast grid is 1° (~111 km). A national total is a sum over coarse "
     "cells and should not be read at sub-district precision.",
-    "This is one forecast issue, not a monitored product. It does not update; "
-    "it is replaced when a new initialisation is published.",
+    "Each period comes from one monthly forecast issue, named with it. A "
+    "newer issue replaces an older one for any month both cover, so figures "
+    "for the same month can change from one issue to the next. Periods are "
+    "withdrawn once their months have passed: past months are observed, not "
+    "forecast.",
+    "The El Niño attribution mask is seasonal. A single month is read "
+    "against its forecast issue's season (e.g. November from the October "
+    "issue against NDJ), so monthly attribution is approximate.",
     "A compound probability is counted per ensemble MEMBER — the fraction of "
     "members where both conditions hold at once — not the product of the two "
     "separate probabilities. Dry and hot go together physically (drier soil "
@@ -733,7 +834,7 @@ def download_disclaimer(period_label, issue_label):
         "These figures are a seasonal FORECAST, not a measured impact.",
         f"They come from the ECMWF SEAS5 forecast issued {issue_label} for "
         f"{period_label}. They count children (under 18) living where that "
-        "forecast leans towards a drier, wetter, hotter or cooler season "
+        "forecast leans towards drier, wetter, hotter or cooler conditions "
         "than normal. “Normal” is the model's own re-forecasts of "
         f"{HINDCAST.replace('-', '–')}, used only as a baseline.",
         "They do not predict drought, flooding or harm, and do not reflect "

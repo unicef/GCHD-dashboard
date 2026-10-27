@@ -58,14 +58,16 @@ from forecast_core import (
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
 from elnino_config import (
-    PERIODS, PERIOD_MAP, DEFAULT_PERIOD, period_label,
+    PERIOD_MAP, active_periods, default_period, is_window,
+    period_label, period_issue_label,
+    ISSUES, issue_label,
     SIGNALS, SIGNAL_MAP, DEFAULT_SIGNAL,
     EXPLORE_LAYERS, EXPLORE_MAP, DEFAULT_EXPLORE,
     PROB_MIN, PROB_MAX, PROB_DEFAULT, PROB_STEP, PROB_MARKS,
     SENSITIVITY_THRESHOLDS, CHANCE_LEVEL,
     METHOD_STEPS, CAVEATS, SOURCE_URL,
-    INIT_LABEL, HINDCAST, SYSTEM as ELNINO_SYSTEM,
-    SKILL_USABLE_MIN, SKILL_REFERENCE, ENSO_EVENT_MIN, ENSO_YEARS,
+    HINDCAST, SYSTEM as ELNINO_SYSTEM,
+    SKILL_USABLE_MIN, SKILL_REFERENCE, ENSO_EVENT_MIN,
     SIGNAL_GROUPS, is_compound, threshold_contract,
     EN_INFO, ENSO_MASK_DIR,
     PROB_COMPOUND_DEFAULT, COMPOUND_CHANCE_LEVEL,
@@ -191,6 +193,13 @@ def _fmt(v):
     if abs(v) >= 1_000:     return f"{v/1000:.1f}k"
     if isinstance(v, float): return f"{v:.2f}"
     return str(int(v))
+
+
+def _elnino_period_options():
+    multi = len({p["init"] for p in active_periods()}) > 1
+    return [{"label": p["label"] + (f" · issued {p['issue_label']}"
+                                    if multi else ""),
+             "value": p["id"]} for p in active_periods()]
 
 
 # ---------------------------------------------------------------------------
@@ -1305,7 +1314,8 @@ def _elnino_method_block():
             html.A("Copernicus CDS — seasonal-monthly-single-levels",
                    href=SOURCE_URL, target="_blank", className="hi-link"),
             html.Span(f" · ECMWF SEAS5 system {ELNINO_SYSTEM} · "
-                      f"initialised {INIT_LABEL} · hindcast {HINDCAST}"),
+                      f"issued {', '.join(issue_label(t) for t in ISSUES)}"
+                      f" · hindcast {HINDCAST}"),
         ]),
     ])
 
@@ -1412,8 +1422,9 @@ def tab_elnino():
             ], className="exposure-method-p", style={"marginBottom": "0"}),
             _en_collapse("intro", "What this tab shows", [
                 html.P(
-                    f"One ECMWF SEAS5 forecast issued {INIT_LABEL}, not a "
-                    f"live feed. It shows where the season is likely to fall "
+                    f"Monthly ECMWF SEAS5 forecasts (latest issued "
+                    f"{issue_label(ISSUES[-1])}), not a live feed. Each "
+                    f"period is labelled with its issue. It shows where the season is likely to fall "
                     f"in the driest or wettest third of what this model "
                     f"normally predicts, during a period when El Niño "
                     f"conditions are present.",
@@ -1437,9 +1448,8 @@ def tab_elnino():
                 html.Div("1. Period", className="ps-label"),
                 dcc.Dropdown(
                     id="elnino-period", className="ps-select",
-                    options=[{"label": p["label"], "value": p["period"]}
-                             for p in PERIODS],
-                    value=DEFAULT_PERIOD, clearable=False, searchable=False,
+                    options=_elnino_period_options(),
+                    value=default_period(), clearable=False, searchable=False,
                 ),
                 html.Div(id="elnino-period-note", className="ps-caption"),
             ]),
@@ -6502,9 +6512,25 @@ def elnino_notes(period, signal, layer):
     p = PERIOD_MAP.get(period) or {}
     s = SIGNAL_MAP.get(signal) or {}
     l = EXPLORE_MAP.get(layer) or {}
-    p_note = p.get("note") or (
-        f"Dry-area cutoff for this period: {p.get('dry_mask_mm', '—')} mm.")
+    p_note = (f"Forecast issued {p.get('issue_label', '—')}. "
+              + ("Three-month total. " if p.get("lead") == 0 else "")
+              + f"Dry-area cutoff: {p.get('dry_mask_mm', '—')} mm.")
     return p_note, s.get("blurb", ""), l.get("desc", "")
+
+
+# Ended months drop out without a restart: rebuilt whenever the tab opens.
+@app.callback(
+    Output("elnino-period", "options"),
+    Output("elnino-period", "value"),
+    Input("store-tab",      "data"),
+    State("elnino-period",  "value"),
+)
+def elnino_period_refresh(tab, current):
+    if tab != "elnino":
+        raise dash.exceptions.PreventUpdate
+    opts = _elnino_period_options()
+    keep = current in {o["value"] for o in opts}
+    return opts, (no_update if keep else default_period())
 
 
 @app.callback(
@@ -7179,9 +7205,8 @@ def _elnino_enso_block(state):
                         "by ENSO. "),
             "For the empirical check, compare the map against the ",
             html.Em("El Niño rainfall fingerprint"),
-            f" layer — the model's own difference between its "
-            f"{len(ENSO_YEARS['elnino'])} El Niño hindcast seasons and its "
-            f"{len(ENSO_YEARS['neutral'])} neutral ones.",
+            " layer — the model's own difference between its El Niño "
+            "and neutral hindcast seasons.",
         ], className="ps-caption", style={"marginTop": "8px"}),
     ])
 
@@ -7393,6 +7418,7 @@ def build_elnino_xlsx(meta, result, history, export):
     pop_txt = (f"WorldPop 2025, children under 18, "
                f"{meta.get('pop_res', 1000):,} m grid")
     generated = export.get("computed_utc", "")
+    issue = period_issue_label(meta["period"])
 
     def _print_setup(ws, header_rows=None):
         ws.set_landscape()
@@ -7406,7 +7432,7 @@ def build_elnino_xlsx(meta, result, history, export):
     ws = wb.add_worksheet("Read me first")
     ws.set_column(0, 0, 112)
     disclaimer = export.get("disclaimer") or download_disclaimer(
-        period_label(meta["period"]), INIT_LABEL)
+        period_label(meta["period"]), period_issue_label(meta["period"]))
     ws.write(0, 0, disclaimer[0], f_title)
     r = 1
     for c in disclaimer[1:]:
@@ -7433,7 +7459,7 @@ def build_elnino_xlsx(meta, result, history, export):
         r += 1
     r += 1
     ws.write(r, 0, f"Forecast: ECMWF SEAS5 system {ELNINO_SYSTEM}, issued "
-                   f"{INIT_LABEL}, compared against its own {HINDCAST} "
+                   f"{issue}, compared against its own {HINDCAST} "
                    f"hindcast. Population: {pop_txt}. "
                    f"Generated {generated}.", f_note)
     _print_setup(ws)
@@ -7464,7 +7490,7 @@ def build_elnino_xlsx(meta, result, history, export):
         ("Arid areas excluded", "yes" if meta["dry_mask"] else "no", f_txt,
          "Areas too dry in a normal season for 'drier' or 'wetter' to mean "
          "anything are left out of the count."),
-        ("Forecast issued", INIT_LABEL, f_txt,
+        ("Forecast issued", issue, f_txt,
          f"ECMWF SEAS5 system {ELNINO_SYSTEM}; normal = its own {HINDCAST} "
          f"hindcast."),
         ("Population data", pop_txt, f_txt, None),
@@ -7607,7 +7633,7 @@ def build_elnino_xlsx(meta, result, history, export):
                                "bg_color": "#FDF3C8"})
         f_nowp = wb.add_format({"border": 1, "bold": True,
                                 "num_format": PCT, "bg_color": "#FDF3C8"})
-        ws.write(r, 0, f"This forecast ({INIT_LABEL})", f_now)
+        ws.write(r, 0, f"This forecast ({issue})", f_now)
         ws.write(r, 1, _frac(area), f_nowp)
     _print_setup(ws, header_rows=3)
 
@@ -7716,6 +7742,9 @@ def _elnino_magnitude_block(meta):
             note += (" This mask covers rainfall only, so for a combined "
                      "signal it says nothing about whether the heat is "
                      "El Niño-related — treat it as the weaker claim.")
+        if not is_window(meta.get("period")):
+            note += (" A single month is read against its forecast issue's "
+                     "seasonal mask, so this is approximate.")
         kids.append(html.Div(note, className="ps-caption",
                              style={"marginTop": "6px"}))
 
@@ -7737,7 +7766,9 @@ def _elnino_export_payload(result, meta):
 
     export = {
         "product": "ECMWF SEAS5 seasonal precipitation outlook",
-        "init": INIT_LABEL, "system": ELNINO_SYSTEM, "hindcast": HINDCAST,
+        "init": period_issue_label(meta["period"]),
+        "init_tag": (PERIOD_MAP.get(meta["period"]) or {}).get("init"),
+        "system": ELNINO_SYSTEM, "hindcast": HINDCAST,
         "period": meta["period"], "period_label": period_label(meta["period"]),
         "signal": meta["signal"], "signal_label": sig.get("label"),
         "probability_threshold": meta["threshold"],
@@ -7787,8 +7818,8 @@ def _elnino_export_payload(result, meta):
             "Counted per ensemble member, not as a product of marginal "
             "probabilities. Threshold is not comparable with a "
             "single-variable one.")
-    export["disclaimer"] = download_disclaimer(period_label(meta["period"]),
-                                               INIT_LABEL)
+    export["disclaimer"] = download_disclaimer(
+        period_label(meta["period"]), period_issue_label(meta["period"]))
     export["suggested_citation"] = _elnino_quote(export)
     return export
 
@@ -7983,7 +8014,7 @@ def render_elnino_results(result, meta, history=None):
         html.Div(className="ps", children=[
             html.Div([
                 f"ECMWF SEAS5 system {ELNINO_SYSTEM}, initialised "
-                f"{INIT_LABEL}, hindcast {HINDCAST}. ",
+                f"{period_issue_label(meta['period'])}, hindcast {HINDCAST}. ",
                 f"Population grid: {meta['pop_res']} m. ",
                 html.Br(),
                 html.Strong("A tercile signal is relative to this model's own "

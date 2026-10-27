@@ -20,18 +20,17 @@ from cachetools import TTLCache, cached as _ttl_cached
 
 from config import ADMIN_DATA, POP_VIS
 from elnino_config import (
-    TERCILES_COLLECTION, RAW_HINDCAST_COLLECTION, SKILL_COLLECTION,
-    TERCILE_BANDS, PERIOD_MAP, DEFAULT_PERIOD, WINDOW_PERIOD,
+    ISSUES, issue_collection, issue_asset,
+    TERCILE_BANDS, PERIOD_MAP, is_window, HC_YEARS,
     SIGNAL_MAP, EXPLORE_MAP,
-    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, INIT_TAG, to_fraction,
+    PROB_DEFAULT, SENSITIVITY_THRESHOLDS, to_fraction,
     SKILL_BANDS, SKILL_USABLE_MIN, SKILL_MODERATE_MIN,
-    BRIER_COLLECTION, BRIER_BANDS, BSS_USEFUL_MIN, BSS_GOOD_MIN,
+    BRIER_BANDS, BSS_USEFUL_MIN, BSS_GOOD_MIN,
     NINO34_BOX, OISST_COLLECTION, OISST_SCALE, NINO34_MONTHS,
     ENSO_EVENT_MIN, ENSO_STRONG_MIN, ENSO_YEARS,
-    TERCILES_T2M_COLLECTION, COMPOUND_COLLECTION, SKILL_T2M_COLLECTION,
     TERCILE_T2M_BANDS, COMPOUND_BANDS, is_compound,
     PROB_COMPOUND_DEFAULT, SENSITIVITY_COMPOUND,
-    ENSO_MASK_ASSET, ENSO_MASK_BAND, ENSO_MASK_DIR,
+    enso_mask_asset, ENSO_MASK_BAND, ENSO_MASK_DIR,
 )
 from gee_core import _admin_region
 from forecast_core import _forecast_pop
@@ -78,10 +77,26 @@ def _band_names(asset_id):
     return list(TERCILE_BANDS)
 
 
-def tercile_asset(period):
-    if period not in PERIOD_MAP:
+def _period(period):
+    p = PERIOD_MAP.get(period)
+    if not p:
         raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{period}"
+    return p
+
+
+def _asset(collection, period):
+    p = _period(period)
+    return issue_asset(p["init"], collection,
+                       f"{collection}_{p['init']}_{p['suffix']}")
+
+
+def _hindcast_ids(init):
+    return [issue_asset(init, "raw_hindcast", f"hc_{y}{init[4:]}")
+            for y in HC_YEARS]
+
+
+def tercile_asset(period):
+    return _asset("terciles", period)
 
 
 def _tercile_image(period):
@@ -99,9 +114,7 @@ def _tercile_image(period):
 
 
 def tercile_t2m_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{TERCILES_T2M_COLLECTION}/terciles_t2m_{INIT_TAG}_{period}"
+    return _asset("terciles_t2m", period)
 
 
 def _tercile_t2m_image(period):
@@ -115,9 +128,7 @@ def _tercile_t2m_image(period):
 
 
 def compound_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{period}"
+    return _asset("compound", period)
 
 
 def _compound_image(period):
@@ -142,15 +153,11 @@ def _dry_mask_for(period):
 
 
 def skill_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{period}"
+    return _asset("skill", period)
 
 
 def skill_t2m_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{period}"
+    return _asset("skill_t2m", period)
 
 
 def _skill_t2m_image(period):
@@ -179,9 +186,7 @@ def _skill_image(period):
 
 
 def brier_asset(period):
-    if period not in PERIOD_MAP:
-        raise ElNinoError(f"Unknown period '{period}'.")
-    return f"{BRIER_COLLECTION}/brier_{INIT_TAG}_{period}"
+    return _asset("brier", period)
 
 
 def _brier_image(period):
@@ -194,7 +199,7 @@ def _brier_image(period):
     return ee.Image(asset).rename(names)
 
 
-def _hindcast_structure():
+def _hindcast_structure(init):
     """({lead_key: [band names]}, ordered lead keys) for the hindcast images.
 
     Derived from the band names, never hardcoded: the collection was 4x25 when
@@ -202,7 +207,7 @@ def _hindcast_structure():
     lead that no longer exists. Shared by the historical context and the ENSO
     composite so they cannot disagree about the structure.
     """
-    names = _band_names(f"{RAW_HINDCAST_COLLECTION}/hc_1993{INIT_TAG[4:]}")
+    names = _band_names(_hindcast_ids(init)[0])
     by_lead = {}
     for nm in names:
         by_lead.setdefault(nm.split("_")[0], []).append(nm)
@@ -210,7 +215,7 @@ def _hindcast_structure():
     return names, by_lead, keys
 
 
-def _hindcast_season_mean(year, names, by_lead, lead_keys):
+def _hindcast_season_mean(year, init, names, by_lead, lead_keys):
     """Ensemble-mean season total for one hindcast year, mm.
 
     Each band is a MONTHLY total, so the season total is the sum over leads of
@@ -218,7 +223,7 @@ def _hindcast_season_mean(year, names, by_lead, lead_keys):
     monthly mean and compare one month against a multi-month quantity.
     """
     img = ee.Image(
-        f"{RAW_HINDCAST_COLLECTION}/hc_{year}{INIT_TAG[4:]}").rename(names)
+        issue_asset(init, "raw_hindcast", f"hc_{year}{init[4:]}")).rename(names)
     per_lead = [img.select(by_lead[k]).reduce(ee.Reducer.mean())
                 for k in lead_keys]
     total = per_lead[0]
@@ -441,13 +446,17 @@ def _d_enso_composite(img, ctx):
     lead as bands, and the monthly periods would need a different selection.
     Returns a fully masked image for those rather than a misleading one.
     """
-    if ctx.get("period") != WINDOW_PERIOD:
+    if not is_window(ctx.get("period")):
         return ee.Image(0).selfMask().rename("value")
-    names, by_lead, lead_keys = _hindcast_structure()
-    warm = [_hindcast_season_mean(y, names, by_lead, lead_keys)
-            for y in ENSO_YEARS["elnino"]]
-    cold = [_hindcast_season_mean(y, names, by_lead, lead_keys)
-            for y in ENSO_YEARS["neutral"]]
+    init = _period(ctx["period"])["init"]
+    years = ENSO_YEARS.get(init)
+    if not years:
+        return ee.Image(0).selfMask().rename("value")
+    names, by_lead, lead_keys = _hindcast_structure(init)
+    warm = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
+            for y in years["elnino"]]
+    cold = [_hindcast_season_mean(y, init, names, by_lead, lead_keys)
+            for y in years["neutral"]]
     warm_mean = ee.ImageCollection(warm).mean()
     cold_mean = ee.ImageCollection(cold).mean()
     return warm_mean.subtract(cold_mean).rename("value")
@@ -737,8 +746,9 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     lead month as bands, so a per-month variant would need a different band
     selection and is left out rather than guessed at.
     """
-    if period != WINDOW_PERIOD:
+    if not is_window(period):
         return []
+    init = _period(period)["init"]
 
     cfg = SIGNAL_MAP.get(signal)
     if not cfg:
@@ -755,7 +765,7 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
     # and members from them rather than hardcoding: this collection was 4x25
     # when the season was Sep-Dec and is 3x25 now, and a stale constant would
     # select a lead that no longer exists.
-    hc_names, by_lead, lead_keys = _hindcast_structure()
+    hc_names, by_lead, lead_keys = _hindcast_structure(init)
     if not lead_keys:
         print(f"[elnino] hindcast bands unrecognised: {hc_names[:4]}", flush=True)
         return []
@@ -784,7 +794,8 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
         return ee.Feature(None, {"year": ee.Image(img).get("year"),
                                  "share": share})
 
-    coll = ee.ImageCollection(RAW_HINDCAST_COLLECTION)
+    # This issue's images only: the collection holds every issue.
+    coll = ee.ImageCollection([ee.Image(i) for i in _hindcast_ids(init)])
 
     try:
         rows = ee.FeatureCollection(coll.map(year_share)).getInfo()
@@ -808,6 +819,11 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
 # Skill
 # ---------------------------------------------------------------------------
 
+def _any_issue_has(collection):
+    return any(ee.ImageCollection(issue_collection(t, collection))
+               .size().getInfo() > 0 for t in ISSUES)
+
+
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def brier_available():
     """Whether the Brier collection exists and holds images.
@@ -816,7 +832,7 @@ def brier_available():
     layers and caption rather than erroring.
     """
     try:
-        return ee.ImageCollection(BRIER_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("brier")
     except Exception:
         return False
 
@@ -827,8 +843,7 @@ def brier_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def t2m_available():
     try:
-        return ee.ImageCollection(
-            TERCILES_T2M_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("terciles_t2m")
     except Exception:
         return False
 
@@ -836,7 +851,7 @@ def t2m_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def compound_available():
     try:
-        return ee.ImageCollection(COMPOUND_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("compound")
     except Exception:
         return False
 
@@ -844,7 +859,7 @@ def compound_available():
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
 def skill_t2m_available():
     try:
-        return ee.ImageCollection(SKILL_T2M_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("skill_t2m")
     except Exception:
         return False
 
@@ -894,7 +909,7 @@ def skill_available():
     script — so the tab hides the skill layers and caption rather than erroring.
     """
     try:
-        return ee.ImageCollection(SKILL_COLLECTION).size().getInfo() > 0
+        return _any_issue_has("skill")
     except Exception:
         return False
 
@@ -940,10 +955,10 @@ def signal_skill_share(period, signal, threshold, feature_ucode, admin_level,
         return None
 
 
-@_ttl_cached(cache=TTLCache(maxsize=1, ttl=600), lock=_lock)
-def enso_mask_available():
+@_ttl_cached(cache=TTLCache(maxsize=16, ttl=600), lock=_lock)
+def enso_mask_available(asset):
     try:
-        return ee.Image(ENSO_MASK_ASSET).bandNames().size().getInfo() > 0
+        return ee.Image(asset).bandNames().size().getInfo() > 0
     except Exception:
         return False
 
@@ -1018,7 +1033,8 @@ def enso_attributable(period, signal, threshold, feature_ucode, admin_level,
 
     Returns {"children", "pct", "rainfall_only"} or None.
     """
-    if not enso_mask_available():
+    asset = enso_mask_asset(_period(period))
+    if not enso_mask_available(asset):
         return None
     direction = ENSO_MASK_DIR.get(signal)
     if direction is None:
@@ -1026,7 +1042,7 @@ def enso_attributable(period, signal, threshold, feature_ucode, admin_level,
     try:
         img = _tercile_image(period)
         mask = _signal_mask(img, signal, threshold, apply_dry_mask, period)
-        enso = ee.Image(ENSO_MASK_ASSET).rename(ENSO_MASK_BAND)
+        enso = ee.Image(asset).rename(ENSO_MASK_BAND)
         consistent = enso.eq(direction)
         region = _admin_region(admin_level, feature_ucode)
         pop = _forecast_pop()["childpop"]
@@ -1212,14 +1228,17 @@ def elnino_available():
     created under a personal account by the upload script, so "not shared with
     the service account" is the expected first-run failure and is named as such.
     """
-    try:
-        n = ee.ImageCollection(TERCILES_COLLECTION).size().getInfo()
-    except Exception as e:
-        return False, (
-            f"The El Niño assets are not readable ({str(e)[:100]}). They are "
-            f"created under the uploader's own Earth Engine account, so the "
-            f"app's service account needs read access to {TERCILES_COLLECTION}.")
-    if not n:
-        return False, (f"{TERCILES_COLLECTION} is empty — run "
+    missing = []
+    for tag in ISSUES:
+        coll = issue_collection(tag, "terciles")
+        try:
+            if not ee.ImageCollection(coll).size().getInfo():
+                missing.append(coll)
+        except Exception as e:
+            return False, (
+                f"The El Niño assets are not readable ({str(e)[:100]}). The "
+                f"app's service account needs read access to {coll}.")
+    if missing:
+        return False, (f"{', '.join(missing)} empty — run "
                        f"scripts/el_nino/download_ecmwf_prec.py.")
-    return True, f"{n} period(s) available."
+    return True, f"{len(ISSUES)} forecast issue(s) available."

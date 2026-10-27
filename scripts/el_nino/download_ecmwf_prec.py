@@ -7,8 +7,10 @@ bare invocation does exactly what it always did); VARS holds everything that
 differs between them. Temperature is the SAME CDS dataset and request shape, so
 it is a one-variable addition rather than a second pipeline.
 
-Init Sep 2026, lead months 2-4 (Oct-Nov-Dec). Hindcast 1993-2016, same init
-month and the same leads, so forecast and baseline are compared like for like.
+One forecast issue per run (--init YYYYMM), lead months 2-4 (e.g. init
+202609 -> Oct-Nov-Dec). Hindcast 1993-2016, same init month and leads, so
+forecast and baseline are compared like for like. Assets are tagged with the
+init, so issues never collide.
 Terciles come from the model's own hindcast climatology, so model bias cancels.
 
 The one asymmetry worth knowing before reading VARS: precipitation ACCUMULATES
@@ -89,12 +91,10 @@ Auth (one-off):
         access to them. Same caveat as upload_infra.py.
 
 Usage (PY = scripts/el_nino/.venv/Scripts/python):
-    PY scripts/el_nino/download_ecmwf_prec.py --dry-run    # build, validate upload
-    PY scripts/el_nino/download_ecmwf_prec.py --no-upload  # build and stop
-    PY scripts/el_nino/download_ecmwf_prec.py              # precipitation
-    PY scripts/el_nino/download_ecmwf_prec.py --only terciles --overwrite
-    PY scripts/el_nino/download_ecmwf_prec.py --var t2m    # temperature
-    PY scripts/el_nino/download_ecmwf_prec.py --var prec --var t2m
+    PY scripts/el_nino/download_ecmwf_prec.py --init 202610 --var prec --var t2m
+    PY scripts/el_nino/download_ecmwf_prec.py --init 202610 --no-upload
+    PY scripts/el_nino/download_ecmwf_prec.py --init 202610 --dry-run
+    PY scripts/el_nino/download_ecmwf_prec.py --init 202610 --only terciles --overwrite
 """
 import argparse
 import calendar
@@ -122,24 +122,15 @@ import rioxarray  # noqa: F401  (registers the .rio accessor used by write_tif)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))          # scripts/ — for _common
+sys.path.insert(0, str(HERE.parent.parent / "app"))
 from _common import load_env                  # noqa: E402
+from elnino_config import (                   # noqa: E402
+    LEADS, HC_YEARS, SYSTEM, issue_periods, season_code)
 
 # ---------------- CONFIG ----------------
-INIT_YEAR, INIT_MONTH = 2026, 9
-# Lead = months after the INIT month, so lead 1 is always September here and
-# October is always lead 2 — leads cannot be renumbered by dropping one.
-# [2, 3, 4] = Oct-Nov-Dec (OND), the season the team asked for. September (lead
-# 1) is excluded deliberately: it is the initialisation month, partly
-# determined by conditions already present at launch, so it behaves unlike a
-# true forecast month and dilutes the seasonal signal.
-#
-# A sharper OND becomes available once the October initialisation publishes
-# (~5 Oct): set INIT_MONTH = 10 and LEADS = [1, 2, 3]. That needs a fresh
-# download — new initial conditions AND an October-initialised hindcast — and
-# lands under a separate 202610 asset tag, so it will not collide with this.
-LEADS = [2, 3, 4]
-HC_YEARS = list(range(1993, 2017))       # 1993-2016 (range stops before 2017)
-SYSTEM = "51"                            # current ECMWF system in the CDS form
+# LEADS, HC_YEARS and SYSTEM come from app/elnino_config (single source).
+# Set from --init by set_init(); lead 1 is the init month, never used.
+INIT_TAG = INIT_YEAR = INIT_MONTH = None
 # Both of these only LABEL pixels (cat, dry_mask); neither drops data. Change
 # them freely without invalidating the probability bands.
 PROB_THR = 0.5                           # cat's dry/wet cutoff, nothing else
@@ -211,8 +202,6 @@ DEFAULT_VAR = "prec"
 GEE_PROJECT = "unicef-ccri"
 GEE_ROOT = f"projects/{GEE_PROJECT}/assets/el_nino"
 
-INIT_TAG = f"{INIT_YEAR}{INIT_MONTH:02d}"
-OUT = HERE / "data" / f"seas5_{INIT_TAG}"
 
 # Collection -> the images that belong in it. Also the --only choices. Bare
 # names are precipitation's, for backwards compatibility with every existing
@@ -234,6 +223,27 @@ def collection_for(col, var):
 
 
 # ---------------- HELPERS ----------------
+def set_init(tag):
+    global INIT_TAG, INIT_YEAR, INIT_MONTH
+    if len(tag) != 6 or not tag.isdigit() or not 1 <= int(tag[4:]) <= 12:
+        sys.exit(f"ERROR: --init must be YYYYMM, got {tag!r}")
+    INIT_TAG, INIT_YEAR, INIT_MONTH = tag, int(tag[:4]), int(tag[4:])
+
+
+def issue_root():
+    return f"{GEE_ROOT}/{INIT_TAG}"
+
+
+def default_out():
+    return HERE / "data" / f"seas5_{INIT_TAG}"
+
+
+def lead_legend():
+    ps = issue_periods(INIT_TAG)
+    return (",".join(f"{p['lead']}={p['short']}" for p in ps[1:])
+            + f", 0={season_code(INIT_TAG)} window")
+
+
 def valid_year_month(lead):
     """Calendar year/month a lead month refers to (lead 1 = the init month)."""
     m0 = INIT_MONTH - 1 + (lead - 1)
@@ -609,7 +619,7 @@ def build(out, var, only=None, loaded=None):
                 {**common, "kind": "hindcast", "year": yr},
                 iso(yr, INIT_MONTH))
 
-    # terciles — each lead month, plus the full OND window
+    # terciles — each lead month, plus the season window
     if not only or "terciles" in only:
         periods = {lead_label(l): (fc.sel(forecastMonth=l),
                                    hc.sel(forecastMonth=l),
@@ -643,7 +653,7 @@ def build(out, var, only=None, loaded=None):
                  "hindcast": f"{HC_YEARS[0]}-{HC_YEARS[-1]}",
                  "cat_legend": f"1={cfg['low_name']},3={cfg['high_name']},"
                                f"0=no_signal",
-                 "lead_legend": "2=Oct,3=Nov,4=Dec, 0=OND window"},
+                 "lead_legend": lead_legend()},
                 init_iso)
 
     return images
@@ -741,7 +751,7 @@ def build_compound(out, loaded, only=None):
                         "hot_saturated_pct": round(sat, 1),
                         "cat_legend": "1=hot_dry,2=cool_wet,3=hot_wet,"
                                       "4=cool_dry,0=no_signal",
-                        "lead_legend": "2=Oct,3=Nov,4=Dec, 0=OND window",
+                        "lead_legend": lead_legend(),
                         "band_names": ",".join(ids),
                         "system:time_start": init_iso}))
         # Flags BELOW 1.0, not below some margin above it: 1.0 is the
@@ -826,8 +836,8 @@ def ensure_collections(cols):
         print("   geeup will create the destinations itself; carry on.")
         return
 
-    for path, kind in [(GEE_ROOT, "FOLDER")] + [
-            (f"{GEE_ROOT}/{c}", "IMAGE_COLLECTION") for c in cols]:
+    for path, kind in [(GEE_ROOT, "FOLDER"), (issue_root(), "FOLDER")] + [
+            (f"{issue_root()}/{c}", "IMAGE_COLLECTION") for c in cols]:
         try:
             ee.data.getAsset(path)
         except ee.EEException:
@@ -900,7 +910,8 @@ def check_cookies(jar):
                  f"       Refresh it:  cd {COOKIE_JAR.parent} && geeup cookie_setup")
 
 
-def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1):
+def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1,
+               pyramiding="MEAN", nodata=NODATA):
     """Upload one collection. Returns a process-style status (0 = success).
 
     Driven in-process rather than by shelling out to the geeup CLI, so the
@@ -932,8 +943,8 @@ def run_geeup(staging, meta, dest, user, overwrite, dry_run, workers=1):
             source_path=source,
             destination_path=dest,
             metadata_path=metadata,
-            pyramiding="MEAN",
-            nodata_value=int(NODATA),
+            pyramiding=pyramiding,
+            nodata_value=None if nodata is None else int(nodata),
             overwrite=bool(overwrite),
             dry_run=bool(dry_run),
             workers=max(1, int(workers or 1)),
@@ -950,6 +961,8 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
     ap.add_argument("--only", action="append", choices=ALL_COLLECTIONS,
                     default=None,
                     help="build/upload only these collections (repeatable). "
@@ -960,9 +973,9 @@ def main():
                          f"(default {DEFAULT_VAR}). Temperature lands in "
                          f"parallel _t2m collections, leaving the "
                          f"precipitation assets untouched")
-    ap.add_argument("--out", default=str(OUT),
-                    help=f"working directory for GRIBs and GeoTIFFs "
-                         f"(default {OUT})")
+    ap.add_argument("--out", default=None,
+                    help="working directory for GRIBs and GeoTIFFs "
+                         "(default data/seas5_<init>)")
     ap.add_argument("--user", default=os.environ.get("GEEUP_USER"),
                     help="Google account email, recorded for reference only — "
                          "the raster upload authenticates as whoever "
@@ -977,8 +990,9 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="build, then validate the upload without ingesting")
     args = ap.parse_args()
+    set_init(args.init)
 
-    out = Path(args.out)
+    out = Path(args.out) if args.out else default_out()
     out.mkdir(parents=True, exist_ok=True)
     only = set(args.only) if args.only else None
     # dict.fromkeys and not set(): --var prec --var t2m should build in the
@@ -1032,9 +1046,9 @@ def main():
     failed = []
     for col in cols:
         n = sum(1 for c, _, _, _ in images if c == col)
-        print(f"\n=== {col}: {n} image(s) -> {GEE_ROOT}/{col} ===")
+        print(f"\n=== {col}: {n} image(s) -> {issue_root()}/{col} ===")
         staging = stage(out, images, col)
-        rc = run_geeup(staging, metas[col], f"{GEE_ROOT}/{col}",
+        rc = run_geeup(staging, metas[col], f"{issue_root()}/{col}",
                        args.user, args.overwrite, args.dry_run, args.workers)
         if rc != 0:
             failed.append((col, rc))

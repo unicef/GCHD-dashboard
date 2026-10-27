@@ -42,9 +42,9 @@ build_brier_skill.py).
 
 Requirements:  pip install earthengine-api openpyxl
 Usage:
-    python scripts/el_nino/export_reliability_table.py
-    python scripts/el_nino/export_reliability_table.py --period L3_Nov
-    python scripts/el_nino/export_reliability_table.py --threshold 50
+    python scripts/el_nino/export_reliability_table.py --init 202609
+    python scripts/el_nino/export_reliability_table.py --init 202609 --period L3_Nov
+    python scripts/el_nino/export_reliability_table.py --init 202609 --threshold 50
 """
 import argparse
 import datetime as dt
@@ -59,11 +59,10 @@ APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
 from elnino_config import (            # noqa: E402
-    TERCILES_COLLECTION, SKILL_COLLECTION,
-    TERCILES_T2M_COLLECTION, COMPOUND_COLLECTION, SKILL_T2M_COLLECTION,
-    PERIOD_MAP, WINDOW_PERIOD, SIGNALS, SIGNAL_MAP,
-    INIT_TAG, INIT_LABEL, HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction,
-    ENSO_MASK_DIR as CFG_ENSO_DIR,
+    issue_asset,
+    SIGNALS, SIGNAL_MAP,
+    HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction, parse_issue, window_suffix,
+    ENSO_MASK_DIR as CFG_ENSO_DIR, enso_mask_asset,
 )
 
 # Brier is deliberately absent. It is still computed and stored in
@@ -105,8 +104,6 @@ DEFAULT_THRESHOLD_COMPOUND = 25
 #
 # This is the difference between "children under a forecast signal" and
 # "children under a forecast signal that El Nino plausibly caused".
-ENSO_MASK_ASSET = ("projects/unicef-ccri/assets/el_nino/enso_mask/"
-                   "enso_mask_OND_sig90_p50")
 # From elnino_config so a workbook figure and a dashboard figure cannot drift.
 # Compound signals inherit their RAINFALL component's direction; the mask says
 # nothing about temperature, which the Method sheet states.
@@ -136,6 +133,11 @@ JENKS_BREAKS = {
 # saturated colour on every row would compete with the numbers.
 CLASS_FILLS = ["F4C7C3", "FADBC8", "FDF3C8", "DDEFD5", "CCE5D9"]
 
+
+# Set from --init in main().
+INIT_TAG = INIT_LABEL = None
+PERIOD_MAP = {}
+WINDOW_PERIOD = window_suffix()
 
 def classify(value, breaks):
     """Index 0..4 for a value against four ascending break points."""
@@ -202,7 +204,7 @@ def child_pop(variant="T_U18"):
 
 
 def tercile_image(period):
-    asset = f"{TERCILES_COLLECTION}/terciles_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "terciles", f"terciles_{INIT_TAG}_{period}")
     names = band_names_of(asset, [
         "p_below", "p_normal", "p_above", "cat",
         "fc_mean_mm", "clim_mean_mm", "anom_mm", "dry_mask"])
@@ -227,7 +229,7 @@ def _on_tercile_grid(img, period):
 
 
 def skill_image(period):
-    asset = f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "skill", f"skill_{INIT_TAG}_{period}")
     img = ee.Image(asset).rename(
         band_names_of(asset, ["skill_r", "skill_p"]))
     return _on_tercile_grid(img, period)
@@ -241,7 +243,7 @@ def skill_t2m_image(period):
     CHIRPS-scored rainfall skill beside it. The Method sheet says so, because
     the two columns sit next to each other and invite direct comparison.
     """
-    asset = f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "skill_t2m", f"skill_t2m_{INIT_TAG}_{period}")
     img = ee.Image(asset).rename(
         band_names_of(asset, ["skill_r", "skill_p"]))
     return _on_tercile_grid(img, period)
@@ -249,7 +251,7 @@ def skill_t2m_image(period):
 
 def tercile_t2m_image(period):
     """Temperature terciles — SEVEN bands, no dry_mask."""
-    asset = f"{TERCILES_T2M_COLLECTION}/terciles_t2m_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "terciles_t2m", f"terciles_t2m_{INIT_TAG}_{period}")
     return ee.Image(asset).rename(band_names_of(
         asset, ["p_below", "p_normal", "p_above", "cat",
                 "fc_mean_c", "clim_mean_c", "anom_c"]))
@@ -257,7 +259,7 @@ def tercile_t2m_image(period):
 
 def compound_image(period):
     """Joint rainfall+temperature probabilities — nine bands."""
-    asset = f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{period}"
+    asset = issue_asset(INIT_TAG, "compound", f"compound_{INIT_TAG}_{period}")
     return ee.Image(asset).rename(band_names_of(
         asset, ["p_hotdry", "p_coolwet", "p_hotwet", "p_cooldry",
                 "cat_compound", "p_dry_marginal", "p_hot_marginal",
@@ -297,14 +299,14 @@ def signal_mask(img, sig, pct, period=None):
              .And(img.select("dry_mask").eq(1)))
 
 
-def enso_mask_for(sig):
+def enso_mask_for(sig, period):
     """Cells where El Nino historically shifts rainfall in THIS direction.
 
     Direction-matched: dry against -1, wet against +1. The union has no single
     direction, so it takes either — a cell qualifies if El Nino historically
     moves it at all.
     """
-    m = ee.Image(ENSO_MASK_ASSET).rename("enso_dir")
+    m = ee.Image(enso_mask_asset(PERIOD_MAP[period])).rename("enso_dir")
     if sig.get("union_of"):
         return m.neq(0)
     return m.eq(ENSO_MASK_DIR[sig["name"]])
@@ -361,7 +363,8 @@ def build_stack(period, thr_rain, thr_compound, with_enso=True):
         thr = threshold_for(sig, thr_rain, thr_compound)
         mask = signal_mask(img, sig, thr, period)
         n = sig["name"]
-        attributable = mask.And(enso_mask_for(sig)) if with_enso else None
+        attributable = (mask.And(enso_mask_for(sig, period))
+                        if with_enso else None)
         for sfx, _ in POP_VARIANTS:
             sum_bands.append(
                 pops[sfx].updateMask(mask).rename(f"{n}_children{sfx}"))
@@ -1019,10 +1022,14 @@ def _write_classes_sheet(wb):
 
 
 def main():
+    global INIT_TAG, INIT_LABEL, PERIOD_MAP
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--period", default=WINDOW_PERIOD, choices=list(PERIOD_MAP))
+    ap.add_argument("--init", required=True, metavar="YYYYMM",
+                    help="forecast issue (init month), e.g. 202610")
+    ap.add_argument("--period", default=WINDOW_PERIOD,
+                    help="window_L2_L4 or L<lead>_<Mon>, e.g. L3_Dec")
     ap.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
                     help=f"signal probability cutoff in %% "
                          f"(default {DEFAULT_THRESHOLD})")
@@ -1034,6 +1041,10 @@ def main():
                          f"no-information baseline is 1/9, not 1/3")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    INIT_TAG, INIT_LABEL, PERIOD_MAP = parse_issue(args.init)
+    if args.period not in PERIOD_MAP:
+        sys.exit(f"ERROR: {args.period} not in issue {INIT_TAG}: "
+                 f"{list(PERIOD_MAP)}")
 
     out = Path(args.out) if args.out else (
         HERE / f"elnino_exposure_reliability_{INIT_TAG}_{args.period}"
@@ -1048,7 +1059,7 @@ def main():
     # Rainfall skill is required; temperature and compound are optional, so a
     # run against a part-built project still produces the rainfall columns
     # rather than failing outright.
-    aid = f"{SKILL_COLLECTION}/skill_{INIT_TAG}_{args.period}"
+    aid = issue_asset(INIT_TAG, "skill", f"skill_{INIT_TAG}_{args.period}")
     try:
         ee.data.getAsset(aid)
     except ee.EEException:
@@ -1056,9 +1067,11 @@ def main():
                  f"scripts/el_nino/build_skill_mask.py")
     for label, aid2 in (
             ("temperature skill",
-             f"{SKILL_T2M_COLLECTION}/skill_t2m_{INIT_TAG}_{args.period}"),
+             issue_asset(INIT_TAG, "skill_t2m",
+                         f"skill_t2m_{INIT_TAG}_{args.period}")),
             ("combined signals",
-             f"{COMPOUND_COLLECTION}/compound_{INIT_TAG}_{args.period}")):
+             issue_asset(INIT_TAG, "compound",
+                         f"compound_{INIT_TAG}_{args.period}"))):
         try:
             ee.data.getAsset(aid2)
         except ee.EEException:
