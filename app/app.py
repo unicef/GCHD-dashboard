@@ -3130,6 +3130,9 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
 
     # Dedicated top-level components (forecast-*-tile), shared by both tabs.
     if tab in FORECAST_TABS:
+        # Entering starts clean; the stores still hold the tab being left.
+        if ctx.triggered_id == "store-tab":
+            return layers, []
         return layers, _forecast_legend_specs(forecast_viz, forecast_preview)
 
     # Dedicated top-level components (elnino-*-tile).
@@ -5534,6 +5537,16 @@ def render_map_legend(specs):
     # "flex" (not "block") so the stylesheet's column layout applies — the
     # header stays pinned while a long row list scrolls inside the body.
     return [_legend_row(s) for s in specs], {"display": "flex"}
+
+
+# Hide the legend the instant the tab changes; the server re-shows it once the
+# new tab's layers are known (two round trips otherwise).
+app.clientside_callback(
+    "function(tab) { return {display: 'none'}; }",
+    Output("map-legend", "style", allow_duplicate=True),
+    Input("store-tab",   "data"),
+    prevent_initial_call=True,
+)
 
 
 # Collapse / expand the legend panel (clientside — no server round-trip).
