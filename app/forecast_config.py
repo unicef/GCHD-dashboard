@@ -77,8 +77,8 @@ RAINFALL = {
     "min": 0, "max": 200, "units": "mm/day",
     "range_source": "Wettest-day p99.9 162 mm/day (IMERG, Jan), rounded up",
     "thresholds": {
-        "daily_max":  (20, "ETCCDI R20mm (WMO), very heavy precipitation day "
-                           "(≥20 mm)"),
+        "daily_max":  (50, "WMO Severe Weather Information Centre, heavy rain "
+                           "(≥50 mm in 24 h)"),
         "daily_mean": (20, "ETCCDI R20mm (WMO), very heavy precipitation day "
                            "(≥20 mm), applied to the average day"),
     },
