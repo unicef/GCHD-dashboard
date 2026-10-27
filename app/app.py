@@ -46,7 +46,7 @@ from gee_core import (
     get_topic_tile_url_clipped, get_feature_bounds,
 )
 from forecast_config import (
-    FORECAST_DATASETS, FORECAST_MAP, REDUCERS,
+    FORECAST_DATASETS, FORECAST_MAP, REDUCERS, DAILY_REDUCERS,
     CUSTOM_NAME, CUSTOM_PALETTE,
     KIND_LABELS, KIND_BLURBS, active_datasets, forecast_groups,
 )
@@ -5675,7 +5675,8 @@ def _forecast_cfg(dataset, asset):
         return {
             "name": CUSTOM_NAME, "label": asset["asset_id"].split("/")[-1],
             "units": "", "threshold": 0, "min": 0, "max": 100,
-            "reducers": list(REDUCERS), "palette": CUSTOM_PALETTE,
+            "reducers": [r for r in REDUCERS if r not in DAILY_REDUCERS],
+            "palette": CUSTOM_PALETTE,
             "topic": None, "kind": "nrt", "note": "",
             "custom_id": asset["asset_id"], "custom_band": asset.get("band"),
             "is_custom": True,

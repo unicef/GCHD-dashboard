@@ -20,7 +20,7 @@ from cachetools import TTLCache, cached as _ttl_cached
 
 from config import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
 from forecast_config import (
-    FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE,
+    FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS,
 )
 from gee_core import build_core_images, _admin_region
 
@@ -400,6 +400,26 @@ _REDUCER_FNS = {
 }
 
 
+def _daily(coll, cfg, s, e1, reducer):
+    """Mean or max of UTC-day totals. A day's total is its mean step amount ×
+    steps_per_day, so a few missing steps do not read as a drier day."""
+    r = cfg.get("run") or {}
+    prop = r.get("valid", "system:time_start")
+    per_day = cfg["steps_per_day"]
+    days = []
+    for k in range((e1 - s).days):
+        lo = _ms(s + dt.timedelta(days=k))
+        hi = lo + 86_400_000
+        if cfg.get("accumulated"):
+            f = ee.Filter.And(ee.Filter.gt(prop, lo), ee.Filter.lte(prop, hi))
+        else:
+            f = ee.Filter.And(ee.Filter.gte(prop, lo), ee.Filter.lt(prop, hi))
+        day = coll.filter(f)
+        days.append(day.mean().multiply(per_day).set("n", day.size()))
+    totals = ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+    return totals.max() if reducer == "daily_max" else totals.mean()
+
+
 def build_forecast_image(name, start, end, reducer,
                          custom_id=None, custom_band=None):
     """Reduce a dataset over [start, end] to a single ee.Image.
@@ -462,10 +482,13 @@ def build_forecast_image(name, start, end, reducer,
     if pre is not None:
         coll = pre(coll, cfg)
 
-    fn = _REDUCER_FNS.get(reducer)
-    if fn is None:
-        raise ForecastError(f"Unsupported reducer '{reducer}'.")
-    img = fn(coll)
+    if reducer in DAILY_REDUCERS and cfg.get("steps_per_day"):
+        img = _daily(coll, cfg, s, e1, reducer)
+    else:
+        fn = _REDUCER_FNS.get(reducer)
+        if fn is None:
+            raise ForecastError(f"Unsupported reducer '{reducer}'.")
+        img = fn(coll)
 
     post = _POST_TRANSFORMS.get(cfg.get("transform"))
     if post is not None:

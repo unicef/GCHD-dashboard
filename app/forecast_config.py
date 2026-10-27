@@ -22,7 +22,11 @@ REDUCERS = {
     "max":    "Peak over period",
     "min":    "Minimum over period",
     "median": "Median over period",
+    # Daily totals (UTC days) — needs `steps_per_day`; see forecast_core._daily.
+    "daily_mean": "Average daily total",
+    "daily_max":  "Wettest day (highest daily total)",
 }
+DAILY_REDUCERS = ("daily_mean", "daily_max")
 
 # ── Entry schema ─────────────────────────────────────────────────────────────
 #   id                GEE ImageCollection id
@@ -49,6 +53,8 @@ REDUCERS = {
 #                     run and its full horizon would be mixed.
 #   accumulated       values are amounts per step: the window is (start, end] so
 #                     a step ending at 00:00 belongs to the previous day
+#   steps_per_day     images per complete UTC day; enables the daily reducers
+#                     (a day's total = mean step amount × steps_per_day)
 #   transform         key into forecast_core._TRANSFORMS for derived bands
 #   note              caveat shown under the dataset in the panel
 
@@ -58,9 +64,9 @@ FORECAST_DATASETS = [
         "id": "NOAA/GFS0P25", "name": "gfs_precip",
         "label": "Rainfall forecast (NOAA GFS)", "topic": "Rainfall",
         "kind": "forecast", "band": "total_precipitation_surface",
-        "reducers": ["sum", "max"], "max_span_days": 10, "default_span_days": 3,
-        "lag_days": 0,
-        "threshold": 50, "min": 0, "max": 400, "units": "mm",
+        "reducers": ["daily_max", "daily_mean"], "max_span_days": 10,
+        "default_span_days": 3, "lag_days": 0,
+        "threshold": 50, "min": 0, "max": 300, "units": "mm/day",
         "palette": ["#cfe8ff", "#8fcbff", "#1d7bff", "#0654be", "#00357d"],
         "scale": 27830,
         # Precipitation accumulates within each 6-hour block and resets
@@ -70,23 +76,25 @@ FORECAST_DATASETS = [
                      "value": list(range(6, 385, 6))}],
         "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
         "accumulated": True,
-        "note": "GFS runs 4x daily out to 16 days. Rainfall is accumulated over "
-                "the selected window.",
+        "steps_per_day": 4,
+        "note": "GFS runs 4x daily out to 16 days. Rainfall is totalled per UTC "
+                "day from the latest run.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
     },
     {
         "id": "NASA/GPM_L3/IMERG_V07", "name": "imerg_precip",
         "label": "Observed rainfall (GPM IMERG)", "topic": "Rainfall",
         "kind": "nrt", "band": "precipitation",
-        "reducers": ["sum", "max"], "max_span_days": 30, "default_span_days": 7,
-        "lag_days": 3,
-        "threshold": 100, "min": 0, "max": 800, "units": "mm",
+        "reducers": ["daily_max", "daily_mean"], "max_span_days": 30,
+        "default_span_days": 7, "lag_days": 3,
+        "threshold": 50, "min": 0, "max": 300, "units": "mm/day",
         "palette": ["#cfe8ff", "#8fcbff", "#1d7bff", "#0654be", "#00357d"],
         "scale": 11132,
         # Band is mm/hr on half-hourly images -> x0.5 per image to reach mm.
         "transform": "imerg_mm",
-        "note": "Half-hourly satellite rainfall, ~2 day latency. Converted from "
-                "mm/hr to total mm over the window.",
+        "steps_per_day": 48,
+        "note": "Half-hourly satellite rainfall, ~2 day latency. Totalled per "
+                "UTC day; missing half-hours are filled with the day's mean rate.",
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NASA_GPM_L3_IMERG_V07",
     },
 
