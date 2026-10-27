@@ -2741,7 +2741,7 @@ app.clientside_callback(
 def select_hazard_layer(all_clicks):
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     selected = triggered["index"]
     classes = [
         "layer-item active" if inp["id"]["index"] == selected else "layer-item"
@@ -2874,7 +2874,7 @@ def infra_thr_badge(values, ids, topics):
 def toggle_topic_group(all_clicks):
     triggered = ctx.triggered_id
     if not triggered:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     toggled = triggered["index"]
     body_styles    = []
     chevron_styles = []
@@ -6285,10 +6285,16 @@ def render_forecast_results(result, meta):
 
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
-    male    = int(round(result.get("total_population_male", 0) or 0))
-    fema    = int(round(result.get("total_population_female", 0) or 0))
+    # Boys/girls exposed; *_t are region totals.
+    male    = int(round(result.get("exposed_male", 0) or 0))
+    fema    = int(round(result.get("exposed_female", 0) or 0))
+    male_t  = int(round(result.get("total_population_male", 0) or 0))
+    fema_t  = int(round(result.get("total_population_female", 0) or 0))
     pct     = (exposed / total * 100) if total else 0
     units   = meta.get("units", "")
+
+    def _share(part, whole):
+        return (part / whole * 100) if whole else 0
     thr_txt = f"{meta['threshold']:g}" + (f" {units}" if units else "")
 
     export = {
@@ -6299,7 +6305,8 @@ def render_forecast_results(result, meta):
         "aggregation": meta["reducer"], "threshold": meta["threshold"],
         "threshold_units": units, "images_in_window": meta["n_images"],
         "children_exposed": exposed, "total_children": total,
-        "male": male, "female": fema,
+        "boys_exposed": male, "girls_exposed": fema,
+        "total_boys": male_t, "total_girls": fema_t,
         "pct_exposed": round(pct, 2),
         "population_grid_m": meta["pop_res"],
         "computed_utc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -6350,15 +6357,23 @@ def render_forecast_results(result, meta):
                 html.Span("└ Boys", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{male:,}", className="info-val",
-                          style={"color": "var(--mid)", "fontWeight": "500"}),
+                html.Span([
+                    html.Span(f"{male:,}", className="info-val",
+                              style={"color": "var(--mid)", "fontWeight": "500"}),
+                    html.Span(f" ({_share(male, male_t):.1f}% of boys)",
+                              className="info-pct"),
+                ]),
             ]),
             html.Div(className="info-row", children=[
                 html.Span("└ Girls", className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
-                html.Span(f"{fema:,}", className="info-val",
-                          style={"color": "var(--mid)", "fontWeight": "500"}),
+                html.Span([
+                    html.Span(f"{fema:,}", className="info-val",
+                              style={"color": "var(--mid)", "fontWeight": "500"}),
+                    html.Span(f" ({_share(fema, fema_t):.1f}% of girls)",
+                              className="info-pct"),
+                ]),
             ]),
         ]),
         # Provenance — the window and image count travel with the number.
@@ -6695,11 +6710,13 @@ def elnino_extra_toggle(picks, eyes, on, eye_ids, current):
     re-renders: without it, rebuilding the rows would silently toggle the
     layer.
     """
+    # PreventUpdate, not no_update: a bare no_update is invalid for the
+    # wildcard (ALL) output in Dash 4.
     if not any(c for c in ((picks or []) + (eyes or [])) if c):
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     t = ctx.triggered_id
     if not t:
-        return no_update, no_update
+        raise dash.exceptions.PreventUpdate
     if t.get("type") == "en-layer-eye":
         on = not bool(on) if t["index"] == current else True
     else:

@@ -441,10 +441,14 @@ def compute_forecast_exposure(name, start, end, reducer, threshold,
         name, start, end, reducer, custom_id, custom_band)
 
     # Strict > matches _exposed_for_hazard in gee_core.
-    exposed = childpop.updateMask(layer.gt(threshold)).rename("exposed")
+    mask = layer.gt(threshold)
+    exposed = childpop.updateMask(mask).rename("exposed")
 
     combined = (
         ee.Image.cat([exposed])
+        # Boys/girls exposed; the totals below are the denominators.
+        .addBands(childpop_m.updateMask(mask).rename("exposed_male"))
+        .addBands(childpop_f.updateMask(mask).rename("exposed_female"))
         .addBands(childpop.rename("total_population"))
         .addBands(childpop_m.rename("total_population_male"))
         .addBands(childpop_f.rename("total_population_female"))
