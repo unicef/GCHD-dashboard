@@ -268,8 +268,8 @@ TABS = [
 
 TAB_BY_KEY = {t["key"]: t for t in TABS}
 
-# Observed and Forecast are two tabs over one shared control stack and one set
-# of map layers, so anything keyed on "the forecast tab" must accept either.
+# Observed and Forecast reuse one control block (fc_controls) and one set of
+# map layers, reset on every switch; code serving that block accepts either.
 FORECAST_TABS = ("forecast", "observed")
 
 
@@ -996,13 +996,8 @@ _FC_CAVEAT = (
 
 
 def tab_observed():
-    """Recently observed (near-real-time) hazards.
-
-    Carries only its own dataset list. The window / region / threshold controls
-    and every store live once in tab_forecast() — Dash ids must be unique, so
-    they cannot be duplicated per pane — and are shared by both tabs, with the
-    active tab supplying the dataset `kind`.
-    """
+    """Recently observed (near-real-time) hazards: header and dataset list.
+    The rest of the workflow is fc_controls(), shown below it."""
     return html.Div(id="tab-observed", style={"display": "none"}, children=[
         tab_header("observed"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
@@ -1016,9 +1011,6 @@ def tab_observed():
         html.Div(id="observed-list-wrap", children=[
             html.Div(id="observed-dataset-list", className="layer-list"),
         ]),
-        html.Div("Set the window, region and threshold on the Forecast tab — "
-                 "the controls are shared between both tabs.",
-                 className="ps-caption", style={"padding": "10px 16px"}),
     ])
 
 
@@ -1079,7 +1071,17 @@ def tab_forecast():
                 ]),
             ]),
         ]),
+    ])
 
+
+def fc_controls():
+    """Window, region, threshold, results and stores for Observed AND Forecast.
+
+    One instance (Dash ids are unique), placed after both panes and shown under
+    whichever of the two is open. Switching between them resets it, so each tab
+    starts clean (forecast_reset_on_tab).
+    """
+    return html.Div(id="fc-controls", style={"display": "none"}, children=[
         # Selected-dataset summary — badge, caveat, catalog link.
         html.Div(id="forecast-selected-wrap", style={"display": "none"},
                  children=[
@@ -2167,6 +2169,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_infrastructure(),
             tab_observed(),
             tab_forecast(),
+            fc_controls(),
             tab_elnino(),
             tab_ai(),
         ]),
@@ -2472,11 +2475,6 @@ def leave_guard(*args):
     if not dest or dest == current:
         raise dash.exceptions.PreventUpdate
 
-    # Observed and Forecast share one control stack and one set of layers, so
-    # moving between them loses nothing and needs no confirmation.
-    if {dest, current} <= set(FORECAST_TABS):
-        return dest, None, hidden, no_update
-
     entry = _RESULT_STORES.get(current)
     key = {"observed": "forecast"}.get(current, current)
     if not entry or not live.get(key):
@@ -2540,9 +2538,13 @@ def clear_on_leave(tab):
     Everything else is cleared unconditionally — that is what stops a previous
     section's raster lingering under the new one, and emptying the viz stores
     clears the legend, which is driven from them.
+
+    Observed and Forecast are separate sections over shared layers, so those
+    are always cleared; their preview follows the dataset selection, not
+    store-tab, so there is no race (forecast_reset_on_tab).
     """
     keep_elnino   = tab == "elnino"
-    keep_forecast = tab in FORECAST_TABS
+    keep_forecast = False
     keep_infra    = tab == "infrastructure"
     keep_analysis = tab == "analysis"
     blank = lambda keep: no_update if keep else ""
@@ -5906,6 +5908,34 @@ def forecast_dataset_params(dataset, asset):
             reducers, (cfg.get("reducers") or ["mean"])[0],
             default_thr, lo, hi, step, lo, hi, default_thr, step, marks,
             cfg.get("units", ""))
+
+
+# ── Observed / Forecast: one control block, reset per tab ────────────────────
+
+@app.callback(
+    Output("fc-controls", "style"),
+    Input("store-tab",    "data"),
+)
+def forecast_show_controls(tab):
+    return {"display": "block" if tab in FORECAST_TABS else "none"}
+
+
+@app.callback(
+    Output("forecast-dataset-select", "value", allow_duplicate=True),
+    Output("store-forecast-asset",    "data", allow_duplicate=True),
+    Output("store-forecast-result",   "data", allow_duplicate=True),
+    Output("forecast-results-panel",  "children", allow_duplicate=True),
+    Output("forecast-asset-input",    "value"),
+    Input("store-tab",                "data"),
+    prevent_initial_call=True,
+)
+def forecast_reset_on_tab(tab):
+    """Entering Observed or Forecast starts clean, so neither tab inherits the
+    other's dataset, parameters or results. The params section, preview layer
+    and asset status all follow the cleared selection."""
+    if tab not in FORECAST_TABS:
+        raise dash.exceptions.PreventUpdate
+    return None, None, None, None, ""
 
 
 # ── Dataset segment switch + row list ────────────────────────────────────────
