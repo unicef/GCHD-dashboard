@@ -208,61 +208,56 @@ def _elnino_period_options():
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Tab registry — the single source of truth for the nav rail.
+# Navigation registry — phases, views and panes.
 #
-# Order here IS the visual order of the sidebar. Everything that used to be
-# duplicated across four sites (the nav_btn calls, the #panel children, and
-# switch_tab's Output list + id->key dict) is now derived from this table, so
-# adding or reordering a tab is a one-line edit instead of a four-site edit
-# whose mistakes only show up at runtime as a tab that silently won't switch.
+# Three levels, each derived from the table above it:
+#   PHASES - the global switch under the panel title (Preparedness, Early
+#            Warning, Damage Assessment). Sets the rail's contents and accent.
+#   VIEWS  - the rail buttons of a phase. A view with several segments shows a
+#            segmented control at the top of the panel (e.g. Observed|Forecast).
+#   TABS   - the panes. Each segment opens one pane, and store-tab holds its
+#            key. Pane keys are load-bearing (store-tab's default, and ~30
+#            callbacks compare against them), so they never change with labels.
 #
-# `key`   - internal tab id held in store-tab. NOT the label: `hazard` in
-#           particular is load-bearing (store-tab's default, and several
-#           callbacks compare against it), so it stays put across renames.
-# `label` - rail text. CSS uppercases it (.nav-label), so casing here is free.
-# `title` / `desc` - the pane's own .ph header, rendered by tab_header().
+# Two views may share a pane: EW Visualization and EW Pop analysis both open
+# the Observed/Forecast panes, and store-view decides whether the region and
+# compute steps of fc_controls are shown. Moving between them keeps the
+# dataset selection, which is what carries a previewed layer into analysis.
 # ---------------------------------------------------------------------------
 
 TABS = [
-    {"key": "hazard",         "btn": "btn-hazard",   "pane": "tab-hazard",
-     "icon": "bi bi-layers",         "label": "hazard layers",
+    {"key": "hazard",         "pane": "tab-hazard",
      "title": "Hazard Layers",
      "desc": "Select a layer to show the occurrence probability of each type of hazard"},
-    {"key": "mh",             "btn": "btn-mh",       "pane": "tab-mh",
-     "icon": "bi bi-stack",          "label": "Multi hazard",
+    {"key": "mh",             "pane": "tab-mh",
      "title": "Multi Hazard Indicators",
      "desc": "Display areas exposed to multiple hazards"},
-    {"key": "exposure",       "btn": "btn-exposure", "pane": "tab-exposure",
-     "icon": "bi bi-people",         "label": "Pop Exposure",
+    {"key": "exposure",       "pane": "tab-exposure",
      "title": "Children's Exposure",
      "desc": "Display child population exposed to each type of hazard at "
              "different thresholds"},
-    {"key": "analysis",       "btn": "btn-analysis", "pane": "tab-analysis",
-     "icon": "bi bi-bar-chart-line", "label": "Pop Analysis",
+    {"key": "analysis",       "pane": "tab-analysis",
      "title": "Exposure Analysis",
      "desc": "Compute number of children exposed by admin unit"},
-    {"key": "infrastructure", "btn": "btn-infra",    "pane": "tab-infrastructure",
-     "icon": "bi bi-buildings",      "label": "Infra Analysis",
+    {"key": "infrastructure", "pane": "tab-infrastructure",
      "title": "Infrastructure Analysis",
      "desc": "Compute number of facilities exposed, and number of children "
              "affected by admin unit"},
-    {"key": "observed",       "btn": "btn-observed", "pane": "tab-observed",
-     "icon": "bi bi-cloud-sun",      "label": "Observed",
+    {"key": "observed",       "pane": "tab-observed",
      "title": "Observed Hazards",
-     "desc": "Compute number of children recently experiencing each type of "
-             "hazard by admin region (under development)"},
-    {"key": "forecast",       "btn": "btn-forecast", "pane": "tab-forecast",
-     "icon": "bi bi-cloud-drizzle",  "label": "Forecast",
+     "desc": "Hazards recently recorded by near-real-time satellite and "
+             "reanalysis data (under development)"},
+    {"key": "forecast",       "pane": "tab-forecast",
      "title": "Forecast Hazards",
-     "desc": "Compute number of children forecast to experience each type of "
-             "hazard by admin region (under development)"},
-    {"key": "elnino",         "btn": "btn-elnino",   "pane": "tab-elnino",
-     "icon": "bi bi-thermometer-sun", "label": "El Niño",
+     "desc": "Hazards forecast for the days ahead (under development)"},
+    {"key": "ewinfra",        "pane": "tab-ewinfra",
+     "title": "Infrastructure Analysis",
+     "desc": "Facilities exposed to observed and forecast hazards"},
+    {"key": "elnino",         "pane": "tab-elnino",
      "title": "El Niño Seasonal Outlook",
      "desc": "Explore the seasonal rainfall outlook and compute the number of "
              "children in areas with a dry or wet signal"},
-    {"key": "ai",             "btn": "btn-ai",       "pane": "tab-ai",
-     "icon": "bi bi-robot",          "label": "AI",
+    {"key": "ai",             "pane": "tab-ai",
      "title": "AI Assistant",
      "desc": "Ask about hazard layers or child exposure"},
 ]
@@ -273,10 +268,113 @@ TAB_BY_KEY = {t["key"]: t for t in TABS}
 # map layers, reset on every switch; code serving that block accepts either.
 FORECAST_TABS = ("forecast", "observed")
 
+PHASES = [
+    {"key": "prep",   "slug": "preparedness",      "label": "Preparedness",
+     "icon": "bi bi-shield-check", "enabled": True,
+     "badge": "Historical hazard data"},
+    {"key": "ew",     "slug": "early-warning",     "label": "Early Warning",
+     "icon": "bi bi-broadcast",    "enabled": True,
+     "badge": "Live hazard data"},
+    {"key": "damage", "slug": "damage-assessment", "label": "Damage",
+     "icon": "bi bi-clipboard2-pulse", "enabled": False,
+     "badge": ""},
+]
+PHASE_BY_KEY = {p["key"]: p for p in PHASES}
+
+_seg = lambda tab, slug=None, label=None: {"tab": tab, "slug": slug, "label": label}
+_EW_SEGMENTS = [_seg("observed", "observed", "Observed"),
+                _seg("forecast", "forecast", "Forecast")]
+
+# `phase` None = shown in every phase (the AI utility at the foot of the rail).
+VIEWS = [
+    {"key": "prep-vis",   "phase": "prep", "slug": "visualization",
+     "icon": "bi bi-layers",         "label": "Visualization",
+     "segments": [_seg("hazard",   "hazard",       "Hazard"),
+                  _seg("mh",       "multi-hazard", "Multi-hazard"),
+                  _seg("exposure", "exposure",     "Exposure")]},
+    {"key": "prep-pop",   "phase": "prep", "slug": "population",
+     "icon": "bi bi-people",         "label": "Pop analysis",
+     "segments": [_seg("analysis")]},
+    {"key": "prep-infra", "phase": "prep", "slug": "infrastructure",
+     "icon": "bi bi-buildings",      "label": "Infra analysis",
+     "segments": [_seg("infrastructure")]},
+    {"key": "ew-vis",     "phase": "ew",   "slug": "visualization",
+     "icon": "bi bi-layers",         "label": "Visualization",
+     "segments": _EW_SEGMENTS},
+    {"key": "ew-pop",     "phase": "ew",   "slug": "population",
+     "icon": "bi bi-people",         "label": "Pop analysis",
+     "segments": _EW_SEGMENTS},
+    {"key": "ew-infra",   "phase": "ew",   "slug": "infrastructure",
+     "icon": "bi bi-buildings",      "label": "Infra analysis",
+     "segments": [_seg("ewinfra")], "soon": True},
+    {"key": "ew-seasonal", "phase": "ew",  "slug": "seasonal",
+     "icon": "bi bi-thermometer-sun", "label": "Seasonal",
+     "segments": [_seg("elnino")]},
+    {"key": "ai",         "phase": None,   "slug": "assistant",
+     "icon": "bi bi-robot",          "label": "AI",
+     "segments": [_seg("ai")]},
+]
+VIEW_BY_KEY = {v["key"]: v for v in VIEWS}
+SEGMENTED_VIEWS = [v for v in VIEWS if len(v["segments"]) > 1]
+
+
+def view_tabs(view_key):
+    return [s["tab"] for s in VIEW_BY_KEY[view_key]["segments"]]
+
+
+def default_nav(phase):
+    view = next(v for v in VIEWS if v["phase"] == phase)
+    return {"phase": phase, "view": view["key"],
+            "tab": view["segments"][0]["tab"]}
+
+
+DEFAULT_NAV = default_nav("prep")
+
+
+def nav_to_path(nav):
+    """'/<phase>/<view>[/<segment>]' relative to the app's base pathname."""
+    view = VIEW_BY_KEY[nav["view"]]
+    parts = [PHASE_BY_KEY[nav["phase"]]["slug"], view["slug"]]
+    seg = next(s for s in view["segments"] if s["tab"] == nav["tab"])
+    if seg["slug"]:
+        parts.append(seg["slug"])
+    return "/" + "/".join(parts)
+
+
+def nav_from_path(rel):
+    """Inverse of nav_to_path; None for an unknown or empty path. A missing
+    segment falls back to the view's first one."""
+    parts = [p for p in (rel or "").strip("/").split("/") if p]
+    if not parts:
+        return None
+    phase = next((p for p in PHASES if p["slug"] == parts[0] and p["enabled"]),
+                 None)
+    if not phase:
+        return None
+    if len(parts) == 1:
+        return default_nav(phase["key"])
+    view = next((v for v in VIEWS if v["slug"] == parts[1]
+                 and v["phase"] in (phase["key"], None)), None)
+    if not view:
+        return None
+    seg = next((s for s in view["segments"]
+                if len(parts) > 2 and s["slug"] == parts[2]),
+               view["segments"][0])
+    return {"phase": phase["key"], "view": view["key"], "tab": seg["tab"]}
+
+
+def nav_label(nav):
+    view = VIEW_BY_KEY[nav["view"]]
+    seg = next(s for s in view["segments"] if s["tab"] == nav["tab"])
+    parts = [PHASE_BY_KEY[nav["phase"]]["label"], view["label"]]
+    if seg["label"]:
+        parts.append(seg["label"])
+    return " › ".join(parts)
+
 
 def tab_header(key):
-    """The .ph title/subtitle block for a pane, sourced from TABS so the rail
-    label and the pane header can never drift apart."""
+    """The .ph title/subtitle block for a pane, sourced from TABS so the
+    registry and the pane header can never drift apart."""
     t = TAB_BY_KEY[key]
     return html.Div(className="ph", children=[
         html.Div(t["title"], className="ph-title"),
@@ -284,13 +382,24 @@ def tab_header(key):
     ])
 
 
-def nav_btn(icon_cls, label, btn_id, active=False):
-    return html.Button(
-        [html.I(className=icon_cls), html.Span(label, className="nav-label")],
-        id=btn_id,
-        className="nav-btn active" if active else "nav-btn",
-        n_clicks=0,
-    )
+def rail_btn_class(view, nav):
+    cls = ["nav-btn"]
+    if view["key"] == nav["view"]:
+        cls.append("active")
+    if view["phase"] not in (None, nav["phase"]):
+        cls.append("off-phase")
+    if view.get("soon"):
+        cls.append("soon")
+    return " ".join(cls)
+
+
+def nav_btn(view, nav):
+    children = [html.I(className=view["icon"]),
+                html.Span(view["label"], className="nav-label")]
+    if view.get("soon"):
+        children.append(html.Span("soon", className="nav-soon"))
+    return html.Button(children, id=f"nav-{view['key']}",
+                       className=rail_btn_class(view, nav), n_clicks=0)
 
 
 def sidebar():
@@ -329,9 +438,55 @@ def sidebar():
             }
         ),
         html.Div(className="sb-nav", children=[
-            nav_btn(t["icon"], t["label"], t["btn"], active=(i == 0))
-            for i, t in enumerate(TABS)
+            nav_btn(v, DEFAULT_NAV) for v in VIEWS if v["phase"]
         ]),
+        html.Div(className="sb-nav sb-foot", children=[
+            nav_btn(v, DEFAULT_NAV) for v in VIEWS if not v["phase"]
+        ]),
+    ])
+
+
+def phase_btn_class(phase, nav):
+    return "phase-btn active" if phase["key"] == nav["phase"] else "phase-btn"
+
+
+def seg_btn_class(view_key, tab, nav):
+    on = view_key == nav["view"] and tab == nav["tab"]
+    return "view-seg active" if on else "view-seg"
+
+
+def panel_head():
+    """Title, phase switch and the active view's segments — pinned at the top
+    of the panel so the phase and view stay visible while the pane scrolls."""
+    return html.Div(id="panel-head", children=[
+        html.Div("Global Child Hazard Database", className="panel-title"),
+        html.Div(className="phase-switch", role="tablist", children=[
+            html.Button(
+                [html.I(className=p["icon"]),
+                 html.Span(p["label"], className="phase-label"),
+                 *([] if p["enabled"] else
+                   [html.Span("soon", className="phase-soon")])],
+                id=f"phase-{p['key']}", n_clicks=0,
+                className=phase_btn_class(p, DEFAULT_NAV),
+                disabled=not p["enabled"],
+                title=("" if p["enabled"] else
+                       "Damage Assessment — planned, not yet available"),
+            )
+            for p in PHASES
+        ]),
+        *[html.Div(
+            id=f"segbar-{v['key']}", className="view-segbar",
+            style={"display": "flex" if v["key"] == DEFAULT_NAV["view"]
+                   else "none"},
+            children=[
+                html.Button(s["label"], n_clicks=0,
+                            id={"type": "seg-btn", "view": v["key"],
+                                "tab": s["tab"]},
+                            className=seg_btn_class(v["key"], s["tab"],
+                                                    DEFAULT_NAV))
+                for s in v["segments"]
+            ])
+          for v in SEGMENTED_VIEWS],
     ])
 
 
@@ -1126,6 +1281,18 @@ def fc_controls():
                          style={"marginTop": "8px"}),
             ]),
 
+            # Visualization mode stops here and hands over to Pop analysis,
+            # which keeps the dataset, window and aggregation chosen above.
+            html.Div(id="fc-goto-wrap", className="ps", children=[
+                html.Button([html.I(className="bi bi-people"),
+                             "  Analyse children exposed  →"],
+                            id="fc-goto-analysis", className="ps-btn",
+                            n_clicks=0),
+            ]),
+
+            # Steps 4-6 and Compute: shown in Pop analysis mode only (CSS on
+            # #fc-controls.fc-mode-vis).
+            html.Div(id="fc-analysis-part", children=[
             # 4. Country — only now, once the layer is visible on the map.
             html.Div(className="ps", children=[
                 html.Div("4. Select country / territory", className="ps-label"),
@@ -1173,6 +1340,7 @@ def fc_controls():
                          "strictly greater than this threshold.",
                          className="ps-caption"),
                 html.Div(id="forecast-threshold-source", className="ps-caption"),
+            ]),
             ]),
         ]),
 
@@ -1632,6 +1800,27 @@ def tab_elnino():
     ])
 
 
+def tab_ewinfra():
+    return html.Div(id="tab-ewinfra", style={"display": "none"}, children=[
+        tab_header("ewinfra"),
+        html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
+                 children=[
+            html.Div("Coming soon", className="hi-label",
+                     style={"marginBottom": "6px"}),
+            html.P([
+                "Facility exposure to observed and forecast hazards is under "
+                "development. It will reuse the Preparedness infrastructure "
+                "analysis with the hazard layer chosen under ",
+                html.Strong("Early Warning › Visualization"), ".",
+            ], className="exposure-method-p"),
+            html.P([
+                "For facility exposure to the historical hazard catalogue, use ",
+                html.Strong("Preparedness › Infra analysis"), ".",
+            ], className="exposure-method-p", style={"marginBottom": "0"}),
+        ]),
+    ])
+
+
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
         tab_header("ai"),
@@ -1705,6 +1894,9 @@ def map_component():
             html.Div(className="map-loading-spinner"),
             html.Span("Loading layer…", className="map-loading-text"),
         ]),
+        # Which phase and hazard source the map is showing, so a forecast is
+        # never mistaken for the historical catalogue (see update_mode_badge).
+        html.Div(id="map-mode-badge", className="map-mode-badge"),
         # Unified floating legend — every tab renders into this one overlay
         # (see render_map_legend). Collapsible via the header chevron.
         html.Div(id="map-legend", className="map-legend",
@@ -1962,7 +2154,22 @@ def _login_page():
 app.layout = html.Div(id="app-root", children=[
     # ── Stores ──
     dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
-    dcc.Store(id="store-tab",           data="hazard"),
+    dcc.Location(id="url", refresh=False),
+    dcc.Store(id="store-tab",           data=DEFAULT_NAV["tab"]),
+    # Rail button (VIEWS key) and phase; store-tab alone can't tell EW
+    # Visualization from EW Pop analysis, which share the Observed/Forecast panes.
+    dcc.Store(id="store-view",          data=DEFAULT_NAV["view"]),
+    dcc.Store(id="store-phase",         data=DEFAULT_NAV["phase"]),
+    # Last pane per view and last view per phase, so returning to a phase or
+    # view lands where the user left it: {"views": {..}, "phases": {..}}.
+    dcc.Store(id="store-last-nav",      data={"views": {}, "phases": {}}),
+    dcc.Store(id="store-url-synced",    data=None),
+    dcc.Store(id="store-nav-paths",     data={
+        f"{p['key']}|{v['key']}|{sg['tab']}": _BASE_PATHNAME.rstrip("/") + nav_to_path(
+            {"phase": p["key"], "view": v["key"], "tab": sg["tab"]})
+        for p in PHASES if p["enabled"]
+        for v in VIEWS if v["phase"] in (p["key"], None)
+        for sg in v["segments"]}),
     dcc.Store(id="store-hazard-layer",  data=None),
     dcc.Store(id="store-exposure-topic",data=None),
     dcc.Store(id="store-country",       data=None),
@@ -2141,7 +2348,7 @@ app.layout = html.Div(id="app-root", children=[
     ]),
 
     # ── Main app ──
-    html.Div(id="main-app", style={
+    html.Div(id="main-app", className=f"phase-{DEFAULT_NAV['phase']}", style={
         "display": "grid",
         "gridTemplateColumns": "77px 320px 1fr",
         "gridTemplateRows": "100vh",
@@ -2151,19 +2358,9 @@ app.layout = html.Div(id="app-root", children=[
     }, children=[
         sidebar(),
         html.Div(id="panel", children=[
-            html.Div(
-                "Global Child Hazard Database",
-                style={
-                    "padding": "14px 16px",
-                    "fontSize": "0.95rem",
-                    "fontWeight": "700",
-                    "color": "#1CABE2",
-                    "borderBottom": "1px solid var(--border)",
-                    "letterSpacing": "0.01em",
-                }
-            ),
-            # Order mirrors TABS so the file reads in rail order; panes are
-            # display-toggled, so DOM order itself is not visually significant.
+            panel_head(),
+            # Order mirrors TABS; panes are display-toggled, so DOM order
+            # itself is not visually significant.
             tab_hazard_layers(),
             tab_mh(),
             tab_exposure(),
@@ -2172,6 +2369,7 @@ app.layout = html.Div(id="app-root", children=[
             tab_observed(),
             tab_forecast(),
             fc_controls(),
+            tab_ewinfra(),
             tab_elnino(),
             tab_ai(),
         ]),
@@ -2363,41 +2561,64 @@ def restore_embargo_state(accepted_forever):
     return {"display": "none"} if accepted_forever else no_update
 
 
-# ── Tab switching ─────────────────────────────────────────────────────────────
+# ── Navigation: phase → view → pane ──────────────────────────────────────────
 
 @app.callback(
-    Output("store-tab", "data"),
-    *[Output(t["btn"],  "className") for t in TABS],
-    *[Output(t["pane"], "style")     for t in TABS],
+    Output("store-tab",      "data"),
+    Output("store-view",     "data"),
+    Output("store-phase",    "data"),
+    Output("store-last-nav", "data"),
+    Output("main-app",       "className"),
+    Output("fc-controls",    "className"),
+    *[Output(f"nav-{v['key']}",    "className") for v in VIEWS],
+    *[Output(f"phase-{p['key']}",  "className") for p in PHASES],
+    *[Output(f"segbar-{v['key']}", "style")     for v in SEGMENTED_VIEWS],
+    Output({"type": "seg-btn", "view": ALL, "tab": ALL}, "className"),
+    *[Output(t["pane"], "style") for t in TABS],
     Output("hazard-info-panel", "style", allow_duplicate=True),
     Input("store-pending-tab", "data"),
-    State("store-tab", "data"),
+    State("store-tab",         "data"),
+    State("store-view",        "data"),
+    State("store-phase",       "data"),
+    State("store-last-nav",    "data"),
     prevent_initial_call=True,
 )
-def switch_tab(tab, current):
-    """Show one pane and highlight its rail button.
+def switch_tab(nav, cur_tab, cur_view, cur_phase, last):
+    """Render one navigation state: phase switch, rail, segments and pane.
 
-    Outputs are generated from TABS, so the arity can never drift out of sync
-    with the rail the way a hand-maintained Output list could — a mismatch
-    there used to fail silently at click time rather than at import.
-
-    The rail buttons no longer reach here directly: leave_guard owns every
-    switch and writes the destination to store-pending-tab, straight through on
-    a plain click or after confirmation when results would be lost. One writer
-    is what stops the pane changing behind an open dialog.
+    Outputs are generated from PHASES / VIEWS / TABS, so their arity can never
+    drift from the registry. leave_guard is the only writer of
+    store-pending-tab, which is what stops the pane changing behind an open
+    dialog. Unchanged stores return no_update: several callbacks clear map
+    layers on store-tab / store-view, and Dash fires them on any write.
     """
-    if not tab:
+    if not nav:
         raise dash.exceptions.PreventUpdate
+    tab, view, phase = nav["tab"], nav["view"], nav["phase"]
 
-    cls = lambda k: "nav-btn active" if tab == k else "nav-btn"
+    last = last or {}
+    last = {
+        "views":  {**last.get("views", {}), view: tab},
+        "phases": {**last.get("phases", {}),
+                   **({phase: view} if VIEW_BY_KEY[view]["phase"] else {})},
+    }
+    seg_out = next(o for o in ctx.outputs_list if isinstance(o, list))
     vis = lambda k: {"display": "block"} if tab == k else {"display": "none"}
+    same = lambda new, old: no_update if new == old else new
     # The popover serves the Layers list and the Forecast dataset info
     # button, so it must survive a switch to either.
     info_panel = (no_update if tab in ("hazard", *FORECAST_TABS)
                   else {"display": "none"})
     return (
-        tab,
-        *[cls(t["key"]) for t in TABS],
+        same(tab, cur_tab), same(view, cur_view), same(phase, cur_phase),
+        last,
+        f"phase-{phase}",
+        "fc-mode-vis" if view == "ew-vis" else "fc-mode-analysis",
+        *[rail_btn_class(v, nav) for v in VIEWS],
+        *[phase_btn_class(p, nav) for p in PHASES],
+        *[{"display": "flex" if v["key"] == view else "none"}
+          for v in SEGMENTED_VIEWS],
+        [seg_btn_class(o["id"]["view"], o["id"]["tab"], nav) for o in seg_out],
         *[vis(t["key"]) for t in TABS],
         info_panel,
     )
@@ -2423,15 +2644,59 @@ _RESULT_STORES = {
 }
 
 
+def _nav_dest(trig, cur, last, pathname):
+    """Where a nav trigger leads, as {phase, view, tab}; None = nowhere new.
+
+    A rail click keeps the current pane when the target view also has it
+    (EW Visualization ↔ Pop analysis), so a previewed dataset carries over;
+    otherwise it returns to the pane last used in that view.
+    """
+    views_last  = (last or {}).get("views", {})
+    phases_last = (last or {}).get("phases", {})
+
+    def resume(view_key, phase):
+        tabs = view_tabs(view_key)
+        tab = (cur["tab"] if cur["tab"] in tabs
+               else views_last.get(view_key) if views_last.get(view_key) in tabs
+               else tabs[0])
+        return {"phase": VIEW_BY_KEY[view_key]["phase"] or phase,
+                "view": view_key, "tab": tab}
+
+    if trig in (None, "url"):
+        return nav_from_path(app.strip_relative_path(pathname or "") or "")
+    if trig == "fc-goto-analysis":
+        return {**cur, "view": "ew-pop"}
+    if isinstance(trig, dict):
+        view = VIEW_BY_KEY[trig["view"]]
+        return {"phase": view["phase"] or cur["phase"],
+                "view": view["key"], "tab": trig["tab"]}
+    if trig.startswith("phase-"):
+        phase = trig[len("phase-"):]
+        if phase == cur["phase"] and VIEW_BY_KEY[cur["view"]]["phase"]:
+            return None
+        view_key = phases_last.get(phase)
+        return resume(view_key, phase) if view_key else default_nav(phase)
+    if trig.startswith("nav-"):
+        return resume(trig[len("nav-"):], cur["phase"])
+    return None
+
+
 @app.callback(
     Output("store-pending-tab",  "data"),
     Output("store-leave-dest",   "data"),
     Output("leave-gate",         "style"),
     Output("leave-gate-body",    "children"),
-    *[Input(t["btn"], "n_clicks") for t in TABS],
+    *[Input(f"nav-{v['key']}",   "n_clicks") for v in VIEWS],
+    *[Input(f"phase-{p['key']}", "n_clicks") for p in PHASES if p["enabled"]],
+    Input({"type": "seg-btn", "view": ALL, "tab": ALL}, "n_clicks"),
+    Input("fc-goto-analysis",    "n_clicks"),
+    Input("url",                 "pathname"),
     Input("leave-confirm-btn",   "n_clicks"),
     Input("leave-cancel-btn",    "n_clicks"),
     State("store-tab",           "data"),
+    State("store-view",          "data"),
+    State("store-phase",         "data"),
+    State("store-last-nav",      "data"),
     State("store-hazard-layer",  "data"),
     State("store-exposure-topic", "data"),
     State("store-analysis-viz",  "data"),
@@ -2439,21 +2704,23 @@ _RESULT_STORES = {
     State("store-forecast-viz",  "data"),
     State("store-elnino-viz",    "data"),
     State("store-leave-dest",    "data"),
-    prevent_initial_call=True,
+    # Not prevented: the initial call is what applies a deep-linked URL.
+    prevent_initial_call=False,
 )
 def leave_guard(*args):
-    """Decide every tab switch: straight through, or via a confirmation.
+    """Decide every navigation: straight through, or via a confirmation.
 
     The single writer of store-pending-tab, which switch_tab listens to. That
     one-writer rule is what stops the pane changing behind an open dialog.
     """
     # Read States by name rather than position: the nav Inputs are generated
-    # from TABS, so positional indices would silently shift the moment a tab is
-    # added — exactly the drift the TABS-driven outputs exist to prevent.
-    st        = ctx.states
-    current   = st.get("store-tab.data")
-    held      = st.get("store-leave-dest.data")
-    live      = {
+    # from the registry, so positional indices would shift with every view.
+    st      = ctx.states
+    cur     = {"tab":   st.get("store-tab.data"),
+               "view":  st.get("store-view.data"),
+               "phase": st.get("store-phase.data")}
+    held    = st.get("store-leave-dest.data")
+    live    = {
         "hazard":         st.get("store-hazard-layer.data"),
         "exposure":       st.get("store-exposure-topic.data"),
         "analysis":       st.get("store-analysis-viz.data"),
@@ -2461,8 +2728,8 @@ def leave_guard(*args):
         "forecast":       st.get("store-forecast-viz.data"),
         "elnino":         st.get("store-elnino-viz.data"),
     }
-    trig      = ctx.triggered_id
-    hidden    = {"display": "none"}
+    trig    = ctx.triggered_id
+    hidden  = {"display": "none"}
 
     if trig == "leave-cancel-btn":
         return no_update, None, hidden, no_update
@@ -2473,26 +2740,115 @@ def leave_guard(*args):
             raise dash.exceptions.PreventUpdate
         return held, None, hidden, no_update
 
-    dest = {t["btn"]: t["key"] for t in TABS}.get(trig)
-    if not dest or dest == current:
+    dest =_nav_dest(trig, cur, st.get("store-last-nav.data"),
+                     ctx.inputs.get("url.pathname"))
+    if not dest or dest == cur:
         raise dash.exceptions.PreventUpdate
 
-    entry = _RESULT_STORES.get(current)
-    key = {"observed": "forecast"}.get(current, current)
-    if not entry or not live.get(key):
-        return dest, None, hidden, no_update      # nothing to lose
+    entry = _RESULT_STORES.get(cur["tab"])
+    key = {"observed": "forecast"}.get(cur["tab"], cur["tab"])
+    moving = dest["tab"] != cur["tab"] or dest["view"] != cur["view"]
+    if not moving or not entry or not live.get(key):
+        return dest, None, hidden, no_update   # nothing to lose
 
     # Hold the destination WITHOUT writing store-pending-tab: writing it here
     # would switch the pane behind the dialog, which is the whole thing the
     # confirmation exists to prevent.
     _, what = entry
-    dest_label = TAB_BY_KEY[dest]["label"]
     body = [
         "This section is showing ", html.Strong(what),
-        f". Moving to {dest_label} clears the map layers and the results "
+        f". Moving to {nav_label(dest)} clears the map layers and the results "
         f"panel, and the calculation would have to be run again.",
     ]
     return no_update, dest, {"display": "flex"}, body
+
+
+# The URL follows navigation via history.pushState, which dcc.Location does
+# not observe: writing url.pathname from switch_tab would close a callback
+# cycle with leave_guard. Back/Forward still fire popstate into leave_guard.
+# A cancelled dialog re-pushes the section the user stayed in.
+app.clientside_callback(
+    """
+    function(tab, view, phase, _cancel, paths) {
+        const path = paths[phase + "|" + view + "|" + tab];
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, "", path);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("store-url-synced", "data"),
+    Input("store-tab",        "data"),
+    Input("store-view",       "data"),
+    Input("store-phase",      "data"),
+    Input("leave-cancel-btn", "n_clicks"),
+    State("store-nav-paths",  "data"),
+    prevent_initial_call=True,
+)
+
+
+@app.callback(
+    Output("forecast-exposed-tile",   "url",      allow_duplicate=True),
+    Output("forecast-selection-tile", "url",      allow_duplicate=True),
+    Output("store-forecast-viz",      "data",     allow_duplicate=True),
+    Output("store-forecast-result",   "data",     allow_duplicate=True),
+    Output("forecast-results-panel",  "children", allow_duplicate=True),
+    Output("store-ucode",             "data",     allow_duplicate=True),
+    Output("store-bounds",            "data",     allow_duplicate=True),
+    Output("store-country",           "data",     allow_duplicate=True),
+    Output("store-clicked-ucode",     "data",     allow_duplicate=True),
+    Output("store-clicked-name",      "data",     allow_duplicate=True),
+    Output("forecast-country-select", "value",    allow_duplicate=True),
+    Input("store-view",               "data"),
+    prevent_initial_call=True,
+)
+def forecast_clear_on_vis(view):
+    """EW Pop analysis → Visualization keeps the pane (store-tab does not
+    change, so clear_on_leave does not fire) but drops the computed results
+    and region, which Visualization has no controls for. The dataset, window
+    and preview stay."""
+    if view != "ew-vis":
+        raise dash.exceptions.PreventUpdate
+    return "", "", None, None, None, None, None, None, None, None, None
+
+
+@app.callback(
+    Output("map-mode-badge",          "children"),
+    Output("map-mode-badge",          "style"),
+    Input("store-phase",              "data"),
+    Input("store-tab",                "data"),
+    Input("forecast-dataset-select",  "value"),
+    Input("forecast-dates",           "start_date"),
+    Input("forecast-dates",           "end_date"),
+)
+def update_mode_badge(phase, tab, dataset, start, end):
+    """Phase + hazard source on the map. Text, not only the accent colour, so
+    Observed vs Forecast vs the historical catalogue is never ambiguous."""
+    if tab == "ai" or phase not in PHASE_BY_KEY:
+        return None, {"display": "none"}
+    p = PHASE_BY_KEY[phase]
+    source = {"observed": "Observed", "forecast": "Forecast",
+              "elnino": "Seasonal outlook"}.get(tab, p["badge"])
+    parts = [html.Span(p["label"], className="mmb-phase"),
+             html.Span(source, className="mmb-source")]
+    if tab in FORECAST_TABS and dataset:
+        parts.append(html.Span(dataset, className="mmb-detail"))
+        window = _fmt_window(start, end)
+        if window:
+            parts.append(html.Span(window, className="mmb-detail"))
+    return parts, {"display": "flex"}
+
+
+def _fmt_window(start, end):
+    try:
+        a = dt.date.fromisoformat(str(start)[:10])
+        b = dt.date.fromisoformat(str(end)[:10])
+    except (TypeError, ValueError):
+        return ""
+    if a == b:
+        return a.strftime("%d %b %Y")
+    left = a.strftime("%d %b" if a.year == b.year else "%d %b %Y")
+    return f"{left} – {b.strftime('%d %b %Y')}"
 
 
 @app.callback(
@@ -3650,7 +4006,7 @@ def on_map_click(click_data, level, country_ucode, last_click, tab):
     if not click_data or not level or not country_ucode:
         return no_update, no_update, no_update, no_update
     if level == "adm0 (Country)" or tab not in ("analysis", "infrastructure",
-                                                *FORECAST_TABS):
+                                                "elnino", *FORECAST_TABS):
         return no_update, no_update, no_update, no_update
     latlng = click_data.get("latlng")
     if not latlng:

@@ -1098,3 +1098,104 @@ body {
   border-left: 2px solid var(--cyan); }
 .en-layer-desc { font-size: .63rem; color: var(--mid); line-height: 1.45;
   margin-bottom: 6px; }
+
+/* ── Phase navigation ──────────────────────────────────────────────────────
+   #main-app carries phase-<key>; everything phase-coloured reads --accent.
+   Early Warning text uses a darker orange: #F26A21 on white is ~3:1. */
+#main-app            { --accent: var(--cyan); --accent-ink: var(--cyan);
+                       --accent-lt: rgba(28,171,226,0.15); }
+#main-app.phase-ew   { --accent: #F26A21; --accent-ink: #C4511A;
+                       --accent-lt: rgba(242,106,33,0.14); }
+
+#panel-head {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+#panel .ph { position: static; border-bottom-color: var(--accent); }
+.panel-title {
+  padding: 12px 16px 8px;
+  font-size: 0.95rem; font-weight: 700; letter-spacing: 0.01em;
+  color: var(--cyan);
+}
+
+.phase-switch {
+  display: flex; gap: 4px; margin: 0 12px 10px; padding: 3px;
+  background: var(--surf); border-radius: 8px;
+}
+.phase-btn {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 2px; border: none; border-radius: 6px;
+  background: transparent; color: var(--mid); cursor: pointer;
+  font-family: 'Source Sans Pro', sans-serif; font-size: 0.66rem; font-weight: 700;
+  line-height: 1.1; position: relative;
+  transition: background 0.15s, color 0.15s;
+}
+.phase-btn i { font-size: 0.95rem; }
+.phase-btn:hover:not(:disabled) { color: var(--hi); background: rgba(0,0,0,0.04); }
+.phase-btn.active {
+  background: var(--panel); color: var(--accent-ink);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.14), inset 0 -2px 0 var(--accent);
+}
+.phase-btn:disabled { color: var(--lo); cursor: not-allowed; opacity: 0.75; }
+.phase-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.phase-soon, .nav-soon {
+  font-size: 0.5rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--lo);
+}
+
+.view-segbar {
+  display: flex; gap: 0; margin: 0 12px 10px;
+  border: 1px solid var(--border2); border-radius: 6px; overflow: hidden;
+}
+.view-seg {
+  flex: 1 1 0; padding: 6px 4px; border: none;
+  border-left: 1px solid var(--border2);
+  background: var(--panel); color: var(--mid); cursor: pointer;
+  font-family: 'Source Sans Pro', sans-serif; font-size: 0.68rem; font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.view-seg:first-child { border-left: none; }
+.view-seg:hover { background: var(--panel-h); color: var(--hi); }
+.view-seg.active { background: var(--accent-lt); color: var(--accent-ink); font-weight: 700; }
+
+/* Rail: only the current phase's views; the AI utility sits at the foot. */
+.nav-btn.off-phase { display: none; }
+.nav-btn.active { background: var(--accent-lt); color: var(--accent-ink); }
+.nav-btn.soon { opacity: 0.7; }
+.sb-foot { margin-top: auto; border-top: 1px solid #d1d5db; padding-bottom: 8px; }
+
+/* EW Visualization shows the dataset, window and preview; Pop analysis adds
+   region, threshold and Compute. !important beats the callbacks' inline
+   display so the mode wins regardless of the steps' own state. */
+#fc-controls.fc-mode-vis #fc-analysis-part,
+#fc-controls.fc-mode-vis #forecast-badge-wrap,
+#fc-controls.fc-mode-vis #forecast-compute-wrap,
+#fc-controls.fc-mode-vis #forecast-results-loading,
+#fc-controls.fc-mode-analysis #fc-goto-wrap { display: none !important; }
+
+/* Map mode badge — top-left, clear of the zoom control and loading pill. */
+.map-mode-badge {
+  position: absolute; top: 14px; left: 14px; z-index: 650;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  max-width: calc(50% - 90px);
+  padding: 5px 10px 5px 5px; border-radius: 16px;
+  background: rgba(255,255,255,0.95); border: 1px solid var(--border2);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+  font-size: 0.66rem; color: var(--mid); pointer-events: none;
+}
+.mmb-phase {
+  padding: 2px 8px; border-radius: 10px;
+  background: var(--accent); color: #fff;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 0.58rem;
+}
+.mmb-source { font-weight: 700; color: var(--hi); }
+.mmb-detail::before { content: '·'; margin-right: 6px; color: var(--lo); }
+
+@media (max-width: 900px) {
+  .phase-label { font-size: 0.6rem; }
+  .map-mode-badge { max-width: calc(100% - 80px); }
+  .mmb-detail { display: none; }
+}

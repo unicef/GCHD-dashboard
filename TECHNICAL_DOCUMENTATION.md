@@ -74,9 +74,25 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 - **Boundary files handled client-side.** Uploaded GeoJSON is parsed, validated, and rendered on the browser. Only the geometry and a single name field are sent to the app server for GEE computation.
 - **Static hazards are cached for the server's lifetime; live data never is.** `gee_core.build_core_images()` is `@lru_cache(maxsize=1)` and holds the whole static hazard image graph. Anything parameterised by time is built on demand in `forecast_core` instead (see below).
 
+### Navigation: phases, views and panes
+
+`app.py` holds a three-level registry, and every navigation control and callback output is generated from it:
+
+- `PHASES`: the phase switch under the panel title (Preparedness, Early Warning, Damage Assessment). The phase sets the rail's contents and the accent colour (`#main-app.phase-<key>`, CSS `--accent`).
+- `VIEWS`: the rail buttons of each phase. A view with several `segments` shows a segmented control at the top of the panel.
+- `TABS`: the panes. A segment opens one pane, and `store-tab` holds its key. Pane keys are load-bearing (many callbacks compare against them) and never change with labels.
+
+`leave_guard` is the only writer of `store-pending-tab` (a `{phase, view, tab}` dict). It resolves rail, phase, segment, hand-off and URL triggers, and holds the destination behind a confirmation when results would be lost. `switch_tab` renders the state.
+
+**URL sync.** The URL follows navigation through `history.pushState` in a clientside callback. `dcc.Location` does not observe that, so there is no `url -> leave_guard -> switch_tab -> url` cycle; Back and Forward still reach `leave_guard` through `popstate`.
+
+**Shared panes.** EW Visualization and EW Pop analysis open the same Observed/Forecast panes. `store-view` sets the mode on `#fc-controls` (`fc-mode-vis` hides the region, threshold and Compute steps), so a previewed dataset carries over into analysis.
+
+The map's top-left badge names the phase and hazard source (and the dataset and window for Observed/Forecast).
+
 ### Observed & Forecast subsystem
 
-Two tabs, **Observed** and **Forecast**, share one dataset registry (`forecast_config.py`) and one exposure module (`forecast_core.py`); the `kind` field decides which tab lists a dataset. Each tab has its own controls and resets when entered. Design decisions:
+The **Observed** and **Forecast** segments of Early Warning share one dataset registry (`forecast_config.py`) and one exposure module (`forecast_core.py`); the `kind` field decides which tab lists a dataset. Each tab has its own controls and resets when entered. Design decisions:
 
 1. **Kept out of the static pipeline.** `build_core_images()` is cached once per server lifetime, so date-parameterised layers would poison it. `forecast_core` builds its own image per `(dataset, window, reducer)` behind a short TTL.
 2. **One model run per forecast.** GFS and CAMS hold overlapping runs. `_select_run` takes the latest run initialised at or before the window start, and images are filtered by valid time (`run` in config). The run is shown in the results and exported as `model_run`. GFS rainfall keeps only 6-hour block ends (it accumulates within each block).

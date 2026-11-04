@@ -6,16 +6,19 @@ A web application for visualising global child exposure to climate and geophysic
 
 ## Features
 
-| Tab | Description |
-|---|---|
-| **Hazard Layers** | Browse and display 20 individual hazard layers on an interactive world map |
-| **Children's Exposure** | View population of children (under 18) exposed to each hazard topic |
-| **Multi Hazard** | Multi Hazard Count (MHC) and Multi Hazard Intensity (MHI) combined indicators |
-| **Exposure Analysis** | Compute child exposure by country, province, or district; supports custom GeoJSON upload and GEE asset paths |
-| **Infrastructure** | Correlate schools, health facilities and water points with hazard footprints and child population |
-| **Observed** | Child exposure to recently observed conditions (GPM IMERG, ERA5-Land, MODIS LST, FIRMS, Sentinel-5P) over a user-selected date window |
-| **Forecast** | Child exposure to forecast conditions (NOAA GFS, CAMS) over a user-selected window, using a single model run; also accepts any pasted GEE Image/ImageCollection id |
-| **AI Assistant** | Gemini-powered assistant for natural language hazard queries (under development) |
+The app is organised by disaster-risk-management phase. A phase switch under the title selects the phase; the left rail shows that phase's tasks, and the views with several data sources show a segmented control at the top of the panel. Every view has its own URL (`/ew/<phase>/<view>[/<segment>]`), so it can be bookmarked and shared.
+
+| Phase | Rail view | Segments / description |
+|---|---|---|
+| **Preparedness** | Visualization | **Hazard** (20 hazard layers), **Multi-hazard** (MHC and MHI indicators), **Exposure** (children under 18 exposed to each hazard topic) |
+| | Pop analysis | Compute child exposure by country, province or district; supports custom GeoJSON upload and GEE asset paths |
+| | Infra analysis | Correlate schools, health facilities and water points with hazard footprints and child population |
+| **Early Warning** | Visualization | **Observed** (GPM IMERG, ERA5-Land, MODIS LST, FIRMS, Sentinel-5P) and **Forecast** (NOAA GFS, CAMS, or any pasted GEE Image/ImageCollection id) over a user-selected window |
+| | Pop analysis | Child exposure to the observed or forecast layer; keeps the dataset, window and aggregation chosen in Visualization |
+| | Infra analysis | Planned: facility exposure to observed and forecast hazards |
+| | Seasonal | El Niño seasonal rainfall and temperature outlook and children in areas with a dry or wet signal |
+| **Damage Assessment** | — | Planned |
+| All phases | AI | Gemini-powered assistant for natural language hazard queries (under development) |
 
 ### Hazard topics covered
 River Flood · Coastal Flood · Tropical Storm · Drought · Heatwave · Extreme Heat · Fire · Sand & Dust Storm · Air Pollution · Malaria · Landslide · Earthquake · Volcanoes
