@@ -20,3 +20,4 @@ scripts/iso3_mwater_review.csv
 scripts/el_nino/data/
 scripts/el_nino/docs/
 scripts/el_nino/*.xlsx
+scripts/out/
