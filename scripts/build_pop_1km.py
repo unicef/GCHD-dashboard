@@ -43,8 +43,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir, "app"))
 
 import ee                                              # noqa: E402
-from gee_core import initialize_gee                    # noqa: E402
-from config import POP_ASSET_TMPL                      # noqa: E402
+from core.gee import initialize_gee                    # noqa: E402
+from config.hazards import POP_ASSET_TMPL                      # noqa: E402
 
 # Only the under-18 classes: those are the ones forecast exposure reduces over.
 # The all-ages grids stay 100 m — nothing reads them at forecast scale.

@@ -1,13 +1,13 @@
 """Map legend: per-section specs, data layers and eye toggles."""
 import dash_leaflet as dl
-from config import (
+from config.hazards import (
     gradient_spec, HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, HAZARD_VIS_PALETTES,
     is_pop_layer, MHC_EXCLUDED_TOPICS, pop_class_of, POP_LAYER_MAP, POP_VIS,
     swatch_spec, TOPIC_COLORS, vis_gradient_spec,
 )
 from dash import ALL, ctx, html, Input, Output, State
-from elnino_config import EXPLORE_MAP, SIGNAL_MAP
-from gee_core import (
+from config.elnino import EXPLORE_MAP, SIGNAL_MAP
+from core.gee import (
     get_hazard_tile_url, get_pixel_score_percentile_tile_url,
     get_pixel_score_tile_url, get_population_tile_url,
     get_topic_count_tile_url, get_topic_tile_url_thr, INFRA_POP_VIS,
@@ -314,7 +314,7 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
 
 
 # ── Unified map legend overlay (top-left) ─────────────────────────────────────
-# Every tab writes a list of legend specs (plain dicts from config.py) into
+# Every tab writes a list of legend specs (plain dicts from config/hazards.py) into
 # store-legend; this single renderer turns them into DOM. Adding a legend for a
 # new layer is therefore data, not markup.
 

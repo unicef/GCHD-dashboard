@@ -2,7 +2,7 @@
 import dash_leaflet as dl
 import time
 from dash import html, Input, no_update, Output, State
-from gee_core import (
+from core.gee import (
     get_admin_boundary_tile_url, get_feature_at_point,
     get_selected_feature_tile_url,
 )

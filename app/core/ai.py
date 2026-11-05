@@ -1,6 +1,6 @@
 import json, os, re
 from google import genai
-from config import HAZARD_MAP, HAZARD_TOPICS, ADMIN_DATA
+from config.hazards import HAZARD_MAP, HAZARD_TOPICS, ADMIN_DATA
 
 _client = None
 _SYSTEM_PROMPT = None
@@ -11,7 +11,7 @@ def initialize_ai(country_names=None):
     global _client, _country_names
     if country_names:
         _country_names = country_names
-    key_path = os.path.join(os.path.dirname(__file__), "credentials", "gemini_api_key.txt")
+    key_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "credentials", "gemini_api_key.txt")
     with open(key_path) as f:
         api_key = f.read().strip()
     _client = genai.Client(api_key=api_key)

@@ -1,6 +1,6 @@
 """Preparedness Visualization: hazard, multi-hazard and exposure."""
 import dash
-from config import (
+from config.hazards import (
     HAZARD_MAP, HAZARD_TOPICS, MHC_OPTIONS, MHI_OPTIONS, POP_PREFIX,
     POPULATION_LAYERS, SUB_TOPIC_DETAIL, TOPIC_COLORS,
 )

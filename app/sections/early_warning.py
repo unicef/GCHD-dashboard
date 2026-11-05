@@ -3,18 +3,18 @@ import dash
 import datetime as dt
 import json as _json
 import re
-from config import ADMIN_DATA, FC_INFO_PREFIX, TOPIC_COLORS
+from config.hazards import ADMIN_DATA, FC_INFO_PREFIX, TOPIC_COLORS
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
-from forecast_config import (
+from config.forecast import (
     FORECAST_MAP, KIND_BLURBS, KIND_LABELS, REDUCERS, threshold_for,
 )
-from forecast_core import (
+from core.forecast import (
     active_datasets_live, clamp_window, compute_forecast_exposure,
     default_window, forecast_run_label, ForecastError,
     get_forecast_exposed_tile, get_forecast_intensity_tile,
     get_forecast_preview_tile, probe_custom_asset,
 )
-from gee_core import (
+from core.gee import (
     get_country_bounds, get_country_ucode, get_feature_bounds,
     get_selected_feature_tile_url,
 )

@@ -1,10 +1,10 @@
 """AI assistant section."""
 import dash_leaflet as dl
 import json as _json_mod
-from ai_core import ask_gemini
-from config import ADMIN_DATA, HAZARD_TOPICS, SUB_TOPIC_DETAIL, TOPIC_COLORS
+from core.ai import ask_gemini
+from config.hazards import ADMIN_DATA, HAZARD_TOPICS, SUB_TOPIC_DETAIL, TOPIC_COLORS
 from dash import dcc, html, Input, no_update, Output, State
-from gee_core import (
+from core.gee import (
     compute_exposure, compute_topic_overlap, get_country_bounds,
     get_country_ucode, get_hazard_tile_url, get_topic_tile_url,
 )

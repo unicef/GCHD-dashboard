@@ -1,5 +1,5 @@
 """Hazard-threshold editors shared by Exposure, Analysis and Infra."""
-from config import (
+from config.hazards import (
     HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, is_binary_hazard, TOPIC_COLORS,
 )
 from dash import ALL, dcc, html, Input, MATCH, Output, State

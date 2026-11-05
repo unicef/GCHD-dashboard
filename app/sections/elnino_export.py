@@ -4,7 +4,7 @@ import datetime as dt
 import json as _json
 import re
 from dash import ctx, dcc, html, Input, no_update, Output, State
-from elnino_config import (
+from config.elnino import (
     CAVEATS, CHANCE_LEVEL, COMPOUND_CHANCE_LEVEL, download_disclaimer,
     HINDCAST, is_compound, METHOD_STEPS, period_issue_label, period_label,
     PERIOD_MAP, SIGNAL_MAP, SKILL_REFERENCE, SKILL_USABLE_MIN,
@@ -365,7 +365,7 @@ def _elnino_export_payload(result, meta):
         "skill_usable_pct_of_signal_area": (meta.get("skill") or {}).get("usable_pct"),
         "skill_assessed_pct_of_signal_area": (meta.get("skill") or {}).get("assessed_pct"),
         # No brier_* keys: the Brier score is no longer surfaced (see
-        # elnino_config.EXPLORE_LAYERS). Emitting them as nulls would imply the
+        # config.elnino.EXPLORE_LAYERS). Emitting them as nulls would imply the
         # measure had been computed and come back empty.
         "skill_grades": "seasonal mean, not tercile probabilities",
         # Compound figures are not comparable with single-variable ones, so the

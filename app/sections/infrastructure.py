@@ -1,12 +1,12 @@
 """Infra analysis (Preparedness and Early Warning)."""
 import dash
-from config import (
+from config.hazards import (
     EXPOSURE_ONLY_TOPICS, HAZARD_INFO, HAZARD_TOPICS, infra_layer_style,
     is_no_data_ucode, SUB_TOPIC_DETAIL, TOPIC_COLORS,
 )
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
-from forecast_core import ForecastError, get_live_hazard_area_tile
-from gee_core import (
+from core.forecast import ForecastError, get_live_hazard_area_tile
+from core.gee import (
     compute_facility_combined, get_asset_bounds, get_asset_info,
     get_clipped_pop_tile_url, get_country_bounds, get_country_ucode,
     get_feature_bounds, get_infra_tile_url, get_topic_tile_url_clipped,

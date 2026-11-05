@@ -1,5 +1,5 @@
 """Styled xlsx builder shared by the analysis exports."""
-from config import HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS
+from config.hazards import HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS
 
 from ui.components import _hazard_label
 

@@ -5,7 +5,7 @@ ALLOWED_DOMAIN  = "unicef.org"
 OTP_EXPIRY_SECS = 600   # 10 minutes
 SESSION_HOURS   = 8
 
-_DB_PATH = os.path.join(os.path.dirname(__file__), "otp_store.db")
+_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "otp_store.db")
 
 
 def _get_db():
@@ -22,7 +22,7 @@ def _get_db():
 
 
 def _smtp_creds():
-    base = os.path.dirname(__file__)
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     user = open(os.path.join(base, "credentials", "smtp_user.txt")).read().strip()
     pwd  = open(os.path.join(base, "credentials", "smtp_pass.txt")).read().strip()
     return user, pwd

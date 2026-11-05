@@ -1,12 +1,12 @@
 # =============================================================================
-# forecast_core.py — GEE logic for the Forecast & Live tab
+# core/forecast.py — GEE logic for the Forecast & Live tab
 #
-# Kept out of gee_core.build_core_images() on purpose: that function is
+# Kept out of core.gee.build_core_images() on purpose: that function is
 # @lru_cache(maxsize=1) and holds the static hazard image graph for the server's
 # lifetime. Everything here is parameterised by a date window, so it is built on
 # demand and cached per (dataset, window, reducer) tuple instead.
 #
-# The child-population grid is imported FROM gee_core so the exposure
+# The child-population grid is imported FROM core.gee so the exposure
 # denominator is identical to the rest of the dashboard — a forecast result must
 # reconcile with an Analysis-tab result for the same region.
 # =============================================================================
@@ -18,13 +18,13 @@ from threading import RLock
 import ee
 from cachetools import TTLCache, cached as _ttl_cached
 
-from config import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
-from forecast_config import (
+from config.hazards import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
+from config.forecast import (
     FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS,
 )
-from gee_core import build_core_images, _admin_region
+from core.gee import build_core_images, _admin_region
 
-# Same TTL rationale as gee_core: GEE map tokens expire, so tiles are refreshed
+# Same TTL rationale as core.gee: GEE map tokens expire, so tiles are refreshed
 # well before then. Reduction results are cached more briefly because live
 # collections gain images during the day.
 _TILE_TTL   = 3000   # 50 min
@@ -48,7 +48,7 @@ def _result_cache(maxsize):
 #
 # The static hazard layers deliberately stay on the 100 m grid — that is what
 # keeps the Analysis tab comparable with the published CCRR figures — so this
-# does NOT touch gee_core.build_core_images().
+# does NOT touch core.gee.build_core_images().
 
 _POP_1KM_TMPL = "projects/unicef-ccri/assets/population/worldpop_{}_2025_CN_1km"
 _POP_1KM_SCALE = 1000
@@ -101,7 +101,7 @@ class ForecastError(Exception):
 #
 # A small GEE FeatureCollection lets datasets be switched on or off without a
 # code change or redeploy — the same principle the Infrastructure tab already
-# uses (gee_core.discover_infra_assets). Edit the asset in the Code Editor and
+# uses (core.gee.discover_infra_assets). Edit the asset in the Code Editor and
 # the running app reflects it within the TTL; no restart.
 #
 # Two guardrails:
@@ -503,7 +503,7 @@ def build_forecast_image(name, start, end, reducer,
 
 
 # ---------------------------------------------------------------------------
-# Exposure — mirrors gee_core.compute_exposure so numbers reconcile
+# Exposure — mirrors core.gee.compute_exposure so numbers reconcile
 # ---------------------------------------------------------------------------
 
 def compute_forecast_exposure(name, start, end, reducer, threshold,
@@ -530,7 +530,7 @@ def compute_forecast_exposure(name, start, end, reducer, threshold,
     layer, n_images = build_forecast_image(
         name, start, end, reducer, custom_id, custom_band)
 
-    # Strict > matches _exposed_for_hazard in gee_core.
+    # Strict > matches _exposed_for_hazard in core.gee.
     mask = layer.gt(threshold)
     exposed = childpop.updateMask(mask).rename("exposed")
 

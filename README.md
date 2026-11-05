@@ -33,17 +33,20 @@ hazard_database_app/
 │   ├── app.py              # Entry point (Gunicorn `app:server`); imports the modules below
 │   ├── dash_app.py         # The Dash app instance (served under /ew)
 │   ├── bootstrap.py        # GEE init and static data shared across sections
-│   ├── auth_routes.py      # Flask session, OTP login page, request guard
+│   ├── config/             # Plain data, no GEE import (also read by scripts/)
+│   │   ├── hazards.py      #   Hazard definitions, topics, colors, admin levels
+│   │   ├── forecast.py     #   Observed / Forecast dataset catalog (ranges, thresholds, sources)
+│   │   └── elnino.py       #   El Niño / SEAS5 seasonal outlook catalog
+│   ├── core/               # Earth Engine and compute logic, no Dash
+│   │   ├── gee.py          #   Tile URLs, exposure and facility computation
+│   │   ├── forecast.py     #   Date-windowed loading, model-run selection, reduction, exposure
+│   │   ├── elnino.py       #   El Niño outlook layers and exposure
+│   │   └── ai.py           #   Google Gemini integration
+│   ├── auth/               # Email OTP logic (otp.py) and the Flask login routes (routes.py)
 │   ├── ui/                 # Shared UI: navigation registry, components, map, legend,
 │   │                       #   threshold editors, info popover, xlsx builder, page layout
 │   ├── sections/           # One module per section: layout + its callbacks
 │   │                       #   (layers, analysis, infrastructure, early_warning, elnino, ai…)
-│   ├── config.py           # Hazard definitions, topics, colors, admin levels
-│   ├── gee_core.py         # Google Earth Engine integration (tile URLs, exposure computation)
-│   ├── forecast_config.py  # Observed / Forecast dataset catalog (ranges, thresholds, sources)
-│   ├── forecast_core.py    # Date-windowed GEE loading, model-run selection, reduction, exposure
-│   ├── ai_core.py          # Google Gemini AI integration
-│   ├── auth.py             # Email OTP authentication logic
 │   ├── requirements.txt    # Python dependencies
 │   ├── assets/             # Static files (CSS, images, favicon)
 │   └── credentials/        # Secret files — NOT committed (see setup below)
@@ -141,7 +144,7 @@ Access is restricted to `@unicef.org` email addresses via a one-time passcode (O
 1. User enters their UNICEF email address
 2. A 6-digit code is sent via SMTP
 3. User enters the code to access the app
-4. Session persists for the duration configured in `auth.py`
+4. Session persists for the duration configured in `auth/otp.py`
 
 ---
 

@@ -40,7 +40,7 @@ import numpy as np                    # noqa: E402
 import rasterio                       # noqa: E402
 from rasterio.transform import from_origin   # noqa: E402
 
-from elnino_config import (            # noqa: E402
+from config.elnino import (            # noqa: E402
     ELNINO_ROOT, HC_YEARS, LEADS, NINO34_BOX, OISST_COLLECTION, OISST_SCALE,
     ENSO_EVENT_MIN, lead_month, parse_issue, season_code,
 )

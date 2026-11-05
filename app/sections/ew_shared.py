@@ -1,8 +1,8 @@
 """Early Warning hazard helpers shared by EW sections."""
-from forecast_config import (
+from config.forecast import (
     CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS, FORECAST_MAP, REDUCERS,
 )
-from forecast_core import build_live_hazard, forecast_run_label
+from core.forecast import build_live_hazard, forecast_run_label
 
 from ui.components import _as_float, _fmt_window
 

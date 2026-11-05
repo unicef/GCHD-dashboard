@@ -1,8 +1,8 @@
 """El Niño seasonal outlook section."""
 import dash
-from config import ADMIN_DATA
+from config.hazards import ADMIN_DATA
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
-from elnino_config import (
+from config.elnino import (
     active_periods, CAVEATS, DEFAULT_EXPLORE, default_period, DEFAULT_SIGNAL,
     ENSO_EVENT_MIN, EXPLORE_LAYERS, EXPLORE_MAP, HINDCAST, is_compound,
     is_window, issue_label, ISSUES, METHOD_STEPS, period_issue_label,
@@ -10,14 +10,14 @@ from elnino_config import (
     PROB_STEP, SIGNAL_MAP, SKILL_REFERENCE, SKILL_USABLE_MIN, SOURCE_URL,
     SYSTEM as ELNINO_SYSTEM, threshold_contract,
 )
-from elnino_core import (
+from core.elnino import (
     compound_available, compute_elnino_exposure, elnino_available, ElNinoError,
     enso_attributable, enso_state, forecast_area_share,
     get_elnino_exposed_tile, get_elnino_layer_tile, get_elnino_pop_tile,
     get_elnino_preview_tile, hindcast_area_share, signal_anomalies,
     signal_skill_share, skill_available, skill_t2m_available, t2m_available,
 )
-from gee_core import get_country_bounds, get_country_ucode, get_feature_bounds
+from core.gee import get_country_bounds, get_country_ucode, get_feature_bounds
 
 from dash_app import app
 from bootstrap import COUNTRY_NAMES
@@ -28,7 +28,7 @@ from sections.elnino_export import _elnino_export_payload
 # The layer that renders the SIGNAL itself. Section 2 chooses the signal and
 # this is how it is drawn; the map dialog's layers are additive extras on their
 # own tile and never replace it. Compound signals carry their own band, so
-# signal_prob resolves per-signal inside elnino_core._d_signal_prob.
+# signal_prob resolves per-signal inside core.elnino._d_signal_prob.
 SIGNAL_LAYER = "signal_prob"
 
 
@@ -926,7 +926,7 @@ def elnino_sync_threshold(box, slider, signal):
     except (TypeError, ValueError):
         val = default
     # Already a percentage — no scaling here. The single 0-100 -> 0-1 step
-    # happens in elnino_core._signal_mask via to_fraction().
+    # happens in core.elnino._signal_mask via to_fraction().
     val = int(round(max(lo, min(hi, val))))
 
     margin = val - chance
@@ -1319,7 +1319,7 @@ def elnino_enso(tab):
 # the stricter question but does not line up with the classified historical
 # values they read a signal's direction from. The scores are still computed and
 # stored in el_nino/brier by build_brier_skill.py, and signal_bss() still works
-# — nothing renders them. See elnino_config.EXPLORE_LAYERS for the full note.
+# — nothing renders them. See config.elnino.EXPLORE_LAYERS for the full note.
 
 
 def _elnino_skill_note(skill, bss=None):

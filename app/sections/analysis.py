@@ -3,13 +3,13 @@ import dash
 import dash_leaflet as dl
 import json as _json
 import re
-from config import (
+from config.hazards import (
     ADMIN_DATA, EXCLUDE_ISO3, EXPOSURE_ONLY_TOPICS, FORCE_NULL_RULES,
     HAZARD_MAP, HAZARD_TOPICS, HAZARDS, is_no_data_ucode, SUB_TOPIC_DETAIL,
     TOPIC_COLORS,
 )
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
-from gee_core import (
+from core.gee import (
     compute_exposure, compute_exposure_asset, compute_exposure_custom,
     get_asset_bounds, get_asset_info, get_country_bounds, get_country_ucode,
     get_custom_asset_tile_url, get_exposed_pop_tile_url, get_feature_bounds,

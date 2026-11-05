@@ -1,14 +1,14 @@
 # =============================================================================
-# elnino_core.py — GEE logic for the El Niño seasonal outlook tab
+# core/elnino.py — GEE logic for the El Niño seasonal outlook tab
 #
-# Parallel to forecast_core.py, with one structural difference that drives the
+# Parallel to core/forecast.py, with one structural difference that drives the
 # whole module: these assets were uploaded with geeup, whose ingestion manifest
 # carries no `bands` key. Earth Engine therefore names every band b1..b8 in file
 # order. Band ORDER is the contract; the real names ride along in each image's
 # `band_names` property. _tercile_image() is the ONLY place that renames, so no
 # caller ever has to think about b-numbers.
 #
-# The child-population grid is imported FROM forecast_core so this tab's numbers
+# The child-population grid is imported FROM core.forecast so this tab's numbers
 # reconcile with the Forecast tab's, which in turn reconcile with Analysis.
 # =============================================================================
 
@@ -18,8 +18,8 @@ from threading import RLock
 import ee
 from cachetools import TTLCache, cached as _ttl_cached
 
-from config import ADMIN_DATA, POP_VIS
-from elnino_config import (
+from config.hazards import ADMIN_DATA, POP_VIS
+from config.elnino import (
     ISSUES, issue_collection, issue_asset,
     TERCILE_BANDS, PERIOD_MAP, is_window, HC_YEARS,
     SIGNAL_MAP, EXPLORE_MAP,
@@ -32,8 +32,8 @@ from elnino_config import (
     PROB_COMPOUND_DEFAULT, SENSITIVITY_COMPOUND,
     enso_mask_asset, ENSO_MASK_BAND, ENSO_MASK_DIR,
 )
-from gee_core import _admin_region
-from forecast_core import _forecast_pop
+from core.gee import _admin_region
+from core.forecast import _forecast_pop
 
 _TILE_TTL   = 3000   # 50 min — GEE map tokens expire
 _RESULT_TTL = 3600   # 1 h — unlike the Forecast tab these assets never change

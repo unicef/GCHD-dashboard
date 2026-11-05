@@ -1,6 +1,6 @@
 """The full page layout."""
 from dash import dcc, html
-from elnino_config import DOWNLOAD_DISCLAIMER_ACK, DOWNLOAD_DISCLAIMER_TITLE
+from config.elnino import DOWNLOAD_DISCLAIMER_ACK, DOWNLOAD_DISCLAIMER_TITLE
 
 from dash_app import app, _BASE_PATHNAME
 from ui.components import panel_head, sidebar, view_header_children
@@ -49,7 +49,7 @@ app.layout = html.Div(id="app-root", children=[
     # Shared custom hazard thresholds {hazard_name: value} (non-default only).
     # Written by the Exposure-tab editor; read by the exposure visualization.
     dcc.Store(id="store-thresholds",    data={}),
-    # Active legend rows (list of specs from config.py) for the floating overlay.
+    # Active legend rows (list of specs from config/hazards.py) for the floating overlay.
     dcc.Store(id="store-legend",        data=None),
     # Layer whose info popover is open (None = closed). Drives the open/close
     # toggle and tells the clientside positioner which button to anchor to.

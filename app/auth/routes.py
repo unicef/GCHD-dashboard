@@ -2,7 +2,7 @@
 import datetime as _dt
 import os
 import secrets as _secrets
-from auth import request_otp, SESSION_HOURS, verify_otp
+from auth.otp import request_otp, SESSION_HOURS, verify_otp
 from flask import redirect as _fredirect, request as _freq, session as _fsess
 
 from dash_app import app, _BASE_PATHNAME
@@ -13,7 +13,7 @@ from dash_app import app, _BASE_PATHNAME
 app.server.config["SESSION_COOKIE_PATH"] = _BASE_PATHNAME.rstrip("/") + "/"
 app.server.config["SESSION_COOKIE_NAME"] = "gchd_ew_session"
 
-_key_path = os.path.join(os.path.dirname(__file__), "credentials", "flask_secret.txt")
+_key_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "credentials", "flask_secret.txt")
 if os.path.exists(_key_path):
     app.server.secret_key = open(_key_path).read().strip()
 else:

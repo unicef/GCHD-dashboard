@@ -1,5 +1,5 @@
 # =============================================================================
-# gee_core.py — GEE logic with no Streamlit dependency
+# core/gee.py — GEE logic with no Streamlit dependency
 # Caches with functools.lru_cache (module-level, server lifetime).
 # =============================================================================
 
@@ -18,7 +18,7 @@ _tile_lock = RLock()
 def _tile_cache(maxsize):
     return TTLCache(maxsize=maxsize, ttl=_TILE_TTL)
 
-from config import (
+from config.hazards import (
     HAZARDS, HAZARD_MAP, HAZARD_TOPICS, ALLOW_NEGATIVE,
     HAZARD_VIS_PALETTES, SELF_MASK_HAZARDS, GLOBAL_GEOMETRY,
     ADMIN_DATA, EXPOSURE_ONLY_TOPICS, MHC_EXCLUDED_TOPICS,
@@ -33,7 +33,7 @@ from config import (
 # ---------------------------------------------------------------------------
 
 def initialize_gee():
-    key_path = os.path.join(os.path.dirname(__file__), "credentials", "service_account.json")
+    key_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "credentials", "service_account.json")
     with open(key_path) as f:
         info = json.load(f)
     credentials = ee.ServiceAccountCredentials(email=info["client_email"], key_file=key_path)

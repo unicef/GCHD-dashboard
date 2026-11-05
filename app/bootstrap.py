@@ -1,8 +1,8 @@
 """GEE initialisation and static data shared across sections."""
 import os
-from ai_core import initialize_ai
-from config import HAZARD_TOPICS, HAZARDS
-from gee_core import build_core_images, get_country_names, initialize_gee
+from core.ai import initialize_ai
+from config.hazards import HAZARD_TOPICS, HAZARDS
+from core.gee import build_core_images, get_country_names, initialize_gee
 
 
 # ---------------------------------------------------------------------------

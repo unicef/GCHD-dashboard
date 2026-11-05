@@ -41,7 +41,7 @@ HERE = Path(__file__).resolve().parent
 APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))          # reuse the dashboard's own config/core
 
-from elnino_config import (            # noqa: E402
+from config.elnino import (            # noqa: E402
     issue_asset, SIGNALS, SIGNAL_MAP,
     HINDCAST, SYSTEM, to_fraction, parse_issue, window_suffix,
 )
@@ -60,7 +60,7 @@ ADM0_CHUNKS = "projects/unicef-ccri/assets/global_boundary/adm0_chunked_500km_sh
 REGIONS_ASSET = "projects/unicef-ccri/assets/global_boundary/admin0_regions_merged"
 
 # Same 1 km under-18 grid the dashboard's forecast and El Nino tabs use, so a
-# number here matches one produced in the app. See forecast_core._forecast_pop
+# number here matches one produced in the app. See core.forecast._forecast_pop
 # for why the values are rescaled by the pixel-area ratio.
 POP_1KM = "projects/unicef-ccri/assets/population/worldpop_T_U18_2025_CN_1km"
 POP_SCALE = 1000

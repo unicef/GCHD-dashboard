@@ -1,6 +1,6 @@
 """Phase/view/pane switching, leave guard, URL sync and resets."""
 import dash
-from config import EXPOSURE_ONLY_TOPICS, HAZARD_TOPICS
+from config.hazards import EXPOSURE_ONLY_TOPICS, HAZARD_TOPICS
 from dash import ALL, ctx, html, Input, no_update, Output, State
 
 from dash_app import app

@@ -1,8 +1,8 @@
 """Info popover for hazard, provenance and dataset info buttons."""
-from config import FC_INFO_PREFIX, HAZARD_INFO
+from config.hazards import FC_INFO_PREFIX, HAZARD_INFO
 from dash import ALL, ctx, Input, no_update, Output, State
-from elnino_config import EN_INFO, EXPLORE_MAP
-from forecast_config import FORECAST_MAP
+from config.elnino import EN_INFO, EXPLORE_MAP
+from config.forecast import FORECAST_MAP
 
 from dash_app import app
 from ui.components import _hazard_info_body, _layer_label

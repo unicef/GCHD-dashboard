@@ -55,7 +55,7 @@ HERE = Path(__file__).resolve().parent
 APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))          # reuse the dashboard's own config
 
-from elnino_config import (            # noqa: E402
+from config.elnino import (            # noqa: E402
     ELNINO_ROOT, issue_collection, issue_asset,
     HINDCAST, HC_YEARS, SYSTEM,
     parse_issue, window_suffix, obs_months, staged_obs_name,

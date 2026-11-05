@@ -1,6 +1,6 @@
 """Small layout builders and formatters shared by sections."""
 import datetime as dt
-from config import (
+from config.hazards import (
     HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, is_pop_layer, MHC_EXCLUDED_TOPICS,
     pop_class_of, POP_LAYER_MAP,
 )
