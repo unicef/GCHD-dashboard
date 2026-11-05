@@ -30,7 +30,14 @@ River Flood · Coastal Flood · Tropical Storm · Drought · Heatwave · Extreme
 ```
 hazard_database_app/
 ├── app/
-│   ├── app.py              # Main Dash application, layout, callbacks, auth routes
+│   ├── app.py              # Entry point (Gunicorn `app:server`); imports the modules below
+│   ├── dash_app.py         # The Dash app instance (served under /ew)
+│   ├── bootstrap.py        # GEE init and static data shared across sections
+│   ├── auth_routes.py      # Flask session, OTP login page, request guard
+│   ├── ui/                 # Shared UI: navigation registry, components, map, legend,
+│   │                       #   threshold editors, info popover, xlsx builder, page layout
+│   ├── sections/           # One module per section: layout + its callbacks
+│   │                       #   (layers, analysis, infrastructure, early_warning, elnino, ai…)
 │   ├── config.py           # Hazard definitions, topics, colors, admin levels
 │   ├── gee_core.py         # Google Earth Engine integration (tile URLs, exposure computation)
 │   ├── forecast_config.py  # Observed / Forecast dataset catalog (ranges, thresholds, sources)
@@ -160,7 +167,7 @@ The app server must not read or write files at request time. If a feature requir
 
 ### 3. Boundary files are handled client-side
 
-When a user uploads a GeoJSON boundary, all parsing, validation, and geometry processing happens in the browser (see the `clientside_callback` in `app.py`). Only the minimal stripped GeoJSON (geometry + one name field) is sent to the app server for the GEE exposure computation. Property tables, large feature collections, and display rendering stay on the client.
+When a user uploads a GeoJSON boundary, all parsing, validation, and geometry processing happens in the browser (see the `clientside_callback` in `sections/analysis.py`). Only the minimal stripped GeoJSON (geometry + one name field) is sent to the app server for the GEE exposure computation. Property tables, large feature collections, and display rendering stay on the client.
 
 ```
 Client:  parse → validate → render on Leaflet → strip to geometry + name field

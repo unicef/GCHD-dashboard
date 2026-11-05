@@ -76,7 +76,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 
 ### Navigation: phases, views and panes
 
-`app.py` holds a three-level registry, and every navigation control and callback output is generated from it:
+`ui/registry.py` holds a three-level registry, and every navigation control and callback output is generated from it:
 
 - `PHASES`: the phase switch under the panel title (Preparedness, Early Warning, Damage Assessment). The phase sets the rail's contents and the accent colour (`#main-app.phase-<key>`, CSS `--accent`).
 - `VIEWS`: the rail buttons of each phase. A view with several `segments` shows a segmented control at the top of the panel.
