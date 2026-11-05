@@ -587,7 +587,7 @@ def forecast_reducer_threshold(reducer, dataset, asset):
     average daily rainfall)."""
     cfg = _forecast_cfg(dataset, asset)
     if not cfg or reducer not in (cfg.get("reducers") or []):
-        raise PreventUpdate
+        raise dash.exceptions.PreventUpdate
     thr = threshold_for(cfg, reducer)[0]
     return thr, thr
 
