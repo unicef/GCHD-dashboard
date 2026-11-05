@@ -2844,27 +2844,86 @@ def _as_float(v, default=0.0):
         return default
 
 
+_DEFAULT_ANALYSIS_TOPICS = [t for t in HAZARD_TOPICS
+                            if t not in EXPOSURE_ONLY_TOPICS]
+
+
 @app.callback(
-    Output("infra-results-panel",   "children", allow_duplicate=True),
-    Output("infra-download-wrap",   "children", allow_duplicate=True),
-    Output("infra-pop-tile",        "url",      allow_duplicate=True),
-    Output("infra-voronoi-geojson", "data",     allow_duplicate=True),
-    Output("store-infra-viz",       "data",     allow_duplicate=True),
-    Output("store-infra-pending",   "data",     allow_duplicate=True),
-    Output("forecast-intensity-tile", "url",    allow_duplicate=True),
-    Output("store-forecast-preview",  "data",   allow_duplicate=True),
-    Input("store-view",             "data"),
+    # Prep Pop analysis
+    Output("country-select",          "value",    allow_duplicate=True),
+    Output("level-select",            "value",    allow_duplicate=True),
+    Output("analysis-topic-select",   "value",    allow_duplicate=True),
+    # Infra analysis (Prep and EW share the pane)
+    Output("infra-country-select",    "value",    allow_duplicate=True),
+    Output("infra-layer-select",      "value",    allow_duplicate=True),
+    Output("infra-asset-input",       "value",    allow_duplicate=True),
+    Output("infra-asset-status",      "children", allow_duplicate=True),
+    Output("infra-topic-select",      "value",    allow_duplicate=True),
+    Output("store-infra-asset",       "data",     allow_duplicate=True),
+    Output("infra-results-panel",     "children", allow_duplicate=True),
+    Output("infra-download-wrap",     "children", allow_duplicate=True),
+    Output("store-infra-viz",         "data",     allow_duplicate=True),
+    Output("store-infra-pending",     "data",     allow_duplicate=True),
+    Output("infra-pop-tile",          "url",      allow_duplicate=True),
+    Output("infra-points-tile",       "url",      allow_duplicate=True),
+    Output("infra-selection-tile",    "url",      allow_duplicate=True),
+    Output("infra-voronoi-geojson",   "data",     allow_duplicate=True),
+    # EW Pop analysis
+    Output("forecast-country-select", "value",    allow_duplicate=True),
+    Output("forecast-level-select",   "value",    allow_duplicate=True),
+    Output("store-forecast-viz",      "data",     allow_duplicate=True),
+    Output("store-forecast-result",   "data",     allow_duplicate=True),
+    Output("forecast-results-panel",  "children", allow_duplicate=True),
+    Output("forecast-exposed-tile",   "url",      allow_duplicate=True),
+    Output("forecast-selection-tile", "url",      allow_duplicate=True),
+    # El Niño
+    Output("elnino-country",          "value",    allow_duplicate=True),
+    # Live preview: EW views only (forecast_preview redraws it there)
+    Output("forecast-intensity-tile", "url",      allow_duplicate=True),
+    Output("store-forecast-preview",  "data",     allow_duplicate=True),
+    # Shared region
+    Output("store-country",           "data",     allow_duplicate=True),
+    Output("store-ucode",             "data",     allow_duplicate=True),
+    Output("store-bounds",            "data",     allow_duplicate=True),
+    Output("store-clicked-ucode",     "data",     allow_duplicate=True),
+    Output("store-clicked-name",      "data",     allow_duplicate=True),
+    Output("main-map",                "viewport", allow_duplicate=True),
+    Input("store-view",               "data"),
     prevent_initial_call=True,
 )
-def infra_clear_on_phase(view):
-    """Prep and EW Infra analysis share the pane, so moving between them does
-    not change store-tab and clear_on_leave never fires. The district stays
-    selected (handy for comparing the two), but a result computed on one
-    phase's hazard must not remain under the other's."""
-    if view not in ("prep-infra", "ew-infra"):
+def reset_forms_on_view(view):
+    """Every view change starts each analysis form from scratch: country,
+    level, facility layer, topics, results and their map layers. Rebuilding a
+    half-kept form on re-entry is what left dropdowns out of step with the
+    map. Only the EW Hazard card survives, within Early Warning
+    (reset_hazard_card_on_phase)."""
+    preview = ((no_update, no_update) if view in EW_HAZARD_VIEWS
+               else ("", None))
+    return (
+        None, None, list(_DEFAULT_ANALYSIS_TOPICS),
+        None, None, "", "", [], None, None, None, None, None,
+        "", "", "", None,
+        None, None, None, None, None, "", "",
+        None,
+        *preview,
+        None, None, None, None, None, GLOBAL_VIEWPORT,
+    )
+
+
+@app.callback(
+    Output("forecast-dataset-select",  "value",    allow_duplicate=True),
+    Output("store-forecast-asset",     "data",     allow_duplicate=True),
+    Output("forecast-asset-input",     "value",    allow_duplicate=True),
+    Output("forecast-asset-status",    "children", allow_duplicate=True),
+    Output("forecast-asset-band-wrap", "style",    allow_duplicate=True),
+    Input("store-phase",               "data"),
+    prevent_initial_call=True,
+)
+def reset_hazard_card_on_phase(phase):
+    """The EW hazard carries across EW tasks only; leaving the phase drops it."""
+    if phase == "ew":
         raise dash.exceptions.PreventUpdate
-    preview = ("", None) if view == "prep-infra" else (no_update, no_update)
-    return None, None, "", None, None, None, *preview
+    return None, None, "", "", {"display": "none"}
 
 
 @app.callback(
@@ -2935,13 +2994,11 @@ def _fmt_window(start, end):
     # country name sitting in a dropdown with no boundary drawn for it.
     Output("elnino-country",          "value", allow_duplicate=True),
     Output("forecast-country-select", "value", allow_duplicate=True),
-    Output("store-level",             "data", allow_duplicate=True),
     Input("store-tab",                "data"),
     State("store-view",               "data"),
-    State("infra-country-select",     "value"),
     prevent_initial_call=True,
 )
-def clear_on_leave(tab, view, infra_country):
+def clear_on_leave(tab, view):
     """Blank the OTHER sections' map layers and result stores on a tab change.
 
     Never touches the section being entered. Both this and that section's own
@@ -2966,14 +3023,6 @@ def clear_on_leave(tab, view, infra_country):
     keep_analysis = tab == "analysis"
     blank = lambda keep: no_update if keep else ""
     none_ = lambda keep: no_update if keep else None
-    # Region state is shared, so it resets on every switch — except that the
-    # infra pane keeps its country dropdown, and the map must follow it.
-    region = (None, None, None, None, None)
-    viewport, level = GLOBAL_VIEWPORT, no_update
-    if keep_infra and infra_country:
-        ucode = get_country_ucode(infra_country)
-        region = (ucode, get_country_bounds(ucode), infra_country, None, None)
-        viewport, level = no_update, "adm2 (Districts/Counties)"
     return (
         blank(keep_elnino), blank(keep_elnino), blank(keep_elnino),
         blank(keep_preview), blank(keep_forecast),
@@ -2982,11 +3031,12 @@ def clear_on_leave(tab, view, infra_country):
         none_(keep_elnino), none_(keep_elnino),
         none_(keep_forecast), none_(keep_preview),
         none_(keep_infra), none_(keep_analysis),
-        *region,
+        # Region state and the selection highlights are shared, so they reset
+        # on every switch regardless of destination.
+        None, None, None, None, None,
         "", "", "",
-        viewport,
+        GLOBAL_VIEWPORT,
         None, None,
-        level,
     )
 
 
@@ -5973,27 +6023,6 @@ def infra_compute_perfacility(pending):
                            banner_lines=banner)
 
 
-# ── Clear infra map layers when leaving the Infrastructure tab ─────────────────
-
-@app.callback(
-    Output("infra-selection-tile", "url",  allow_duplicate=True),
-    Output("infra-pop-tile",       "url",  allow_duplicate=True),
-    Output("infra-points-tile",    "url",  allow_duplicate=True),
-    Output("infra-voronoi-geojson","data", allow_duplicate=True),
-    Output("store-infra-viz",      "data", allow_duplicate=True),
-    Input("store-tab",             "data"),
-    prevent_initial_call=True,
-)
-def infra_clear_layers_on_leave(tab):
-    """The infra tiles live in dedicated top-level components (not the shared
-    data-layers group), so nothing clears them on tab change. Blank them when
-    navigating away so they don't linger over other tabs' maps. Re-entering the
-    tab redraws points via infra_load_asset."""
-    if tab == "infrastructure":
-        return (no_update,) * 5
-    return "", "", "", None, None
-
-
 # ── Unified map legend overlay (top-left) ─────────────────────────────────────
 # Every tab writes a list of legend specs (plain dicts from config.py) into
 # store-legend; this single renderer turns them into DOM. Adding a legend for a
@@ -6670,7 +6699,7 @@ def forecast_kind_badge(dataset, asset):
 )
 def forecast_preview(dataset, start, end, reducer, tab, view, asset, viz):
     # Every EW hazard view redraws the kept selection on entry; other panes
-    # leave the tile to clear_on_leave / infra_clear_on_phase.
+    # leave the tile to clear_on_leave / reset_forms_on_view.
     if tab not in FORECAST_TABS and view != "ew-infra":
         raise dash.exceptions.PreventUpdate
     if ctx.triggered_id in ("store-tab", "store-view"):
