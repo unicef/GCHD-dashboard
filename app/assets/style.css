@@ -1166,14 +1166,29 @@ body {
 .nav-btn.soon { opacity: 0.7; }
 .sb-foot { margin-top: auto; border-top: 1px solid #d1d5db; padding-bottom: 8px; }
 
-/* EW Visualization shows the dataset, window and preview; Pop analysis adds
-   region, threshold and Compute. !important beats the callbacks' inline
-   display so the mode wins regardless of the steps' own state. */
-#fc-controls.fc-mode-vis #fc-analysis-part,
-#fc-controls.fc-mode-vis #forecast-badge-wrap,
-#fc-controls.fc-mode-vis #forecast-compute-wrap,
-#fc-controls.fc-mode-vis #forecast-results-loading,
-#fc-controls.fc-mode-analysis #fc-goto-wrap { display: none !important; }
+/* EW Hazard card — one instance above the EW panes. Visualization picks
+   from the catalogue list below, so the dropdown and threshold are hidden;
+   the analyses hide the hand-off buttons. */
+.ewh {
+  margin: 10px 12px 4px; padding: 10px 12px;
+  border: 1px solid var(--border2); border-left: 3px solid var(--accent);
+  border-radius: 8px; background: var(--panel-h);
+}
+.ewh-title {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--accent-ink); margin-bottom: 6px;
+}
+.ewh-label { font-size: 0.7rem; font-weight: 700; color: var(--hi); margin: 10px 0 4px; }
+.ewh .ps-caption:empty { display: none; }
+.ewh-goto { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ewh-stale:not(:empty) {
+  margin-top: 8px; padding: 6px 8px; border-radius: 5px;
+  background: rgba(245,158,11,0.12); color: #92400e; font-size: 0.68rem;
+}
+#ew-hazard-card.ewh-mode-vis #ewh-pick,
+#ew-hazard-card.ewh-mode-vis #ewh-threshold,
+#ew-hazard-card.ewh-mode-analysis #ewh-empty,
+#ew-hazard-card.ewh-mode-analysis #fc-goto-wrap { display: none !important; }
 
 /* Map mode badge — top-left, clear of the zoom control and loading pill. */
 .map-mode-badge {
@@ -1199,3 +1214,7 @@ body {
   .map-mode-badge { max-width: calc(100% - 80px); }
   .mmb-detail { display: none; }
 }
+
+/* Infra pane: Preparedness picks catalogue topics; in Early Warning the
+   Hazard card above the pane holds the hazard. */
+#tab-infrastructure.infra-mode-ew #infra-hazard-prep { display: none; }

@@ -14,8 +14,8 @@ The app is organised by disaster-risk-management phase. A phase switch under the
 | | Pop analysis | Compute child exposure by country, province or district; supports custom GeoJSON upload and GEE asset paths |
 | | Infra analysis | Correlate schools, health facilities and water points with hazard footprints and child population |
 | **Early Warning** | Visualization | **Observed** (GPM IMERG, ERA5-Land, MODIS LST, FIRMS, Sentinel-5P) and **Forecast** (NOAA GFS, CAMS, or any pasted GEE Image/ImageCollection id) over a user-selected window |
-| | Pop analysis | Child exposure to the observed or forecast layer; keeps the dataset, window and aggregation chosen in Visualization |
-| | Infra analysis | Planned: facility exposure to observed and forecast hazards |
+| | Pop analysis | Child exposure to the observed or forecast layer in the shared Hazard card (picked in Visualization or right in the analysis form) |
+| | Infra analysis | Facility exposure to the Hazard card's layer (same Voronoi catchments and 100 m population grid as Preparedness) |
 | | Seasonal | El Niño seasonal rainfall and temperature outlook and children in areas with a dry or wet signal |
 | **Damage Assessment** | — | Planned |
 | All phases | AI | Gemini-powered assistant for natural language hazard queries (under development) |

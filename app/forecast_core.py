@@ -652,6 +652,34 @@ def get_forecast_exposed_tile(name, start, end, reducer, threshold,
 
 
 # ---------------------------------------------------------------------------
+# Live hazard for the facility analysis (Early Warning › Infra analysis)
+# ---------------------------------------------------------------------------
+
+def build_live_hazard(name, start, end, reducer, threshold,
+                      custom_id=None, custom_band=None):
+    """The reduced layer as gee_core's `live` hazard: footprint where the value
+    exceeds `threshold` (strict >, as everywhere else) plus the raw values for
+    sampling at each facility. Returns (live, n_images)."""
+    cfg = _resolve_cfg(name, custom_id, custom_band)
+    img, n = build_forecast_image(name, start, end, reducer,
+                                  custom_id, custom_band)
+    return {"label": cfg["label"], "mask": img.gt(threshold).selfMask(),
+            "value": img}, n
+
+
+@_ttl_cached(cache=_tile_cache(32), lock=_lock)
+def get_live_hazard_area_tile(name, start, end, reducer, threshold, adm2_ucode,
+                              color, custom_id=None, custom_band=None):
+    """Hazard footprint clipped to the district — the live twin of
+    gee_core.get_topic_tile_url_clipped for the facility map."""
+    img, _ = build_forecast_image(name, start, end, reducer,
+                                  custom_id, custom_band)
+    region = _admin_region("adm2 (Districts/Counties)", adm2_ucode)
+    area = img.gt(threshold).selfMask().clip(region)
+    return area.getMapId({"palette": [color.lstrip("#")]})["tile_fetcher"].url_format
+
+
+# ---------------------------------------------------------------------------
 # Custom asset probing (paste-a-GEE-id path)
 # ---------------------------------------------------------------------------
 

@@ -996,6 +996,15 @@ def _name_prop(props):
     return props[0] if props else "name"
 
 
+LIVE_VALUE_KEY = "hazard_value"
+
+
+def _live_hazard(live):
+    """One observed/forecast hazard as ([topic], {topic: footprint}), shaped
+    like the static catalogue so the facility code needs no second path."""
+    return [live["label"]], {live["label"]: live["mask"]}
+
+
 def _sel_topics(topic_masks, topics):
     sel = [t for t in (topics or _INFRA_TOPICS) if t in topic_masks]
     return sel or list(_INFRA_TOPICS)
@@ -1042,7 +1051,8 @@ def _voronoi_cells(points, adm2_geojson):
     return {"type": "FeatureCollection", "features": feats}
 
 
-def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overrides=None):
+def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overrides=None,
+                              live=None):
     """Single combined analysis for one adm2 district:
 
       • Exposed population per hazard — aggregated over the WHOLE adm2 (Voronoi
@@ -1055,6 +1065,11 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overr
     `threshold_overrides`: optional {hazard_name: value} applied per hazard so the
     facility summary uses the same custom thresholds as the Analysis tab.
 
+    `live`: optional {"label", "mask", "value"} from an observed/forecast layer
+    (see _live_hazard). It replaces the static topic catalogue with that one
+    hazard; population stays on the 100 m grid, so catchments match the
+    Preparedness analysis.
+
     Returns a merged dict (see keys below). Kept to a small number of sequential
     getInfo calls (never fan-out) to respect the GEE concurrency limit.
     """
@@ -1063,11 +1078,15 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overr
     pop_res     = core["pop_target_res"]
     region      = _adm2_region(adm2_ucode)
 
-    sel_topics = _sel_topics(core["topic_masks"], topics)
-    exposure_by, topic_masks = apply_threshold_overrides(
-        core, threshold_overrides, sel_topics)
-    sub_names  = [h for _t, hs in _subhazards_for(sel_topics)
-                  for h in hs if h in exposure_by]
+    if live:
+        sel_topics, topic_masks = _live_hazard(live)
+        exposure_by, sub_names = {}, []
+    else:
+        sel_topics = _sel_topics(core["topic_masks"], topics)
+        exposure_by, topic_masks = apply_threshold_overrides(
+            core, threshold_overrides, sel_topics)
+        sub_names  = [h for _t, hs in _subhazards_for(sel_topics)
+                      for h in hs if h in exposure_by]
     union_mask = _topic_union_mask(core, sel_topics, topic_masks)
 
     # ── (1) Aggregate exposed population per hazard over the whole adm2 ──
@@ -1098,7 +1117,8 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overr
             (per_topic if key[0] == "topic" else per_sub)[key[1]] = stats.get(bname)
 
     # ── (2) Facility-site exposure (flags + raw intensity per facility) ──
-    site = compute_facility_site(asset_id, adm2_ucode, topics, threshold_overrides)
+    site = compute_facility_site(asset_id, adm2_ucode, topics, threshold_overrides,
+                                 live=live)
     facilities = site["facilities"]
     site_tally = site["tally"]
 
@@ -1136,7 +1156,8 @@ def compute_facility_combined(asset_id, adm2_ucode, topics=None, threshold_overr
     }
 
 
-def compute_facility_site(asset_id, adm2_ucode, topics=None, threshold_overrides=None):
+def compute_facility_site(asset_id, adm2_ucode, topics=None, threshold_overrides=None,
+                          live=None):
     """Concept 2: whether each facility SITE sits in a hazard footprint, and at
     what raw intensity (native units) — sampled at the facility point.
 
@@ -1157,10 +1178,18 @@ def compute_facility_site(asset_id, adm2_ucode, topics=None, threshold_overrides
     target_scale = core["target_scale"]
     region       = _adm2_region(adm2_ucode)
 
-    sel_topics = _sel_topics(core["topic_masks"], topics)
-    _, topic_masks = apply_threshold_overrides(core, threshold_overrides, sel_topics)
-    # Sub-hazard intensity layers for the selected topics (skip missing).
-    sub_names = [h for t in sel_topics for h in HAZARD_TOPICS[t] if h in raw_hazard]
+    if live:
+        sel_topics, topic_masks = _live_hazard(live)
+        # Own key: the topic name already holds the 0/1 site flag.
+        raw_hazard = {LIVE_VALUE_KEY: live["value"]}
+        sub_names  = [LIVE_VALUE_KEY]
+    else:
+        sel_topics = _sel_topics(core["topic_masks"], topics)
+        _, topic_masks = apply_threshold_overrides(core, threshold_overrides,
+                                                   sel_topics)
+        # Sub-hazard intensity layers for the selected topics (skip missing).
+        sub_names = [h for t in sel_topics for h in HAZARD_TOPICS[t]
+                     if h in raw_hazard]
 
     try:
         _, props = get_asset_info(asset_id)

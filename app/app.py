@@ -55,6 +55,7 @@ from forecast_core import (
     compute_forecast_exposure, probe_custom_asset,
     get_forecast_intensity_tile, get_forecast_exposed_tile,
     get_forecast_preview_tile, forecast_run_label,
+    build_live_hazard, get_live_hazard_area_tile,
     active_datasets_live, fetch_active_overrides, FORECAST_CONFIG_ASSET,
 )
 from elnino_config import (
@@ -219,10 +220,11 @@ def _elnino_period_options():
 #            key. Pane keys are load-bearing (store-tab's default, and ~30
 #            callbacks compare against them), so they never change with labels.
 #
-# Two views may share a pane: EW Visualization and EW Pop analysis both open
-# the Observed/Forecast panes, and store-view decides whether the region and
-# compute steps of fc_controls are shown. Moving between them keeps the
-# dataset selection, which is what carries a previewed layer into analysis.
+# Every EW task sits under one Hazard card (ew_hazard_card), so the hazard is
+# picked once and stays editable in Visualization, Pop and Infra analysis.
+# Prep and EW Infra analysis share the infrastructure pane; store-view sets
+# infra-mode-prep / infra-mode-ew, and a view change on a shared pane does not
+# fire store-tab callbacks (clear on store-view).
 # ---------------------------------------------------------------------------
 
 TABS = [
@@ -250,9 +252,9 @@ TABS = [
     {"key": "forecast",       "pane": "tab-forecast",
      "title": "Forecast Hazards",
      "desc": "Hazards forecast for the days ahead (under development)"},
-    {"key": "ewinfra",        "pane": "tab-ewinfra",
-     "title": "Infrastructure Analysis",
-     "desc": "Facilities exposed to observed and forecast hazards"},
+    {"key": "ewpop",          "pane": "tab-ewpop",
+     "title": "Population Analysis",
+     "desc": "Compute children exposed to the selected hazard by admin unit"},
     {"key": "elnino",         "pane": "tab-elnino",
      "title": "El Niño Seasonal Outlook",
      "desc": "Explore the seasonal rainfall outlook and compute the number of "
@@ -264,9 +266,12 @@ TABS = [
 
 TAB_BY_KEY = {t["key"]: t for t in TABS}
 
-# Observed and Forecast reuse one control block (fc_controls) and one set of
-# map layers, reset on every switch; code serving that block accepts either.
-FORECAST_TABS = ("forecast", "observed")
+# EW Visualization's catalogue panes (one per dataset kind).
+CATALOG_TABS = ("forecast", "observed")
+# Panes on the shared forecast map layers; ewpop also shows fc_controls.
+FORECAST_TABS = (*CATALOG_TABS, "ewpop")
+# Views under the shared EW Hazard card.
+EW_HAZARD_VIEWS = ("ew-vis", "ew-pop", "ew-infra")
 
 PHASES = [
     {"key": "prep",   "slug": "preparedness",      "label": "Preparedness",
@@ -303,10 +308,10 @@ VIEWS = [
      "segments": _EW_SEGMENTS},
     {"key": "ew-pop",     "phase": "ew",   "slug": "population",
      "icon": "bi bi-people",         "label": "Pop analysis",
-     "segments": _EW_SEGMENTS},
+     "segments": [_seg("ewpop")]},
     {"key": "ew-infra",   "phase": "ew",   "slug": "infrastructure",
      "icon": "bi bi-buildings",      "label": "Infra analysis",
-     "segments": [_seg("ewinfra")], "soon": True},
+     "segments": [_seg("infrastructure")]},
     {"key": "ew-seasonal", "phase": "ew",  "slug": "seasonal",
      "icon": "bi bi-thermometer-sun", "label": "Seasonal",
      "segments": [_seg("elnino")]},
@@ -372,14 +377,10 @@ def nav_label(nav):
     return " › ".join(parts)
 
 
-def tab_header(key):
-    """The .ph title/subtitle block for a pane, sourced from TABS so the
-    registry and the pane header can never drift apart."""
-    t = TAB_BY_KEY[key]
-    return html.Div(className="ph", children=[
-        html.Div(t["title"], className="ph-title"),
-        html.Div(t["desc"],  className="ph-sub"),
-    ])
+def view_header_children(tab):
+    t = TAB_BY_KEY[tab]
+    return [html.Div(t["title"], className="ph-title"),
+            html.Div(t["desc"],  className="ph-sub")]
 
 
 def rail_btn_class(view, nav):
@@ -579,7 +580,6 @@ def tab_hazard_layers():
                      for p in POPULATION_LAYERS if p["group"] == group)
 
     return html.Div(id="tab-hazard", children=[
-        tab_header("hazard"),
         html.Div(items, className="layer-list"),
     ])
 
@@ -626,7 +626,6 @@ def _exposure_inline_editor(topic):
 
 def tab_exposure():
     return html.Div(id="tab-exposure", style={"display": "none"}, children=[
-        tab_header("exposure"),
         # Radio-selectable topic list; the selected row carries the inline
         # threshold editor. Rebuilt by render_exposure_topics on selection.
         html.Div(id="exposure-topic-list",
@@ -655,7 +654,6 @@ def tab_mh():
     # Colour ramps for these layers live in the floating map legend
     # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
-        tab_header("mh"),
         html.Div(className="ps", children=[
             html.Div("Hazard Count (MHC)", className="ps-label"),
             html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
@@ -700,7 +698,6 @@ def tab_mh():
 
 def tab_analysis():
     return html.Div(id="tab-analysis", style={"display": "none"}, children=[
-        tab_header("analysis"),
         # ── Sub-tab switcher ──
         html.Div(className="analysis-sub-tabs", children=[
             html.Button("GeoRepo Boundaries", id="btn-georapo-tab",
@@ -918,8 +915,8 @@ def _infra_layer_options(country=None):
 
 
 def tab_infrastructure():
-    return html.Div(id="tab-infrastructure", style={"display": "none"}, children=[
-        tab_header("infrastructure"),
+    return html.Div(id="tab-infrastructure", className="infra-mode-prep",
+                    style={"display": "none"}, children=[
 
         # 1. Region — own selector that writes to the shared region stores.
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
@@ -975,8 +972,9 @@ def tab_infrastructure():
                      style={"fontSize": "0.72rem", "marginTop": "8px", "color": "var(--mid)"}),
         ]),
 
-        # 3. Hazard topics
-        html.Div(className="ps", children=[
+        # 3. Hazard topics — Preparedness only; in EW the Hazard card above
+        # the pane holds the hazard (#tab-infrastructure.infra-mode-ew).
+        html.Div(id="infra-hazard-prep", className="ps", children=[
             html.Div("3. Hazard topics", className="ps-label"),
             dcc.Dropdown(
                 id="infra-topic-select", className="ps-select",
@@ -1153,9 +1151,8 @@ _FC_CAVEAT = (
 
 def tab_observed():
     """Recently observed (near-real-time) hazards: header and dataset list.
-    The rest of the workflow is fc_controls(), shown below it."""
+    The hazard card above the pane holds the window and aggregation."""
     return html.Div(id="tab-observed", style={"display": "none"}, children=[
-        tab_header("observed"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
@@ -1172,7 +1169,6 @@ def tab_observed():
 
 def tab_forecast():
     return html.Div(id="tab-forecast", style={"display": "none"}, children=[
-        tab_header("forecast"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
@@ -1230,98 +1226,55 @@ def tab_forecast():
     ])
 
 
-def fc_controls():
-    """Window, region, threshold, results and stores for Observed AND Forecast.
+def ew_hazard_card():
+    """The Early Warning hazard: dataset, window, aggregation and threshold.
 
-    One instance (Dash ids are unique), placed after both panes and shown under
-    whichever of the two is open. Switching between them resets it, so each tab
-    starts clean (forecast_reset_on_tab).
+    One instance above the panes, shared by EW Visualization, Pop and Infra
+    analysis, so the hazard is picked once and stays editable in every task.
+    In Visualization the catalogue list below is the picker, so the dropdown
+    and threshold are hidden (#ew-hazard-card.ewh-mode-vis).
     """
-    return html.Div(id="fc-controls", style={"display": "none"}, children=[
-        # Selected-dataset summary — badge, caveat, catalog link.
+    return html.Div(id="ew-hazard-card", className="ewh ewh-mode-vis",
+                    style={"display": "none"}, children=[
+        html.Div("Hazard", className="ewh-title"),
+        html.Div(id="ewh-pick", children=[
+            dcc.Dropdown(id="forecast-dataset-select", className="ps-select",
+                         options=[], value=None, clearable=False,
+                         searchable=True,
+                         placeholder="Choose an observed or forecast layer…"),
+        ]),
+        html.Div("Pick a layer below to preview it.", id="ewh-empty",
+                 className="ps-caption"),
         html.Div(id="forecast-selected-wrap", style={"display": "none"},
                  children=[
-            html.Div(className="ps", children=[
-                html.Div(id="forecast-kind-badge-wrap"),
-                html.Div(id="forecast-dataset-note", className="ps-caption",
-                         style={"marginTop": "6px"}),
-                html.Div(id="forecast-catalog-link", style={"marginTop": "4px"}),
-            ]),
+            html.Div(id="forecast-kind-badge-wrap"),
+            html.Div(id="forecast-dataset-note", className="ps-caption",
+                     style={"marginTop": "6px"}),
+            html.Div(id="forecast-catalog-link", style={"marginTop": "4px"}),
         ]),
 
-        # Hidden holder for the selected dataset name. Deliberately a
-        # RadioItems, not a Store: nine existing callbacks read
-        # `forecast-dataset-select.value`, and only an input component exposes
-        # `.value` — so the row list can replace the dropdown without touching
-        # a single downstream callback.
-        dcc.RadioItems(id="forecast-dataset-select", options=[], value=None,
-                       style={"display": "none"}),
-
-        # 2. Window + aggregation. Changing either re-renders the global preview.
+        # Changing the window or aggregation re-renders the global preview.
         html.Div(id="forecast-params-section", style={"display": "none"}, children=[
-            html.Div(className="ps", children=[
-                html.Div("2. Time window", className="ps-label"),
-                dcc.DatePickerRange(
-                    id="forecast-dates",
-                    display_format="DD MMM YYYY",
-                    className="forecast-datepicker",
-                    minimum_nights=0,
-                    clearable=False,
-                    updatemode="bothdates",
-                ),
-                html.Div(id="forecast-dates-note", className="ps-caption"),
-            ]),
-            html.Div(className="ps", children=[
-                html.Div("3. Aggregation over the window", className="ps-label"),
-                dcc.Dropdown(
-                    id="forecast-reducer", className="ps-select",
-                    clearable=False, searchable=False,
-                ),
-                html.Div(id="forecast-preview-status", className="ps-caption",
-                         style={"marginTop": "8px"}),
-            ]),
+            html.Div("Time window", className="ewh-label"),
+            dcc.DatePickerRange(
+                id="forecast-dates",
+                display_format="DD MMM YYYY",
+                className="forecast-datepicker",
+                minimum_nights=0,
+                clearable=False,
+                updatemode="bothdates",
+            ),
+            html.Div(id="forecast-dates-note", className="ps-caption"),
+            html.Div("Aggregation over the window", className="ewh-label"),
+            dcc.Dropdown(
+                id="forecast-reducer", className="ps-select",
+                clearable=False, searchable=False,
+            ),
+            html.Div(id="forecast-preview-status", className="ps-caption",
+                     style={"marginTop": "8px"}),
 
-            # Visualization mode stops here and hands over to Pop analysis,
-            # which keeps the dataset, window and aggregation chosen above.
-            html.Div(id="fc-goto-wrap", className="ps", children=[
-                html.Button([html.I(className="bi bi-people"),
-                             "  Analyse children exposed  →"],
-                            id="fc-goto-analysis", className="ps-btn",
-                            n_clicks=0),
-            ]),
-
-            # Steps 4-6 and Compute: shown in Pop analysis mode only (CSS on
-            # #fc-controls.fc-mode-vis).
-            html.Div(id="fc-analysis-part", children=[
-            # 4. Country — only now, once the layer is visible on the map.
-            html.Div(className="ps", children=[
-                html.Div("4. Select country / territory", className="ps-label"),
-                dcc.Dropdown(
-                    id="forecast-country-select", className="ps-select",
-                    options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
-                    value=None, placeholder="Search country / territory…",
-                    clearable=False, searchable=True,
-                ),
-            ]),
-
-            # 5. Level
-            html.Div(id="forecast-level-section", style={"display": "none"},
-                     children=[
-                html.Div(className="ps", children=[
-                    html.Div("5. Analysis level", className="ps-label"),
-                    dcc.Dropdown(
-                        id="forecast-level-select", className="ps-select",
-                        options=[{"label": l, "value": l} for l in ADMIN_DATA.keys()],
-                        value=None, placeholder="— select level —",
-                        clearable=False, searchable=False,
-                    ),
-                    html.Div("For ADM1/ADM2, click the region on the map.",
-                             className="ps-caption"),
-                ]),
-            ]),
-
-            html.Div(className="ps", children=[
-                html.Div("6. Exposure threshold", className="ps-label"),
+            html.Div(id="ewh-threshold", children=[
+                html.Div("Exposure threshold", className="ewh-label"),
                 html.Div(className="analysis-threshold-row", children=[
                     html.Div(className="athr-row-head", children=[
                         html.Span("Exposed where value >", className="athr-label"),
@@ -1336,11 +1289,49 @@ def fc_controls():
                                tooltip={"placement": "bottom",
                                         "always_visible": False}),
                 ]),
-                html.Div("Children are counted where the aggregated value is "
-                         "strictly greater than this threshold.",
-                         className="ps-caption"),
                 html.Div(id="forecast-threshold-source", className="ps-caption"),
+                html.Div(id="ewh-stale", className="ewh-stale"),
             ]),
+
+            html.Div(id="fc-goto-wrap", className="ewh-goto", children=[
+                html.Button([html.I(className="bi bi-people"),
+                             "  Analyse children exposed  →"],
+                            id="fc-goto-analysis", className="ps-btn",
+                            n_clicks=0),
+                html.Button([html.I(className="bi bi-buildings"),
+                             "  Analyse facilities exposed  →"],
+                            id="fc-goto-infra", className="ps-btn",
+                            n_clicks=0),
+            ]),
+        ]),
+    ])
+
+
+def fc_controls():
+    """Region, Compute and results for EW Pop analysis, plus the stores the
+    EW panes share. The hazard itself lives in ew_hazard_card()."""
+    return html.Div(id="fc-controls", style={"display": "none"}, children=[
+        html.Div(className="ps", children=[
+            html.Div("1. Select country / territory", className="ps-label"),
+            dcc.Dropdown(
+                id="forecast-country-select", className="ps-select",
+                options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
+                value=None, placeholder="Search country / territory…",
+                clearable=False, searchable=True,
+            ),
+        ]),
+        html.Div(id="forecast-level-section", style={"display": "none"},
+                 children=[
+            html.Div(className="ps", children=[
+                html.Div("2. Analysis level", className="ps-label"),
+                dcc.Dropdown(
+                    id="forecast-level-select", className="ps-select",
+                    options=[{"label": l, "value": l} for l in ADMIN_DATA.keys()],
+                    value=None, placeholder="— select level —",
+                    clearable=False, searchable=False,
+                ),
+                html.Div("For ADM1/ADM2, click the region on the map.",
+                         className="ps-caption"),
             ]),
         ]),
 
@@ -1584,7 +1575,6 @@ def _elnino_layer_panel():
 
 def tab_elnino():
     return html.Div(id="tab-elnino", style={"display": "none"}, children=[
-        tab_header("elnino"),
 
         html.Div(className="exposure-method-note",
                  style={"margin": "12px 10px 0"}, children=[
@@ -1800,30 +1790,8 @@ def tab_elnino():
     ])
 
 
-def tab_ewinfra():
-    return html.Div(id="tab-ewinfra", style={"display": "none"}, children=[
-        tab_header("ewinfra"),
-        html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
-                 children=[
-            html.Div("Coming soon", className="hi-label",
-                     style={"marginBottom": "6px"}),
-            html.P([
-                "Facility exposure to observed and forecast hazards is under "
-                "development. It will reuse the Preparedness infrastructure "
-                "analysis with the hazard layer chosen under ",
-                html.Strong("Early Warning › Visualization"), ".",
-            ], className="exposure-method-p"),
-            html.P([
-                "For facility exposure to the historical hazard catalogue, use ",
-                html.Strong("Preparedness › Infra analysis"), ".",
-            ], className="exposure-method-p", style={"marginBottom": "0"}),
-        ]),
-    ])
-
-
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
-        tab_header("ai"),
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
             html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
             html.P([
@@ -2359,8 +2327,11 @@ app.layout = html.Div(id="app-root", children=[
         sidebar(),
         html.Div(id="panel", children=[
             panel_head(),
-            # Order mirrors TABS; panes are display-toggled, so DOM order
-            # itself is not visually significant.
+            html.Div(view_header_children(DEFAULT_NAV["tab"]),
+                     id="view-header", className="ph"),
+            ew_hazard_card(),
+            # Panes are display-toggled, so DOM order is not visually
+            # significant.
             tab_hazard_layers(),
             tab_mh(),
             tab_exposure(),
@@ -2368,8 +2339,8 @@ app.layout = html.Div(id="app-root", children=[
             tab_infrastructure(),
             tab_observed(),
             tab_forecast(),
+            html.Div(id="tab-ewpop", style={"display": "none"}),
             fc_controls(),
-            tab_ewinfra(),
             tab_elnino(),
             tab_ai(),
         ]),
@@ -2569,7 +2540,10 @@ def restore_embargo_state(accepted_forever):
     Output("store-phase",    "data"),
     Output("store-last-nav", "data"),
     Output("main-app",       "className"),
-    Output("fc-controls",    "className"),
+    Output("ew-hazard-card", "className"),
+    Output("ew-hazard-card", "style"),
+    Output("view-header",    "children"),
+    Output("tab-infrastructure", "className"),
     *[Output(f"nav-{v['key']}",    "className") for v in VIEWS],
     *[Output(f"phase-{p['key']}",  "className") for p in PHASES],
     *[Output(f"segbar-{v['key']}", "style")     for v in SEGMENTED_VIEWS],
@@ -2613,7 +2587,10 @@ def switch_tab(nav, cur_tab, cur_view, cur_phase, last):
         same(tab, cur_tab), same(view, cur_view), same(phase, cur_phase),
         last,
         f"phase-{phase}",
-        "fc-mode-vis" if view == "ew-vis" else "fc-mode-analysis",
+        "ewh " + ("ewh-mode-vis" if view == "ew-vis" else "ewh-mode-analysis"),
+        {"display": "block" if view in EW_HAZARD_VIEWS else "none"},
+        view_header_children(tab),
+        "infra-mode-ew" if view == "ew-infra" else "infra-mode-prep",
         *[rail_btn_class(v, nav) for v in VIEWS],
         *[phase_btn_class(p, nav) for p in PHASES],
         *[{"display": "flex" if v["key"] == view else "none"}
@@ -2640,23 +2617,25 @@ _RESULT_STORES = {
     "infrastructure": ("store-infra-viz",      "infrastructure results"),
     "observed":       ("store-forecast-viz",   "observed-hazard results"),
     "forecast":       ("store-forecast-viz",   "forecast results"),
+    "ewpop":          ("store-forecast-viz",   "exposure results"),
     "elnino":         ("store-elnino-viz",     "El Niño results"),
 }
 
 
-def _nav_dest(trig, cur, last, pathname):
+def _nav_dest(trig, cur, last, pathname, ew_tab=None):
     """Where a nav trigger leads, as {phase, view, tab}; None = nowhere new.
 
-    A rail click keeps the current pane when the target view also has it
-    (EW Visualization ↔ Pop analysis), so a previewed dataset carries over;
-    otherwise it returns to the pane last used in that view.
+    A rail click keeps the current pane when the target view also has it,
+    otherwise returns to the pane last used in that view. EW Visualization
+    opens on the segment of the selected hazard (`ew_tab`) so its row shows.
     """
     views_last  = (last or {}).get("views", {})
     phases_last = (last or {}).get("phases", {})
 
     def resume(view_key, phase):
         tabs = view_tabs(view_key)
-        tab = (cur["tab"] if cur["tab"] in tabs
+        tab = (ew_tab if view_key == "ew-vis" and ew_tab in tabs
+               else cur["tab"] if cur["tab"] in tabs
                else views_last.get(view_key) if views_last.get(view_key) in tabs
                else tabs[0])
         return {"phase": VIEW_BY_KEY[view_key]["phase"] or phase,
@@ -2665,7 +2644,9 @@ def _nav_dest(trig, cur, last, pathname):
     if trig in (None, "url"):
         return nav_from_path(app.strip_relative_path(pathname or "") or "")
     if trig == "fc-goto-analysis":
-        return {**cur, "view": "ew-pop"}
+        return resume("ew-pop", "ew")
+    if trig == "fc-goto-infra":
+        return resume("ew-infra", "ew")
     if isinstance(trig, dict):
         view = VIEW_BY_KEY[trig["view"]]
         return {"phase": view["phase"] or cur["phase"],
@@ -2690,6 +2671,7 @@ def _nav_dest(trig, cur, last, pathname):
     *[Input(f"phase-{p['key']}", "n_clicks") for p in PHASES if p["enabled"]],
     Input({"type": "seg-btn", "view": ALL, "tab": ALL}, "n_clicks"),
     Input("fc-goto-analysis",    "n_clicks"),
+    Input("fc-goto-infra",       "n_clicks"),
     Input("url",                 "pathname"),
     Input("leave-confirm-btn",   "n_clicks"),
     Input("leave-cancel-btn",    "n_clicks"),
@@ -2704,6 +2686,8 @@ def _nav_dest(trig, cur, last, pathname):
     State("store-forecast-viz",  "data"),
     State("store-elnino-viz",    "data"),
     State("store-leave-dest",    "data"),
+    State("forecast-dataset-select", "value"),
+    State("store-forecast-asset",    "data"),
     # Not prevented: the initial call is what applies a deep-linked URL.
     prevent_initial_call=False,
 )
@@ -2740,13 +2724,17 @@ def leave_guard(*args):
             raise dash.exceptions.PreventUpdate
         return held, None, hidden, no_update
 
-    dest =_nav_dest(trig, cur, st.get("store-last-nav.data"),
-                     ctx.inputs.get("url.pathname"))
+    cfg = _forecast_cfg(st.get("forecast-dataset-select.value"),
+                        st.get("store-forecast-asset.data"))
+    ew_tab = (None if not cfg else "forecast"
+              if cfg["is_custom"] or cfg.get("kind") == "forecast" else "observed")
+    dest = _nav_dest(trig, cur, st.get("store-last-nav.data"),
+                     ctx.inputs.get("url.pathname"), ew_tab)
     if not dest or dest == cur:
         raise dash.exceptions.PreventUpdate
 
     entry = _RESULT_STORES.get(cur["tab"])
-    key = {"observed": "forecast"}.get(cur["tab"], cur["tab"])
+    key = "forecast" if cur["tab"] in FORECAST_TABS else cur["tab"]
     moving = dest["tab"] != cur["tab"] or dest["view"] != cur["view"]
     if not moving or not entry or not live.get(key):
         return dest, None, hidden, no_update   # nothing to lose
@@ -2788,55 +2776,120 @@ app.clientside_callback(
 
 
 @app.callback(
-    Output("forecast-exposed-tile",   "url",      allow_duplicate=True),
-    Output("forecast-selection-tile", "url",      allow_duplicate=True),
-    Output("store-forecast-viz",      "data",     allow_duplicate=True),
-    Output("store-forecast-result",   "data",     allow_duplicate=True),
-    Output("forecast-results-panel",  "children", allow_duplicate=True),
-    Output("store-ucode",             "data",     allow_duplicate=True),
-    Output("store-bounds",            "data",     allow_duplicate=True),
-    Output("store-country",           "data",     allow_duplicate=True),
-    Output("store-clicked-ucode",     "data",     allow_duplicate=True),
-    Output("store-clicked-name",      "data",     allow_duplicate=True),
-    Output("forecast-country-select", "value",    allow_duplicate=True),
-    Input("store-view",               "data"),
-    prevent_initial_call=True,
-)
-def forecast_clear_on_vis(view):
-    """EW Pop analysis → Visualization keeps the pane (store-tab does not
-    change, so clear_on_leave does not fire) but drops the computed results
-    and region, which Visualization has no controls for. The dataset, window
-    and preview stay."""
-    if view != "ew-vis":
-        raise dash.exceptions.PreventUpdate
-    return "", "", None, None, None, None, None, None, None, None, None
-
-
-@app.callback(
     Output("map-mode-badge",          "children"),
     Output("map-mode-badge",          "style"),
     Input("store-phase",              "data"),
+    Input("store-view",               "data"),
     Input("store-tab",                "data"),
     Input("forecast-dataset-select",  "value"),
+    Input("store-forecast-asset",     "data"),
     Input("forecast-dates",           "start_date"),
     Input("forecast-dates",           "end_date"),
 )
-def update_mode_badge(phase, tab, dataset, start, end):
+def update_mode_badge(phase, view, tab, dataset, asset, start, end):
     """Phase + hazard source on the map. Text, not only the accent colour, so
     Observed vs Forecast vs the historical catalogue is never ambiguous."""
     if tab == "ai" or phase not in PHASE_BY_KEY:
         return None, {"display": "none"}
     p = PHASE_BY_KEY[phase]
-    source = {"observed": "Observed", "forecast": "Forecast",
-              "elnino": "Seasonal outlook"}.get(tab, p["badge"])
+    cfg = _forecast_cfg(dataset, asset) if view in EW_HAZARD_VIEWS else None
+    source = ("Seasonal outlook" if tab == "elnino" else
+              _ew_source(cfg) if cfg else p["badge"])
     parts = [html.Span(p["label"], className="mmb-phase"),
              html.Span(source, className="mmb-source")]
-    if tab in FORECAST_TABS and dataset:
-        parts.append(html.Span(dataset, className="mmb-detail"))
+    if cfg:
+        parts.append(html.Span(cfg["label"], className="mmb-detail"))
         window = _fmt_window(start, end)
         if window:
             parts.append(html.Span(window, className="mmb-detail"))
     return parts, {"display": "flex"}
+
+
+def _ew_source(cfg):
+    if cfg["is_custom"]:
+        return "Custom layer"
+    return "Forecast" if cfg.get("kind") == "forecast" else "Observed"
+
+
+@app.callback(
+    Output("ewh-stale",               "children"),
+    Input("forecast-dataset-select",  "value"),
+    Input("store-forecast-asset",     "data"),
+    Input("forecast-dates",           "start_date"),
+    Input("forecast-dates",           "end_date"),
+    Input("forecast-reducer",         "value"),
+    Input("forecast-threshold",       "value"),
+    Input("store-forecast-viz",       "data"),
+    Input("store-infra-viz",          "data"),
+    Input("store-view",               "data"),
+)
+def ew_hazard_stale(dataset, asset, start, end, reducer, threshold,
+                    fc_viz, infra_viz, view):
+    """Flag a result computed on a different hazard than the card now shows;
+    the result is kept so an accidental edit costs nothing."""
+    done = ((fc_viz or {}).get("spec") if view == "ew-pop" else
+            (infra_viz or {}).get("live") if view == "ew-infra" else None)
+    if not done or done == _live_spec(dataset, asset, start, end, reducer,
+                                      threshold):
+        return None
+    return [html.I(className="bi bi-exclamation-triangle"),
+            " Hazard changed since the result below was computed. "
+            "Compute again to update it."]
+
+
+def _as_float(v, default=0.0):
+    try:
+        return float(v if v not in (None, "") else default)
+    except (TypeError, ValueError):
+        return default
+
+
+@app.callback(
+    Output("infra-results-panel",   "children", allow_duplicate=True),
+    Output("infra-download-wrap",   "children", allow_duplicate=True),
+    Output("infra-pop-tile",        "url",      allow_duplicate=True),
+    Output("infra-voronoi-geojson", "data",     allow_duplicate=True),
+    Output("store-infra-viz",       "data",     allow_duplicate=True),
+    Output("store-infra-pending",   "data",     allow_duplicate=True),
+    Output("forecast-intensity-tile", "url",    allow_duplicate=True),
+    Output("store-forecast-preview",  "data",   allow_duplicate=True),
+    Input("store-view",             "data"),
+    prevent_initial_call=True,
+)
+def infra_clear_on_phase(view):
+    """Prep and EW Infra analysis share the pane, so moving between them does
+    not change store-tab and clear_on_leave never fires. The district stays
+    selected (handy for comparing the two), but a result computed on one
+    phase's hazard must not remain under the other's."""
+    if view not in ("prep-infra", "ew-infra"):
+        raise dash.exceptions.PreventUpdate
+    preview = ("", None) if view == "prep-infra" else (no_update, no_update)
+    return None, None, "", None, None, None, *preview
+
+
+@app.callback(
+    Output({"type": "infra-topic-tile", "index": ALL}, "url", allow_duplicate=True),
+    Input("store-infra-viz", "data"),
+    State({"type": "infra-topic-tile", "index": ALL}, "url"),
+    prevent_initial_call=True,
+)
+def infra_reset_topic_tiles(viz, urls):
+    """Hazard-area slots are fetched once, on first reveal; any new result (or
+    none) empties them so a reveal never shows the previous district's tile.
+    An EW result's single live hazard area starts visible, so it is fetched
+    now."""
+    out = [""] * len(urls)
+    live = (viz or {}).get("live")
+    if live and viz.get("topics") and out:
+        try:
+            out[0] = get_live_hazard_area_tile(
+                live["name"], live["start"], live["end"], live["reducer"],
+                live["threshold"], viz["ucode"], LIVE_HAZARD_COLOR,
+                custom_id=live.get("custom_id"),
+                custom_band=live.get("custom_band"))
+        except Exception:
+            pass
+    return out
 
 
 def _fmt_window(start, end):
@@ -2882,10 +2935,13 @@ def _fmt_window(start, end):
     # country name sitting in a dropdown with no boundary drawn for it.
     Output("elnino-country",          "value", allow_duplicate=True),
     Output("forecast-country-select", "value", allow_duplicate=True),
+    Output("store-level",             "data", allow_duplicate=True),
     Input("store-tab",                "data"),
+    State("store-view",               "data"),
+    State("infra-country-select",     "value"),
     prevent_initial_call=True,
 )
-def clear_on_leave(tab):
+def clear_on_leave(tab, view, infra_country):
     """Blank the OTHER sections' map layers and result stores on a tab change.
 
     Never touches the section being entered. Both this and that section's own
@@ -2903,25 +2959,34 @@ def clear_on_leave(tab):
     """
     keep_elnino   = tab == "elnino"
     keep_forecast = False
+    # The preview follows the dataset selection, which survives a return to
+    # Observed/Forecast (forecast_reset_on_tab); forecast_preview redraws it.
+    keep_preview  = tab in FORECAST_TABS or view == "ew-infra"
     keep_infra    = tab == "infrastructure"
     keep_analysis = tab == "analysis"
     blank = lambda keep: no_update if keep else ""
     none_ = lambda keep: no_update if keep else None
+    # Region state is shared, so it resets on every switch — except that the
+    # infra pane keeps its country dropdown, and the map must follow it.
+    region = (None, None, None, None, None)
+    viewport, level = GLOBAL_VIEWPORT, no_update
+    if keep_infra and infra_country:
+        ucode = get_country_ucode(infra_country)
+        region = (ucode, get_country_bounds(ucode), infra_country, None, None)
+        viewport, level = no_update, "adm2 (Districts/Counties)"
     return (
         blank(keep_elnino), blank(keep_elnino), blank(keep_elnino),
-        blank(keep_forecast), blank(keep_forecast),
+        blank(keep_preview), blank(keep_forecast),
         blank(keep_infra), blank(keep_infra),
         blank(keep_analysis),
         none_(keep_elnino), none_(keep_elnino),
-        none_(keep_forecast), none_(keep_forecast),
+        none_(keep_forecast), none_(keep_preview),
         none_(keep_infra), none_(keep_analysis),
-        # Region state and the selection highlights are shared, so they reset
-        # on every switch regardless of destination: the new section starts
-        # from no region, as it would on a fresh load.
-        None, None, None, None, None,
+        *region,
         "", "", "",
-        GLOBAL_VIEWPORT,
+        viewport,
         None, None,
+        level,
     )
 
 
@@ -3311,8 +3376,9 @@ def _infra_legend_specs(viz):
         if i >= ANALYSIS_TOPIC_SLOTS:
             break
         specs.append(swatch_spec(
-            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
-            layer_id=f"infra-topic-{i}", toggleable=True, visible=False))
+            f"{topic} — hazard area", TOPIC_COLORS.get(topic, LIVE_HAZARD_COLOR),
+            layer_id=f"infra-topic-{i}", toggleable=True,
+            visible=bool(viz.get("live"))))
     specs.append(swatch_spec("Selected subregion", "#f1c40f", shape="line",
                              layer_id="infra-selection", toggleable=True))
     return specs
@@ -3465,11 +3531,12 @@ def _elnino_extra_specs(extra):
     Input("store-elnino-viz",     "data"),
     Input("store-elnino-preview", "data"),
     Input("store-elnino-extra",   "data"),
+    Input("store-view",           "data"),
 )
 def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
                        infra_viz, analysis_viz, forecast_viz, forecast_preview,
                        elnino_viz, elnino_preview,
-                      elnino_extra):
+                      elnino_extra, view):
     """Build this tab's map tiles and the legend specs that describe them.
 
     Single source of truth for the legend: whichever tab is active writes its
@@ -3481,7 +3548,12 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
     # (infra-pop-tile / infra-points-tile / etc.), not in this group — but
     # their legend is still rendered by the shared overlay.
     if tab == "infrastructure":
-        return layers, _infra_legend_specs(infra_viz)
+        specs = _infra_legend_specs(infra_viz)
+        if view == "ew-infra":
+            # The live layer stays on the map; after Compute it steps back
+            # behind the district's hazard area.
+            specs += _preview_specs(forecast_preview, visible=not infra_viz)
+        return layers, specs
 
     if tab == "analysis":
         return layers, _analysis_legend_specs(analysis_viz)
@@ -4302,11 +4374,19 @@ def reveal_infra_topic(_eye_clicks, existing_urls, viz):
 
     topic   = topics[slot]
     thr_key = tuple((h, v) for h, v in (viz.get("thr") or []))
+    live    = viz.get("live")
     try:
-        url, _ = get_topic_tile_url_clipped(
-            topic, TOPIC_COLORS.get(topic, "#888888"),
-            viz["ucode"], viz.get("level") or "adm2 (Districts/Counties)",
-            thr_key)
+        if live:
+            url = get_live_hazard_area_tile(
+                live["name"], live["start"], live["end"], live["reducer"],
+                live["threshold"], viz["ucode"], LIVE_HAZARD_COLOR,
+                custom_id=live.get("custom_id"),
+                custom_band=live.get("custom_band"))
+        else:
+            url, _ = get_topic_tile_url_clipped(
+                topic, TOPIC_COLORS.get(topic, "#888888"),
+                viz["ucode"], viz.get("level") or "adm2 (Districts/Counties)",
+                thr_key)
     except Exception:
         raise dash.exceptions.PreventUpdate
 
@@ -5250,7 +5330,8 @@ def infra_on_country_select(country):
 )
 def infra_update_badge(name, tab):
     if not name or tab != "infrastructure":
-        return None, no_update
+        return None, ({"display": "block"} if tab == "infrastructure"
+                      else no_update)
     badge = html.Div(className="selected-badge", children=[
         html.Div("Selected region", className="selected-badge-tag"),
         html.Div(name, className="selected-badge-name"),
@@ -5548,7 +5629,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
     for td in tdata:
         topic = td["topic"]
         pct   = (td["pop"] / total * 100) if total else 0
-        color = TOPIC_COLORS.get(topic, "#888")
+        color = TOPIC_COLORS.get(topic, LIVE_HAZARD_COLOR)
         # Single-hazard topics show the threshold inline; multi-hazard topics
         # show it per-subhazard on the detail rows below.
         hazards = HAZARD_TOPICS.get(topic, [])
@@ -5603,6 +5684,63 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
     return items
 
 
+# ── EW Infra analysis: the live hazard ─────────────────────────────────────
+
+# Live (observed/forecast) footprint on the facility map and result rows; the
+# static topics keep their TOPIC_COLORS.
+LIVE_HAZARD_COLOR = "#d7301f"
+
+
+def _live_spec(dataset, asset, start, end, reducer, threshold):
+    """JSON-safe description of the EW Visualization layer, or None. Stored in
+    the infra viz/pending stores so phase 2 and the tile reveal can rebuild
+    the same image."""
+    cfg = _forecast_cfg(dataset, asset)
+    if not cfg or not start or not end or not reducer:
+        return None
+    return {"name": cfg["name"], "label": cfg["label"],
+            "source": _ew_source(cfg), "units": cfg.get("units", ""),
+            "start": start[:10], "end": end[:10], "reducer": reducer,
+            "threshold": _as_float(threshold),
+            "custom_id": cfg.get("custom_id"),
+            "custom_band": cfg.get("custom_band")}
+
+
+def _build_live(spec):
+    live, _n = build_live_hazard(
+        spec["name"], spec["start"], spec["end"], spec["reducer"],
+        spec["threshold"], custom_id=spec.get("custom_id"),
+        custom_band=spec.get("custom_band"))
+    return live
+
+
+def _live_summary(spec):
+    units = f" {spec['units']}" if spec.get("units") else ""
+    return (f"Hazard: {spec['label']} ({spec['source'].lower()}), "
+            f"{_fmt_window(spec['start'], spec['end'])}, "
+            f"{REDUCERS.get(spec['reducer'], spec['reducer']).lower()}, "
+            f"exposed where value > {spec['threshold']:g}{units}")
+
+
+def _live_provenance(spec):
+    run = (forecast_run_label(spec["name"], spec["start"])
+           if spec.get("name") else None)
+    lines = [_live_summary(spec)]
+    if run:
+        lines.append(f"Model run: {run}")
+    lines.append("Children counted on the 100 m population grid, as in "
+                 "Preparedness infrastructure analysis.")
+    return lines
+
+
+def _intensity_label(h, live_spec):
+    if live_spec:
+        units = live_spec.get("units")
+        return f"{live_spec['label']} ({units})" if units else live_spec["label"]
+    units = (HAZARD_INFO.get(h) or {}).get("units")
+    return f"{_hazard_label(h)} ({units})" if units else _hazard_label(h)
+
+
 @app.callback(
     Output("infra-results-panel", "children"),
     Output("infra-pop-tile",      "url"),
@@ -5620,10 +5758,18 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
     State("infra-topic-select",   "value"),
     State({"type": "infra-threshold", "index": ALL}, "value"),
     State({"type": "infra-threshold", "index": ALL}, "id"),
+    State("store-view",              "data"),
+    State("forecast-dataset-select", "value"),
+    State("store-forecast-asset",    "data"),
+    State("forecast-dates",          "start_date"),
+    State("forecast-dates",          "end_date"),
+    State("forecast-reducer",        "value"),
+    State("forecast-threshold",      "value"),
     prevent_initial_call=True,
 )
 def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
-                  thr_values, thr_ids):
+                  thr_values, thr_ids, view, fc_dataset, fc_asset, fc_start,
+                  fc_end, fc_reducer, fc_threshold):
     """Single combined analysis: exposed population (Voronoi catchments) +
     exposed facilities (site hazard). Renders panel + map; per-facility CSV in
     phase 2."""
@@ -5638,14 +5784,28 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     if is_no_data_ucode(adm2_ucode):
         return (_no_data_panel(region_name or "this region"), *nu)
     asset_id = asset["asset_id"]
-    topics_sel = topics or None
-    overrides, _ = _threshold_overrides(_infra_editor_topics(topics), thr_ids, thr_values)
-
     color = _infra_color_for_asset(asset_id)
 
+    live_spec = None
+    if view == "ew-infra":
+        live_spec = _live_spec(fc_dataset, fc_asset, fc_start, fc_end,
+                               fc_reducer, fc_threshold)
+        if not live_spec:
+            return (_infra_error("Choose an Observed or Forecast layer in "
+                                 "Visualization first."), *nu)
+        topics_sel, overrides = None, {}
+    else:
+        topics_sel = topics or None
+        overrides, _ = _threshold_overrides(_infra_editor_topics(topics),
+                                            thr_ids, thr_values)
+
     try:
+        live = _build_live(live_spec) if live_spec else None
         r = compute_facility_combined(asset_id, adm2_ucode, topics_sel,
-                                      threshold_overrides=overrides or None)
+                                      threshold_overrides=overrides or None,
+                                      live=live)
+    except ForecastError as e:
+        return (_infra_error(str(e)), *nu)
     except Exception as e:
         return (_infra_error(f"GEE error: {e}"), *nu)
 
@@ -5672,7 +5832,8 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                                   overrides=overrides or None)
 
     n_custom = len(overrides or {})
-    thr_note = (f"{n_custom} custom threshold(s) applied"
+    thr_note = (_live_summary(live_spec) if live_spec else
+                f"{n_custom} custom threshold(s) applied"
                 if n_custom else "Standard (default) thresholds")
     where = region_name or "the selected district"
     caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
@@ -5680,13 +5841,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
                "rows show exposed children · facilities whose site is in that "
                f"hazard. {thr_note}.")
 
+    prov = [f"Region: {region_name or adm2_ucode} · {level}",
+            "Facilities: as supplied by the selected infrastructure layer "
+            "(see the layer name for its source)"]
+    if live_spec:
+        prov += _live_provenance(live_spec)
     panel = html.Div([
         _infra_panel("Facility exposure", cards, items, None, caption=caption),
-        _provenance_block([
-            f"Region: {region_name or adm2_ucode} · {level}",
-            "Facilities: as supplied by the selected infrastructure layer "
-            "(see the layer name for its source)",
-        ]),
+        _provenance_block(prov),
     ])
 
     # ── Map layers ──
@@ -5702,13 +5864,15 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
 
     # Only topics with exposure here get a legend row — a toggle for a hazard
     # with no local coverage is noise (same rule as the Analysis tab).
-    map_topics = [t for t in HAZARD_TOPICS if t in sel_topics
+    map_topics = [t for t in (sel_topics if live_spec else HAZARD_TOPICS)
+                  if t in sel_topics
                   and (r.get("per_topic_exposed") or {}).get(t)][:ANALYSIS_TOPIC_SLOTS]
     viz = {"asset_id": asset_id, "ucode": adm2_ucode, "color": color,
            "level": level, "topics": map_topics,
-           "thr": sorted((h, v) for h, v in (overrides or {}).items())}
+           "thr": sorted((h, v) for h, v in (overrides or {}).items()),
+           "live": live_spec}
     pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
-               "overrides": overrides or None}
+               "overrides": overrides or None, "live": live_spec}
     placeholder = html.Div("Preparing per-facility download…",
                            className="ps-caption", style={"padding": "4px 0"})
 
@@ -5734,10 +5898,12 @@ def infra_compute_perfacility(pending):
     + raw intensity. Voronoi cells don't overlap → figures are summable."""
     if not pending:
         return no_update
+    live_spec = pending.get("live")
     try:
         r = compute_facility_combined(pending["asset_id"], pending["ucode"],
                                       pending.get("topics"),
-                                      threshold_overrides=pending.get("overrides"))
+                                      threshold_overrides=pending.get("overrides"),
+                                      live=_build_live(live_spec) if live_spec else None)
     except Exception as e:
         return html.Div(f"Per-facility data failed: {e}", className="ps-caption",
                         style={"color": "var(--red)"})
@@ -5787,19 +5953,18 @@ def infra_compute_perfacility(pending):
             {"key": t, "label": t, "kind": "flag"} for t in topic_cols
         ]},
         {"title": "Hazard intensity at site (native units)", "columns": [
-            {"key": h,
-             "label": f"{_hazard_label(h)}"
-                      + (f" ({(HAZARD_INFO.get(h) or {}).get('units','')})"
-                         if (HAZARD_INFO.get(h) or {}).get("units") else ""),
-             "kind": "float"}
+            {"key": h, "label": _intensity_label(h, live_spec), "kind": "float"}
             for h in int_cols
         ]},
     ]
     banner = ["Facility exposure — per-facility detail"]
-    banner += _thresholds_banner(pending.get("topics")
-                                 or [t for t in HAZARD_TOPICS
-                                     if t not in EXPOSURE_ONLY_TOPICS],
-                                 pending.get("overrides"))
+    if live_spec:
+        banner += _live_provenance(live_spec)
+    else:
+        banner += _thresholds_banner(pending.get("topics")
+                                     or [t for t in HAZARD_TOPICS
+                                         if t not in EXPOSURE_ONLY_TOPICS],
+                                     pending.get("overrides"))
     banner.append("Catchment population uses each facility's nearest-neighbour "
                   "(Voronoi) catchment (non-overlapping, summable). Site flags and "
                   "Exposed reflect the thresholds above; intensity columns are raw "
@@ -6048,6 +6213,17 @@ def _forecast_cfg(dataset, asset):
     return None
 
 
+def _preview_specs(preview, visible=True):
+    if not (preview and preview.get("vis")):
+        return []
+    units = preview.get("units", "")
+    label = preview.get("label", "Preview")
+    return [vis_gradient_spec(
+        f"{label} ({units})".strip() if units else label,
+        preview["vis"], layer_id="forecast-intensity", unit=units,
+        toggleable=True, visible=visible)]
+
+
 def _forecast_legend_specs(viz, preview=None):
     """Legend rows for the Forecast tab.
 
@@ -6057,14 +6233,7 @@ def _forecast_legend_specs(viz, preview=None):
     exposed-population and selected-region rows.
     """
     if not viz:
-        if preview and preview.get("vis"):
-            units = preview.get("units", "")
-            label = preview.get("label", "Preview")
-            return [vis_gradient_spec(
-                f"{label} ({units})".strip() if units else label,
-                preview["vis"], layer_id="forecast-intensity", unit=units,
-                toggleable=True)]
-        return None
+        return _preview_specs(preview) or None
     specs = []
     vis = viz.get("intensity_vis")
     if vis:
@@ -6327,25 +6496,20 @@ def forecast_threshold_source(reducer, dataset, asset):
     Input("store-tab",    "data"),
 )
 def forecast_show_controls(tab):
-    return {"display": "block" if tab in FORECAST_TABS else "none"}
+    return {"display": "block" if tab == "ewpop" else "none"}
 
 
 @app.callback(
-    Output("forecast-dataset-select", "value", allow_duplicate=True),
-    Output("store-forecast-asset",    "data", allow_duplicate=True),
     Output("store-forecast-result",   "data", allow_duplicate=True),
     Output("forecast-results-panel",  "children", allow_duplicate=True),
-    Output("forecast-asset-input",    "value"),
     Input("store-tab",                "data"),
     prevent_initial_call=True,
 )
 def forecast_reset_on_tab(tab):
-    """Entering Observed or Forecast starts clean, so neither tab inherits the
-    other's dataset, parameters or results. The params section, preview layer
-    and asset status all follow the cleared selection."""
+    """The hazard (Hazard card) persists across EW panes; results do not."""
     if tab not in FORECAST_TABS:
         raise dash.exceptions.PreventUpdate
-    return None, None, None, None, ""
+    return None, None
 
 
 # ── Dataset segment switch + row list ────────────────────────────────────────
@@ -6383,20 +6547,33 @@ def forecast_switch_segment(_catalog, _custom, tab):
 @app.callback(
     Output("forecast-dataset-list",  "children"),
     Output("observed-dataset-list",  "children"),
+    Output("forecast-dataset-select", "options"),
+    Output("forecast-dataset-select", "placeholder"),
     Input("forecast-dataset-select", "value"),
     Input("store-fc-expanded",       "data"),
     # Tab entry re-reads the runtime override table (TTL-cached), so a dataset
     # enabled in GEE shows up without restarting the server.
     Input("store-tab",               "data"),
+    Input("store-forecast-asset",    "data"),
 )
-def forecast_render_list(selected, expanded, tab):
-    """Render both tabs' lists.
+def forecast_render_list(selected, expanded, tab, asset):
+    """Render both kinds' lists and the Hazard card dropdown.
 
-    One callback rather than two so a single read of active_datasets_live()
-    serves both, and the selection highlight can never disagree between them.
+    One callback so a single read of active_datasets_live() serves all three,
+    and the selection can never disagree between them.
     """
+    active = active_datasets_live()
+    options = []
+    for kind, head in (("nrt", "OBSERVED"), ("forecast", "FORECAST")):
+        options.append({"label": head, "value": f"__{kind}", "disabled": True})
+        options += [{"label": d["label"], "value": d["name"]}
+                    for d in active if d["kind"] == kind]
+    placeholder = (f"Custom layer: {asset['asset_id']}"
+                   if asset and asset.get("asset_id")
+                   else "Choose an observed or forecast layer…")
     return (_forecast_rows_for("forecast", selected, expanded),
-            _forecast_rows_for("nrt", selected, expanded))
+            _forecast_rows_for("nrt", selected, expanded),
+            options, placeholder)
 
 
 @app.callback(
@@ -6453,19 +6630,20 @@ def forecast_select_row(all_clicks, current):
     Output("forecast-kind-badge-wrap", "children"),
     Output("forecast-catalog-link",    "children"),
     Output("forecast-selected-wrap",   "style"),
+    Output("ewh-empty",                "style"),
     Input("forecast-dataset-select",   "value"),
     Input("store-forecast-asset",      "data"),
 )
 def forecast_kind_badge(dataset, asset):
     cfg = _forecast_cfg(dataset, asset)
     if not cfg:
-        return None, None, {"display": "none"}
+        return None, None, {"display": "none"}, {"display": "block"}
     badge = _forecast_kind_badge(cfg)
     url   = FORECAST_MAP.get(cfg["name"], {}).get("source_url")
     link  = html.A("View in Earth Engine catalog ↗", href=url, target="_blank",
                    className="hi-link",
                    style={"fontSize": "0.68rem"}) if url else None
-    return badge, link, {"display": "block"}
+    return badge, link, {"display": "block"}, {"display": "none"}
 
 
 # ── Global preview: render the layer before a region is chosen ───────────────
@@ -6484,11 +6662,19 @@ def forecast_kind_badge(dataset, asset):
     Input("forecast-dates",           "start_date"),
     Input("forecast-dates",           "end_date"),
     Input("forecast-reducer",         "value"),
+    Input("store-tab",                "data"),
+    Input("store-view",               "data"),
     State("store-forecast-asset",     "data"),
     State("store-forecast-viz",       "data"),
     prevent_initial_call=True,
 )
-def forecast_preview(dataset, start, end, reducer, asset, viz):
+def forecast_preview(dataset, start, end, reducer, tab, view, asset, viz):
+    # Every EW hazard view redraws the kept selection on entry; other panes
+    # leave the tile to clear_on_leave / infra_clear_on_phase.
+    if tab not in FORECAST_TABS and view != "ew-infra":
+        raise dash.exceptions.PreventUpdate
+    if ctx.triggered_id in ("store-tab", "store-view"):
+        viz = None
     base = {"fontSize": "0.72rem", "marginTop": "8px"}
     ok   = {**base, "color": "var(--mid)"}
     err  = {**base, "color": "var(--red)"}
@@ -6674,7 +6860,8 @@ def forecast_compute(_n, dataset, asset, start, end, reducer, threshold,
     except Exception:
         pass
 
-    viz = {**meta, "ucode": target, "intensity_vis": intensity_vis}
+    viz = {**meta, "ucode": target, "intensity_vis": intensity_vis,
+           "spec": _live_spec(dataset, asset, start, end, reducer, threshold)}
     return result, render_forecast_results(result, meta), viz
 
 
