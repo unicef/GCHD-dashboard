@@ -1,8 +1,12 @@
-"""The full page layout."""
+"""The full page layout, built per request in the visitor's language."""
+import flask
 from dash import dcc, html
 from config.elnino import DOWNLOAD_DISCLAIMER_ACK, DOWNLOAD_DISCLAIMER_TITLE
 
 from dash_app import app, _BASE_PATHNAME
+from i18n import (
+    current_lang, is_rtl, js_catalog, SKIP_NOTICE_COOKIE, tr, trc,
+)
 from ui.components import panel_head, sidebar, view_header_children
 from ui.map_view import map_component
 from ui.registry import DEFAULT_NAV, nav_to_path, PHASES, VIEWS
@@ -17,8 +21,25 @@ from sections.layers import tab_exposure, tab_hazard_layers, tab_mh
 
 
 # ---------------------------------------------------------------------------
-app.layout = html.Div(id="app-root", children=[
+def serve_layout():
+    lang = current_lang()
+    # Set by the language switcher when the notice was already dismissed, so
+    # changing language doesn't make the user acknowledge it again.
+    skip_notice = (flask.has_request_context()
+                   and bool(flask.request.cookies.get(SKIP_NOTICE_COOKIE)))
+    return html.Div(
+        id="app-root", lang=lang, dir="rtl" if is_rtl(lang) else "ltr",
+        # The product name is a proper noun, kept in English in every language.
+        **{"data-title": app.title}, children=_layout_children(skip_notice))
+
+
+app.layout = serve_layout
+
+
+def _layout_children(skip_notice):
+    return [
     # ── Stores ──
+    dcc.Store(id="store-i18n", data=js_catalog()),
     dcc.Store(id="store-embargo-permanent", storage_type="local",   data=False),
     dcc.Location(id="url", refresh=False),
     dcc.Store(id="store-tab",           data=DEFAULT_NAV["tab"]),
@@ -66,28 +87,31 @@ app.layout = html.Div(id="app-root", children=[
 
     # ── Data-use gate ──────────────────────────────────────────────────────
     # PLACEHOLDER COPY — pending comms/legal sign-off before public launch.
-    html.Div(id="embargo-gate", children=[
+    html.Div(id="embargo-gate",
+             style={"display": "none"} if skip_notice else None, children=[
         html.Div(className="embargo-card", children=[
-            html.Div("UNICEF — Data Use Notice", className="embargo-tag"),
-            html.Div("About this data", className="embargo-title"),
+            html.Div(tr("UNICEF — Data Use Notice"), className="embargo-tag"),
+            html.Div(tr("About this data"), className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Figures shown are ", html.Strong("modelled estimates"),
-                ", derived from global hazard datasets combined with WorldPop "
-                "gridded population. They indicate relative exposure — not "
-                "observed impacts — and carry uncertainty that increases at "
-                "finer administrative levels.",
+                *trc("Figures shown are {estimates}, derived from global hazard "
+                     "datasets combined with WorldPop gridded population. They "
+                     "indicate relative exposure — not observed impacts — and "
+                     "carry uncertainty that increases at finer administrative "
+                     "levels.",
+                     estimates=html.Strong(tr("modelled estimates"))),
                 html.Br(), html.Br(),
-                "The designations employed and the presentation of material on "
-                "this site do not imply the expression of any opinion on the "
-                "part of UNICEF concerning the legal status of any country or "
-                "territory, or the delimitation of its frontiers or boundaries.",
+                tr("The designations employed and the presentation of material "
+                   "on this site do not imply the expression of any opinion on "
+                   "the part of UNICEF concerning the legal status of any country "
+                   "or territory, or the delimitation of its frontiers or "
+                   "boundaries."),
             ]),
             dcc.Checklist(
                 id="embargo-dismiss-forever",
-                options=[{"label": "Don't show this again", "value": "yes"}],
+                options=[{"label": tr("Don't show this again"), "value": "yes"}],
                 value=[], className="embargo-check",
             ),
-            html.Button("I Understand",
+            html.Button(tr("I Understand"),
                         id="embargo-btn", className="embargo-btn", n_clicks=0),
         ]),
     ]),
@@ -99,12 +123,12 @@ app.layout = html.Div(id="app-root", children=[
     # when something is actually on the map (see elnino_leave_guard).
     html.Div(id="leave-gate", style={"display": "none"}, children=[
         html.Div(className="embargo-card leave-card", children=[
-            html.Div("Leave this section?", className="embargo-title"),
+            html.Div(tr("Leave this section?"), className="embargo-title"),
             html.Div(id="leave-gate-body", className="embargo-body"),
             html.Div(className="leave-btns", children=[
-                html.Button("Stay here", id="leave-cancel-btn",
+                html.Button(tr("Stay here"), id="leave-cancel-btn",
                             className="leave-btn-ghost", n_clicks=0),
-                html.Button("Leave and clear", id="leave-confirm-btn",
+                html.Button(tr("Leave and clear"), id="leave-confirm-btn",
                             className="embargo-btn leave-btn-go", n_clicks=0),
             ]),
         ]),
@@ -119,18 +143,18 @@ app.layout = html.Div(id="app-root", children=[
     # ── El Niño download disclaimer (see elnino_dl_gate) ───────────────────
     html.Div(id="elnino-dl-gate", style={"display": "none"}, children=[
         html.Div(className="embargo-card leave-card en-dl-card", children=[
-            html.Div(DOWNLOAD_DISCLAIMER_TITLE, className="embargo-title"),
+            html.Div(tr(DOWNLOAD_DISCLAIMER_TITLE), className="embargo-title"),
             html.Div(id="elnino-dl-body", className="embargo-body"),
             dcc.Checklist(
                 id="elnino-dl-ack",
-                options=[{"label": " " + DOWNLOAD_DISCLAIMER_ACK,
+                options=[{"label": " " + tr(DOWNLOAD_DISCLAIMER_ACK),
                           "value": "yes"}],
                 value=[], className="embargo-check en-dl-ack",
             ),
             html.Div(className="leave-btns", children=[
-                html.Button("Cancel", id="elnino-dl-cancel",
+                html.Button(tr("Cancel"), id="elnino-dl-cancel",
                             className="leave-btn-ghost", n_clicks=0),
-                html.Button("Download", id="elnino-dl-confirm",
+                html.Button(tr("Download"), id="elnino-dl-confirm",
                             className="embargo-btn leave-btn-go",
                             n_clicks=0, disabled=True),
             ]),
@@ -143,40 +167,42 @@ app.layout = html.Div(id="app-root", children=[
     # ── Add-your-own-data dialog (Infra tab) ───────────────────────────────
     html.Div(id="co-template-gate", style={"display": "none"}, children=[
         html.Div(className="embargo-card co-template-card", children=[
-            html.Div("UNICEF — Infrastructure Data", className="embargo-tag"),
-            html.Div("Add your own facility data", className="embargo-title"),
+            html.Div(tr("UNICEF — Infrastructure Data"), className="embargo-tag"),
+            html.Div(tr("Add your own facility data"), className="embargo-title"),
             html.Div(className="embargo-body", children=[
-                "Country offices can have their own schools, health facilities "
-                "or water points added as a layer in this tab. Send us the data "
-                "in the format below and we prepare and load it for you.",
+                tr("Country offices can have their own schools, health "
+                   "facilities or water points added as a layer in this tab. "
+                   "Send us the data in the format below and we prepare and "
+                   "load it for you."),
                 html.Br(), html.Br(),
-                html.Strong("1. Download the template"), " for the facility "
-                "type you hold:",
+                *trc("{step} for the facility type you hold:",
+                     step=html.Strong(tr("1. Download the template"))),
                 html.Div(className="co-template-links", children=[
-                    html.A([html.I(className="bi bi-download"), "Schools"],
+                    html.A([html.I(className="bi bi-download"), tr("Schools")],
                            href="/assets/templates/co_schools_template.csv",
                            download="co_schools_template.csv",
                            className="co-template-link"),
                     html.A([html.I(className="bi bi-download"),
-                            "Health facilities"],
+                            tr("Health facilities")],
                            href="/assets/templates/co_health_template.csv",
                            download="co_health_template.csv",
                            className="co-template-link"),
-                    html.A([html.I(className="bi bi-download"), "Water points"],
+                    html.A([html.I(className="bi bi-download"), tr("Water points")],
                            href="/assets/templates/co_water_template.csv",
                            download="co_water_template.csv",
                            className="co-template-link"),
                 ]),
-                html.Strong("2. Fill it in."), " Coordinates must be decimal "
-                "degrees in WGS84 (EPSG:4326) — longitude between −180 and 180, "
-                "latitude between −90 and 90, negative south and west. Leave "
-                "out any column you do not hold; do not add columns for "
-                "country, facility type or source.",
+                *trc("{step} Coordinates must be decimal degrees in WGS84 "
+                     "(EPSG:4326) — longitude between −180 and 180, latitude "
+                     "between −90 and 90, negative south and west. Leave out any "
+                     "column you do not hold; do not add columns for country, "
+                     "facility type or source.",
+                     step=html.Strong(tr("2. Fill it in."))),
                 html.Br(), html.Br(),
-                html.Strong("3. Check it here"), " before sending — drop your "
-                "filled file below and we will tell you straight away if "
-                "anything needs fixing. Nothing is uploaded; the check runs in "
-                "your browser.",
+                *trc("{step} before sending — drop your filled file below and "
+                     "we will tell you straight away if anything needs fixing. "
+                     "Nothing is uploaded; the check runs in your browser.",
+                     step=html.Strong(tr("3. Check it here"))),
                 dcc.Upload(
                     id="co-validate-upload",
                     accept=".csv",
@@ -184,7 +210,7 @@ app.layout = html.Div(id="app-root", children=[
                     className="co-validate-drop",
                     children=html.Div([
                         html.I(className="bi bi-file-earmark-check"),
-                        html.Span("Drop your CSV here, or click to choose"),
+                        html.Span(tr("Drop your CSV here, or click to choose")),
                     ]),
                 ),
                 # Markdown with raw HTML: the clientside check builds its report
@@ -194,12 +220,12 @@ app.layout = html.Div(id="app-root", children=[
                 dcc.Markdown(id="co-validate-report", children="",
                              dangerously_allow_html=True,
                              className="co-validate-report"),
-                html.Strong("4. Send it to the GCHD team"), " through your usual "
-                "channel, telling us the country, the source and date of the "
-                "data, and whether it may be shown publicly. We confirm once "
-                "the layer is live.",
+                *trc("{step} through your usual channel, telling us the "
+                     "country, the source and date of the data, and whether it "
+                     "may be shown publicly. We confirm once the layer is live.",
+                     step=html.Strong(tr("4. Send it to the GCHD team"))),
             ]),
-            html.Button("Close", id="co-template-close",
+            html.Button(tr("Close"), id="co-template-close",
                         className="embargo-btn", n_clicks=0),
         ]),
     ]),
@@ -244,4 +270,4 @@ app.layout = html.Div(id="app-root", children=[
         ]),
         map_component(),
     ]),
-])
+]

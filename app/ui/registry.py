@@ -1,4 +1,5 @@
 """Navigation registry: phases, views, panes and URL paths."""
+from i18n import N_, tr
 
 
 # ---------------------------------------------------------------------------
@@ -26,39 +27,39 @@
 
 TABS = [
     {"key": "hazard",         "pane": "tab-hazard",
-     "title": "Hazard Layers",
-     "desc": "Select a layer to show the occurrence probability of each type of hazard"},
+     "title": N_("Hazard Layers"),
+     "desc": N_("Select a layer to show the occurrence probability of each type of hazard")},
     {"key": "mh",             "pane": "tab-mh",
-     "title": "Multi Hazard Indicators",
-     "desc": "Display areas exposed to multiple hazards"},
+     "title": N_("Multi Hazard Indicators"),
+     "desc": N_("Display areas exposed to multiple hazards")},
     {"key": "exposure",       "pane": "tab-exposure",
-     "title": "Children's Exposure",
-     "desc": "Display child population exposed to each type of hazard at "
-             "different thresholds"},
+     "title": N_("Children's Exposure"),
+     "desc": N_("Display child population exposed to each type of hazard at "
+             "different thresholds")},
     {"key": "analysis",       "pane": "tab-analysis",
-     "title": "Exposure Analysis",
-     "desc": "Compute number of children exposed by admin unit"},
+     "title": N_("Exposure Analysis"),
+     "desc": N_("Compute number of children exposed by admin unit")},
     {"key": "infrastructure", "pane": "tab-infrastructure",
-     "title": "Infrastructure Analysis",
-     "desc": "Compute number of facilities exposed, and number of children "
-             "affected by admin unit"},
+     "title": N_("Infrastructure Analysis"),
+     "desc": N_("Compute number of facilities exposed, and number of children "
+             "affected by admin unit")},
     {"key": "observed",       "pane": "tab-observed",
-     "title": "Observed Hazards",
-     "desc": "Hazards recently recorded by near-real-time satellite and "
-             "reanalysis data (under development)"},
+     "title": N_("Observed Hazards"),
+     "desc": N_("Hazards recently recorded by near-real-time satellite and "
+             "reanalysis data (under development)")},
     {"key": "forecast",       "pane": "tab-forecast",
-     "title": "Forecast Hazards",
-     "desc": "Hazards forecast for the days ahead (under development)"},
+     "title": N_("Forecast Hazards"),
+     "desc": N_("Hazards forecast for the days ahead (under development)")},
     {"key": "ewpop",          "pane": "tab-ewpop",
-     "title": "Population Analysis",
-     "desc": "Compute children exposed to the selected hazard by admin unit"},
+     "title": N_("Population Analysis"),
+     "desc": N_("Compute children exposed to the selected hazard by admin unit")},
     {"key": "elnino",         "pane": "tab-elnino",
-     "title": "El Niño Seasonal Outlook",
-     "desc": "Explore the seasonal rainfall outlook and compute the number of "
-             "children in areas with a dry or wet signal"},
+     "title": N_("El Niño Seasonal Outlook"),
+     "desc": N_("Explore the seasonal rainfall outlook and compute the number of "
+             "children in areas with a dry or wet signal")},
     {"key": "ai",             "pane": "tab-ai",
-     "title": "AI Assistant",
-     "desc": "Ask about hazard layers or child exposure"},
+     "title": N_("AI Assistant"),
+     "desc": N_("Ask about hazard layers or child exposure")},
 ]
 
 TAB_BY_KEY = {t["key"]: t for t in TABS}
@@ -71,49 +72,49 @@ FORECAST_TABS = (*CATALOG_TABS, "ewpop")
 EW_HAZARD_VIEWS = ("ew-vis", "ew-pop", "ew-infra")
 
 PHASES = [
-    {"key": "prep",   "slug": "preparedness",      "label": "Preparedness",
+    {"key": "prep",   "slug": "preparedness",      "label": N_("Preparedness"),
      "icon": "bi bi-shield-check", "enabled": True,
-     "badge": "Historical hazard data"},
-    {"key": "ew",     "slug": "early-warning",     "label": "Early Warning",
+     "badge": N_("Historical hazard data")},
+    {"key": "ew",     "slug": "early-warning",     "label": N_("Early Warning"),
      "icon": "bi bi-broadcast",    "enabled": True,
-     "badge": "Live hazard data"},
-    {"key": "damage", "slug": "damage-assessment", "label": "Damage",
+     "badge": N_("Live hazard data")},
+    {"key": "damage", "slug": "damage-assessment", "label": N_("Damage"),
      "icon": "bi bi-clipboard2-pulse", "enabled": False,
      "badge": ""},
 ]
 PHASE_BY_KEY = {p["key"]: p for p in PHASES}
 
 _seg = lambda tab, slug=None, label=None: {"tab": tab, "slug": slug, "label": label}
-_EW_SEGMENTS = [_seg("observed", "observed", "Observed"),
-                _seg("forecast", "forecast", "Forecast")]
+_EW_SEGMENTS = [_seg("observed", "observed", N_("Observed")),
+                _seg("forecast", "forecast", N_("Forecast"))]
 
 # `phase` None = shown in every phase (the AI utility at the foot of the rail).
 VIEWS = [
     {"key": "prep-vis",   "phase": "prep", "slug": "visualization",
-     "icon": "bi bi-layers",         "label": "Visualization",
-     "segments": [_seg("hazard",   "hazard",       "Hazard"),
-                  _seg("mh",       "multi-hazard", "Multi-hazard"),
-                  _seg("exposure", "exposure",     "Exposure")]},
+     "icon": "bi bi-layers",         "label": N_("Visualization"),
+     "segments": [_seg("hazard",   "hazard",       N_("Hazard")),
+                  _seg("mh",       "multi-hazard", N_("Multi-hazard")),
+                  _seg("exposure", "exposure",     N_("Exposure"))]},
     {"key": "prep-pop",   "phase": "prep", "slug": "population",
-     "icon": "bi bi-people",         "label": "Pop analysis",
+     "icon": "bi bi-people",         "label": N_("Pop analysis"),
      "segments": [_seg("analysis")]},
     {"key": "prep-infra", "phase": "prep", "slug": "infrastructure",
-     "icon": "bi bi-buildings",      "label": "Infra analysis",
+     "icon": "bi bi-buildings",      "label": N_("Infra analysis"),
      "segments": [_seg("infrastructure")]},
     {"key": "ew-vis",     "phase": "ew",   "slug": "visualization",
-     "icon": "bi bi-layers",         "label": "Visualization",
+     "icon": "bi bi-layers",         "label": N_("Visualization"),
      "segments": _EW_SEGMENTS},
     {"key": "ew-pop",     "phase": "ew",   "slug": "population",
-     "icon": "bi bi-people",         "label": "Pop analysis",
+     "icon": "bi bi-people",         "label": N_("Pop analysis"),
      "segments": [_seg("ewpop")]},
     {"key": "ew-infra",   "phase": "ew",   "slug": "infrastructure",
-     "icon": "bi bi-buildings",      "label": "Infra analysis",
+     "icon": "bi bi-buildings",      "label": N_("Infra analysis"),
      "segments": [_seg("infrastructure")]},
     {"key": "ew-seasonal", "phase": "ew",  "slug": "seasonal",
-     "icon": "bi bi-thermometer-sun", "label": "Seasonal",
+     "icon": "bi bi-thermometer-sun", "label": N_("Seasonal"),
      "segments": [_seg("elnino")]},
     {"key": "ai",         "phase": None,   "slug": "assistant",
-     "icon": "bi bi-robot",          "label": "AI",
+     "icon": "bi bi-robot",          "label": N_("AI"),
      "segments": [_seg("ai")]},
 ]
 VIEW_BY_KEY = {v["key"]: v for v in VIEWS}
@@ -168,7 +169,7 @@ def nav_from_path(rel):
 def nav_label(nav):
     view = VIEW_BY_KEY[nav["view"]]
     seg = next(s for s in view["segments"] if s["tab"] == nav["tab"])
-    parts = [PHASE_BY_KEY[nav["phase"]]["label"], view["label"]]
+    parts = [tr(PHASE_BY_KEY[nav["phase"]]["label"]), tr(view["label"])]
     if seg["label"]:
-        parts.append(seg["label"])
+        parts.append(tr(seg["label"]))
     return " › ".join(parts)

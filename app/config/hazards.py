@@ -6,6 +6,7 @@
 # "min"/"max" bound the editable-threshold slider in the Analysis tab. Where the
 # source data catalog (hazard_info.json) left the range blank, a defensible range
 # is chosen from the units and known extents (noted per line below).
+from i18n.markers import N_
 HAZARDS = [
     {"id": "projects/unicef-ccri/assets/hazards/river_flood_r100",               "threshold": 0.01,       "min": 0,    "max": 10,      "name": "river_flood_100yr_jrc_2024"},        # depth m (catalog range blank)
     {"id": "projects/unicef-ccri/assets/hazards/coastal_flood_r100",             "threshold": 0,          "min": 0,    "max": 1,       "name": "coastal_flood_100yr_jrc_2024", "binary": True},      # binary
@@ -32,6 +33,42 @@ HAZARDS = [
 
 HAZARD_MAP = {h["name"]: h for h in HAZARDS}
 
+# The descriptive (translated) head of each hazard name; the rest of the name
+# (index, source, years) is a dataset identifier and stays as-is.
+HAZARD_DESCRIPTIVE = {
+    "river_flood_100yr_jrc_2024":             N_("River Flood"),
+    "coastal_flood_100yr_jrc_2024":           N_("Coastal Flood"),
+    "tropical_storm_100yr_giri_2024":         N_("Tropical Storm"),
+    "agricultural_drought_fao_1984-2023":     N_("Agricultural Drought"),
+    "drought_spei_terraclimate_1958-2025":    N_("Drought"),
+    "drought_spi_terraclimate_1958-2025":     N_("Drought"),
+    "heatwave_frequency_ecmwf_2014-2024":     N_("Heatwave Frequency"),
+    "heatwave_duration_ecmwf_2014-2024":      N_("Heatwave Duration"),
+    "heatwave_severity_ecmwf_2014-2024":      N_("Heatwave Severity"),
+    "extreme_heat_ecmwf_2014-2024":           N_("Extreme Heat"),
+    "fire_FRP_nasa_2001-2024":                N_("Fire"),
+    "fire_frequency_nasa_2001-2023":          N_("Fire Frequency"),
+    "sand_dust_storm_unccd_2024":             N_("Sand Dust Storm"),
+    "air_pollution_pm25_1998-2023":           N_("Air Pollution"),
+    "vectorborne_malariapv_2012-2022":        N_("Vectorborne"),
+    "vectorborne_malariapf_2012-2022":        N_("Vectorborne"),
+    "landslide_rainfall_worldbank_1980-2018": N_("Landslide Rainfall"),
+    "earthquake_pga_gem_2023":                N_("Earthquake"),
+    "volcanoes_gvp_1800-2025":                N_("Volcanoes"),
+    "complex_emergencies_acled":              N_("Complex Emergencies"),
+}
+
+
+def hazard_name_words(name):
+    """'heatwave_frequency_ecmwf_2014-2024' ->
+    ('Heatwave Frequency', ['Ecmwf', '2014', '2024']): the descriptive head
+    (an English msgid) and the identifier words that follow it."""
+    words = " ".join(w.capitalize() for w in name.replace("-", " ").split("_")).split()
+    head = HAZARD_DESCRIPTIVE.get(name)
+    if not head:
+        return None, words
+    return head, words[len(head.split()):]
+
 
 def is_binary_hazard(name):
     """True for presence/absence hazards (e.g. coastal flood, sand & dust storm)
@@ -39,20 +76,20 @@ def is_binary_hazard(name):
     return bool(HAZARD_MAP.get(name, {}).get("binary"))
 
 HAZARD_TOPICS = {
-    "River Flood":        ["river_flood_100yr_jrc_2024"],
-    "Coastal Flood":      ["coastal_flood_100yr_jrc_2024"],
-    "Tropical Storm":     ["tropical_storm_100yr_giri_2024"],
-    "Drought":            ["agricultural_drought_fao_1984-2023", "drought_spei_terraclimate_1958-2025", "drought_spi_terraclimate_1958-2025"],
-    "Heatwave":           ["heatwave_frequency_ecmwf_2014-2024", "heatwave_duration_ecmwf_2014-2024", "heatwave_severity_ecmwf_2014-2024"],
-    "Extreme Heat":       ["extreme_heat_ecmwf_2014-2024"],
-    "Fire":               ["fire_FRP_nasa_2001-2024", "fire_frequency_nasa_2001-2023"],
-    "Sand and Dust Storm":["sand_dust_storm_unccd_2024"],
-    "Air Pollution":      ["air_pollution_pm25_1998-2023"],
-    "Malaria":            ["vectorborne_malariapv_2012-2022", "vectorborne_malariapf_2012-2022"],
-    "Landslide":          ["landslide_rainfall_worldbank_1980-2018"],
-    "Earthquake":         ["earthquake_pga_gem_2023"],
-    "Volcanoes":          ["volcanoes_gvp_1800-2025"],
-    "Complex Emergencies":["complex_emergencies_acled"],
+    N_("River Flood"):        ["river_flood_100yr_jrc_2024"],
+    N_("Coastal Flood"):      ["coastal_flood_100yr_jrc_2024"],
+    N_("Tropical Storm"):     ["tropical_storm_100yr_giri_2024"],
+    N_("Drought"):            ["agricultural_drought_fao_1984-2023", "drought_spei_terraclimate_1958-2025", "drought_spi_terraclimate_1958-2025"],
+    N_("Heatwave"):           ["heatwave_frequency_ecmwf_2014-2024", "heatwave_duration_ecmwf_2014-2024", "heatwave_severity_ecmwf_2014-2024"],
+    N_("Extreme Heat"):       ["extreme_heat_ecmwf_2014-2024"],
+    N_("Fire"):               ["fire_FRP_nasa_2001-2024", "fire_frequency_nasa_2001-2023"],
+    N_("Sand and Dust Storm"):["sand_dust_storm_unccd_2024"],
+    N_("Air Pollution"):      ["air_pollution_pm25_1998-2023"],
+    N_("Malaria"):            ["vectorborne_malariapv_2012-2022", "vectorborne_malariapf_2012-2022"],
+    N_("Landslide"):          ["landslide_rainfall_worldbank_1980-2018"],
+    N_("Earthquake"):         ["earthquake_pga_gem_2023"],
+    N_("Volcanoes"):          ["volcanoes_gvp_1800-2025"],
+    N_("Complex Emergencies"):["complex_emergencies_acled"],
 }
 
 EXPOSURE_ONLY_TOPICS = ["Landslide", "Earthquake", "Volcanoes", "Complex Emergencies"]
@@ -241,12 +278,12 @@ POP_VIS = {
 
 # Ordered population classes; `id` is the {} slot in POP_ASSET_TMPL.
 POPULATION_LAYERS = [
-    {"id": "T",       "label": "Total population",    "group": "All ages"},
-    {"id": "T_M",     "label": "Male",                "group": "All ages"},
-    {"id": "T_F",     "label": "Female",              "group": "All ages"},
-    {"id": "T_U18",   "label": "Children (under 18)", "group": "Children"},
-    {"id": "T_M_U18", "label": "Boys (under 18)",     "group": "Children"},
-    {"id": "T_F_U18", "label": "Girls (under 18)",    "group": "Children"},
+    {"id": "T",       "label": N_("Total population"),    "group": N_("All ages")},
+    {"id": "T_M",     "label": N_("Male"),                "group": N_("All ages")},
+    {"id": "T_F",     "label": N_("Female"),              "group": N_("All ages")},
+    {"id": "T_U18",   "label": N_("Children (under 18)"), "group": N_("Children")},
+    {"id": "T_M_U18", "label": N_("Boys (under 18)"),     "group": N_("Children")},
+    {"id": "T_F_U18", "label": N_("Girls (under 18)"),    "group": N_("Children")},
 ]
 
 POP_LAYER_MAP = {p["id"]: p for p in POPULATION_LAYERS}
@@ -299,17 +336,17 @@ def vis_gradient_spec(label, vis, layer_id=None, unit="", **kw):
 
 
 ADMIN_DATA = {
-    "adm0 (Country)": {
+    N_("adm0 (Country)"): {
         "asset":       "projects/unicef-ccri/assets/global_boundary/adm0",
         "name_prop":   "name",
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm0_chunked_500km_shp",
     },
-    "adm1 (Provinces/States)": {
+    N_("adm1 (Provinces/States)"): {
         "asset":       "projects/unicef-ccri/assets/global_boundary/adm1",
         "name_prop":   "name",
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm1_chunked_500km_shp",
     },
-    "adm2 (Districts/Counties)": {
+    N_("adm2 (Districts/Counties)"): {
         "asset":       "projects/unicef-ccri/assets/global_boundary/adm2",
         "name_prop":   "name",
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm2_chunked_500km_shp",
@@ -327,9 +364,9 @@ ADMIN_DATA = {
 # A source-qualified layer label like "Schools (Giga)" is styled by its base
 # type "Schools" (see _infra_type_of below).
 INFRA_TYPE_META = {
-    "Schools":           {"color": "#1f78b4", "icon": "bi-mortarboard"},
-    "Health Facilities": {"color": "#e31a1c", "icon": "bi-hospital"},
-    "Water Points":      {"color": "#1CABE2", "icon": "bi-droplet"},
+    N_("Schools"):           {"color": "#1f78b4", "icon": "bi-mortarboard"},
+    N_("Health Facilities"): {"color": "#e31a1c", "icon": "bi-hospital"},
+    N_("Water Points"):      {"color": "#1CABE2", "icon": "bi-droplet"},
 }
 
 # Facility types in a stable display order; used to map a source-qualified layer
@@ -361,151 +398,151 @@ MHI_OPTIONS  = ["75", "80", "85", "90", "95"]
 # Each entry: description, units, source (from CCRR Internal Data Catalog - Indicators tab)
 HAZARD_INFO = {
     "river_flood_100yr_jrc_2024": {
-        "description": "A fluvial or riverine flood is a rise, usually brief, in the water level of a stream or water body to a peak from which the water level recedes at a slower rate.",
-        "units": "Depth in m",
+        "description": N_("A fluvial or riverine flood is a rise, usually brief, in the water level of a stream or water body to a peak from which the water level recedes at a slower rate."),
+        "units": N_("Depth in m"),
         "source": "JRC",
         "source_url": "https://global-flood-maps.jrc.ec.europa.eu/",
     },
     "coastal_flood_100yr_jrc_2024": {
-        "description": "Coastal flooding is most frequently the result of storm surges and high winds coinciding with high tides.",
-        "units": "Binary",
+        "description": N_("Coastal flooding is most frequently the result of storm surges and high winds coinciding with high tides."),
+        "units": N_("Binary"),
         "source": "JRC",
         "source_url": "https://global-flood-maps.jrc.ec.europa.eu/",
     },
     "tropical_storm_100yr_giri_2024": {
-        "description": "A tropical storm is a type of storm system characterized by a low-pressure center, a closed low-level atmospheric circulation, strong winds, and a spiral arrangement of thunderstorms that produce heavy rain.",
-        "units": "Wind speed in m/s",
+        "description": N_("A tropical storm is a type of storm system characterized by a low-pressure center, a closed low-level atmospheric circulation, strong winds, and a spiral arrangement of thunderstorms that produce heavy rain."),
+        "units": N_("Wind speed in m/s"),
         "source": "GIRI",
         "source_url": "https://www.undrr.org/",
     },
     "agricultural_drought_fao_1984-2023": {
-        "description": "Agricultural drought occurs when there is insufficient soil moisture to meet the needs of a particular crop at a particular time.",
-        "units": "Agricultural Stress Index (%)",
+        "description": N_("Agricultural drought occurs when there is insufficient soil moisture to meet the needs of a particular crop at a particular time."),
+        "units": N_("Agricultural Stress Index (%)"),
         "availability": "1984–2023",
         "source": "FAO",
         "source_url": "https://www.fao.org/giews/earthobservation/",
     },
     "drought_spi_terraclimate_1958-2025": {
-        "description": "SPI measures the deviation of precipitation from the climatological average over a given accumulation period and is widely used to detect and characterize meteorological droughts. Probability values are computed from the full 1958–2025 record (804 monthly time steps).",
-        "units": "Index",
+        "description": N_("SPI measures the deviation of precipitation from the climatological average over a given accumulation period and is widely used to detect and characterize meteorological droughts. Probability values are computed from the full 1958–2025 record (804 monthly time steps)."),
+        "units": N_("Index"),
         "availability": "1958–present",
         "source": "TerraClimate",
         "source_url": "https://www.climatologylab.org/terraclimate.html",
     },
     "drought_spei_terraclimate_1958-2025": {
-        "description": "SPEI adds the effect of evapotranspiration and is better suited to assess droughts under climate change scenarios where temperature changes are important. Probability values are computed from the full 1958–2025 record (804 monthly time steps).",
-        "units": "Index",
+        "description": N_("SPEI adds the effect of evapotranspiration and is better suited to assess droughts under climate change scenarios where temperature changes are important. Probability values are computed from the full 1958–2025 record (804 monthly time steps)."),
+        "units": N_("Index"),
         "availability": "1958–present",
         "source": "TerraClimate",
         "source_url": "https://www.climatologylab.org/terraclimate.html",
     },
     "heatwave_frequency_ecmwf_2014-2024": {
-        "description": "A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave frequency refers to the number of heatwaves per year.",
-        "units": "Times per year",
+        "description": N_("A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave frequency refers to the number of heatwaves per year."),
+        "units": N_("Times per year"),
         "availability": "2014–2024",
         "source": "ECMWF",
         "source_url": "https://www.ecmwf.int/",
     },
     "heatwave_duration_ecmwf_2014-2024": {
-        "description": "A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave duration refers to the total number of days an event lasts.",
-        "units": "Number of days",
+        "description": N_("A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave duration refers to the total number of days an event lasts."),
+        "units": N_("Number of days"),
         "availability": "2014–2024",
         "source": "ECMWF",
         "source_url": "https://www.ecmwf.int/",
     },
     "heatwave_severity_ecmwf_2014-2024": {
-        "description": "A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave severity refers to the temperature above the local 15-day average during the heatwave, expressed in degrees Celsius.",
-        "units": "Temperature in °C",
+        "description": N_("A heatwave can be defined as a period where local excess heat accumulates over a sequence of unusually hot days and nights. Heatwave severity refers to the temperature above the local 15-day average during the heatwave, expressed in degrees Celsius."),
+        "units": N_("Temperature in °C"),
         "availability": "2014–2024",
         "source": "ECMWF",
         "source_url": "https://www.ecmwf.int/",
     },
     "extreme_heat_ecmwf_2014-2024": {
-        "description": "Extremely high temperatures (extremely hot days) are estimated when a day exceeds 35 degrees Celsius.",
-        "units": "Number of days over 35°C",
+        "description": N_("Extremely high temperatures (extremely hot days) are estimated when a day exceeds 35 degrees Celsius."),
+        "units": N_("Number of days over 35°C"),
         "availability": "2014–2024",
         "source": "ECMWF",
         "source_url": "https://www.ecmwf.int/",
     },
     "fire_FRP_nasa_2001-2024": {
-        "description": "Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, savannas, and croplands. Fire Radiative Power (FRP) is a measure of the energy released by a fire in the form of radiation.",
-        "units": "MW",
+        "description": N_("Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, savannas, and croplands. Fire Radiative Power (FRP) is a measure of the energy released by a fire in the form of radiation."),
+        "units": N_("MW"),
         "availability": "2001–2023",
         "source": "NASA FIRMS",
         "source_url": "https://firms.modaps.eosdis.nasa.gov/",
     },
     "fire_frequency_nasa_2001-2023": {
-        "description": "Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, savannas, and croplands. Fire frequency is obtained from NASA's Fire Information for Resource Management System (FIRMS) and is used as a proxy for fire hazard.",
-        "units": "km⁻² · yr⁻¹",
+        "description": N_("Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, savannas, and croplands. Fire frequency is obtained from NASA's Fire Information for Resource Management System (FIRMS) and is used as a proxy for fire hazard."),
+        "units": N_("km⁻² · yr⁻¹"),
         "availability": "2001–2023",
         "source": "NASA FIRMS",
         "source_url": "https://firms.modaps.eosdis.nasa.gov/",
     },
     "sand_dust_storm_unccd_2024": {
-        "description": "Sand and dust storms (SDS) are caused by intense winds over areas of arid soil that pick up large amounts of ground material into the atmosphere.",
-        "units": "Index",
+        "description": N_("Sand and dust storms (SDS) are caused by intense winds over areas of arid soil that pick up large amounts of ground material into the atmosphere."),
+        "units": N_("Index"),
         "source": "UNCCD",
         "source_url": "https://www.unccd.int/",
     },
     "air_pollution_pm25_1998-2023": {
-        "description": "Air pollution refers to the presence of substances in the atmosphere that are harmful to human health and the environment. Fine particle air pollution (PM2.5) refers to airborne particles measuring less than 2.5 micrometers in diameter emitted from vehicles, fuel use, power plants, agriculture, waste burning, wildfires, and other sources.",
-        "units": "PM2.5 in μg/m³",
+        "description": N_("Air pollution refers to the presence of substances in the atmosphere that are harmful to human health and the environment. Fine particle air pollution (PM2.5) refers to airborne particles measuring less than 2.5 micrometers in diameter emitted from vehicles, fuel use, power plants, agriculture, waste burning, wildfires, and other sources."),
+        "units": N_("PM2.5 in μg/m³"),
         "availability": "2012–2022",
         "source": "ACAG",
         "source_url": "https://sites.wustl.edu/acag/",
     },
     "vectorborne_malariapv_2012-2022": {
-        "description": "P. vivax is the dominant malaria parasite in most countries outside of sub-Saharan Africa. Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites of infected female Anopheles mosquitoes.",
-        "units": "Persons",
+        "description": N_("P. vivax is the dominant malaria parasite in most countries outside of sub-Saharan Africa. Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites of infected female Anopheles mosquitoes."),
+        "units": N_("Persons"),
         "availability": "2012–2022",
         "source": "MAP",
         "source_url": "https://malariaatlas.org/",
     },
     "vectorborne_malariapf_2012-2022": {
-        "description": "Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites of infected female Anopheles mosquitoes. P. falciparum is the deadliest malaria parasite and the most prevalent on the African continent.",
-        "units": "Persons",
+        "description": N_("Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites of infected female Anopheles mosquitoes. P. falciparum is the deadliest malaria parasite and the most prevalent on the African continent."),
+        "units": N_("Persons"),
         "availability": "2012–2022",
         "source": "MAP",
         "source_url": "https://malariaatlas.org/",
     },
     "landslide_rainfall_worldbank_1980-2018": {
-        "description": "Rainfall-triggered landslide hazard based on the GFDRR Global Landslide Hazard Map (V2), representing the annual frequency of significant rainfall-induced landslides per km².",
-        "units": "Landslides per km² per year",
+        "description": N_("Rainfall-triggered landslide hazard based on the GFDRR Global Landslide Hazard Map (V2), representing the annual frequency of significant rainfall-induced landslides per km²."),
+        "units": N_("Landslides per km² per year"),
         "availability": "1980–2018",
         "source": "World Bank / GFDRR",
         "source_url": "https://www.gfdrr.org/",
     },
     "earthquake_pga_gem_2023": {
-        "description": "Peak ground acceleration (PGA) on reference rock for a 475-year return period (10% probability of exceedance in 50 years), from the GEM Global Seismic Hazard Map v2023.1.",
-        "units": "Peak Ground Acceleration (g)",
+        "description": N_("Peak ground acceleration (PGA) on reference rock for a 475-year return period (10% probability of exceedance in 50 years), from the GEM Global Seismic Hazard Map v2023.1."),
+        "units": N_("Peak Ground Acceleration (g)"),
         "availability": "2023",
         "source": "GEM",
         "source_url": "https://www.globalquakemodel.org/",
     },
     "volcanoes_gvp_1800-2025": {
-        "description": "Proximity to holocene volcanoes (active since 1800) within a 100 km buffer. The Global Volcanism Program (GVP) database is a comprehensive record of volcanic activity and related phenomena worldwide.",
-        "units": "cm",
+        "description": N_("Proximity to holocene volcanoes (active since 1800) within a 100 km buffer. The Global Volcanism Program (GVP) database is a comprehensive record of volcanic activity and related phenomena worldwide."),
+        "units": N_("cm"),
         "availability": "1800–2025",
         "source": "Smithsonian Institution / GVP",
         "source_url": "https://volcano.si.edu/",
     },
     "complex_emergencies_acled": {
-        "description": "The conflict index is a 0–10 hazard intensity layer derived from ACLED event records, specifically battles, remote violence, and explosions." 
-        "It captures both the frequency of conflict events and their fatalities, spatially aggregated to a 0.1° grid using 5 km buffers around each event point.",
-        "units": "Index",
+        "description": N_("The conflict index is a 0–10 hazard intensity layer derived from ACLED event records, specifically battles, remote violence, and explosions. "
+        "It captures both the frequency of conflict events and their fatalities, spatially aggregated to a 0.1° grid using 5 km buffers around each event point."),
+        "units": N_("Index"),
         "availability": "ACLED (2021-2025)",
         "source": "ACLED",
         "source_url": "https://acleddata.com/",
     },
     "Multi Hazard Count": {
-        "description": "Combined count of climate hazard types exceeding their respective thresholds at each pixel. Includes 8 climate topics: River Flood, Coastal Flood, Tropical Storm, Drought, Heatwave, Extreme Heat, Fire, and Sand and Dust Storm. Climate-related topics (Air Pollution, Malaria) and geophysical hazards (Landslide, Earthquake, Volcanoes) are excluded.",
-        "units": "Count",
+        "description": N_("Combined count of climate hazard types exceeding their respective thresholds at each pixel. Includes 8 climate topics: River Flood, Coastal Flood, Tropical Storm, Drought, Heatwave, Extreme Heat, Fire, and Sand and Dust Storm. Climate-related topics (Air Pollution, Malaria) and geophysical hazards (Landslide, Earthquake, Volcanoes) are excluded."),
+        "units": N_("Count"),
         "source": "UNICEF Children's Climate Risk Report 2026",
         "source_url": "https://www.unicef.org/reports/climate-crisis-child-rights-crisis",
     },
     "Multi Hazard Intensity": {
-        "description": "Combined hazard count and intensity score across all hazard types.",
-        "units": "Score",
+        "description": N_("Combined hazard count and intensity score across all hazard types."),
+        "units": N_("Score"),
         "source": "UNICEF Children's Climate Risk Report 2026",
         "source_url": "https://www.unicef.org/reports/climate-crisis-child-rights-crisis",
     },
@@ -514,19 +551,19 @@ HAZARD_INFO = {
 # Population layers reuse the same info panel as hazards, keyed by their
 # prefixed layer id, so provenance stays in one place across the app.
 _POP_DESCRIPTIONS = {
-    "T":       "Estimated total population of all ages.",
-    "T_M":     "Estimated male population of all ages.",
-    "T_F":     "Estimated female population of all ages.",
-    "T_U18":   "Estimated population of children under 18 years of age. This is "
-               "the denominator used for every child-exposure figure in the app.",
-    "T_M_U18": "Estimated population of boys under 18 years of age.",
-    "T_F_U18": "Estimated population of girls under 18 years of age.",
+    "T":       N_("Estimated total population of all ages."),
+    "T_M":     N_("Estimated male population of all ages."),
+    "T_F":     N_("Estimated female population of all ages."),
+    "T_U18":   N_("Estimated population of children under 18 years of age. This is "
+               "the denominator used for every child-exposure figure in the app."),
+    "T_M_U18": N_("Estimated population of boys under 18 years of age."),
+    "T_F_U18": N_("Estimated population of girls under 18 years of age."),
 }
 
 for _p in POPULATION_LAYERS:
     HAZARD_INFO[POP_PREFIX + _p["id"]] = {
         "description": _POP_DESCRIPTIONS[_p["id"]],
-        "units": "Persons per 100 m pixel",
+        "units": N_("Persons per 100 m pixel"),
         "availability": "2025",
         "source": "WorldPop",
         "source_url": "https://www.worldpop.org/",

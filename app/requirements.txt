@@ -6,3 +6,4 @@ gunicorn>=21.2.0
 google-genai
 cachetools>=5.0.0
 XlsxWriter>=3.2
+Babel>=2.14

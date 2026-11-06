@@ -1,12 +1,16 @@
 """Small layout builders and formatters shared by sections."""
 import datetime as dt
 from config.hazards import (
-    HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, is_pop_layer, MHC_EXCLUDED_TOPICS,
-    pop_class_of, POP_LAYER_MAP,
+    HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, hazard_name_words, is_pop_layer,
+    MHC_EXCLUDED_TOPICS, pop_class_of, POP_LAYER_MAP,
 )
 from dash import html
 
 from dash_app import app
+from i18n import (
+    current_lang, fmt_day_range, fmt_num, LANG_BY_CODE, LANG_COOKIE, LANGUAGES, N_,
+    SKIP_NOTICE_COOKIE, tr,
+)
 from ui.registry import DEFAULT_NAV, PHASES, SEGMENTED_VIEWS, TAB_BY_KEY, VIEWS
 
 
@@ -14,19 +18,20 @@ def _hazard_info_body(info):
     if not isinstance(info, dict):
         return info
     rows = []
-    for label, key in [("Description", "description"), ("Units", "units"),
-                       ("Availability", "availability"), ("Resolution", "resolution")]:
+    for label, key in [(N_("Description"), "description"), (N_("Units"), "units"),
+                       (N_("Availability"), "availability"),
+                       (N_("Resolution"), "resolution")]:
         val = info.get(key, "")
         if val:
             rows.append(html.Div([
-                html.Span(label, className="hi-label"),
-                html.Span(val,   className="hi-val"),
+                html.Span(tr(label), className="hi-label"),
+                html.Span(tr(val),   className="hi-val"),
             ], className="hi-row"))
     source = info.get("source", "")
     url    = info.get("source_url", "")
     if source:
         rows.append(html.Div([
-            html.Span("Source", className="hi-label"),
+            html.Span(tr("Source"), className="hi-label"),
             html.A(source, href=url, target="_blank", className="hi-val hi-link") if url
             else html.Span(source, className="hi-val"),
         ], className="hi-row"))
@@ -35,18 +40,20 @@ def _hazard_info_body(info):
 
 def _layer_label(name):
     if name in ("Multi Hazard Count", "Multi Hazard Intensity"):
-        return name
+        return tr(name)
     if is_pop_layer(name):
-        return POP_LAYER_MAP.get(pop_class_of(name), {}).get("label", name)
-    # "flood_river_2yr" → "Flood River 2yr"
-    return " ".join(w.capitalize() for w in name.replace("-", " ").split("_"))
+        return tr(POP_LAYER_MAP.get(pop_class_of(name), {}).get("label", name))
+    # "heatwave_frequency_ecmwf_2014-2024" → "Heatwave Frequency Ecmwf 2014 2024"
+    head, rest = hazard_name_words(name)
+    return " ".join(([tr(head)] if head else []) + rest)
 
 
 def _layer_meta(name):
     if name == "Multi Hazard Count":
-        return f"{len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)} hazard topics combined"
+        return tr("{n} hazard topics combined",
+                  n=len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS))
     if name == "Multi Hazard Intensity":
-        return "Pixel-based hazard score (MHI)"
+        return tr("Pixel-based hazard score (MHI)")
     if is_pop_layer(name):
         return "WorldPop 2025 · 100 m"
     h = HAZARD_MAP.get(name)
@@ -55,16 +62,16 @@ def _layer_meta(name):
 
 def _fmt(v):
     if v is None: return "—"
-    if abs(v) >= 1_000_000: return f"{v/1e6:.2f}M"
-    if abs(v) >= 1_000:     return f"{v/1000:.1f}k"
-    if isinstance(v, float): return f"{v:.2f}"
+    if abs(v) >= 1_000_000: return fmt_num(v / 1e6, 2) + "M"
+    if abs(v) >= 1_000:     return fmt_num(v / 1000, 1) + "k"
+    if isinstance(v, float): return fmt_num(v, 2)
     return str(int(v))
 
 
 def view_header_children(tab):
     t = TAB_BY_KEY[tab]
-    return [html.Div(t["title"], className="ph-title"),
-            html.Div(t["desc"],  className="ph-sub")]
+    return [html.Div(tr(t["title"]), className="ph-title"),
+            html.Div(tr(t["desc"]),  className="ph-sub")]
 
 
 def rail_btn_class(view, nav):
@@ -80,9 +87,9 @@ def rail_btn_class(view, nav):
 
 def nav_btn(view, nav):
     children = [html.I(className=view["icon"]),
-                html.Span(view["label"], className="nav-label")]
+                html.Span(tr(view["label"]), className="nav-label")]
     if view.get("soon"):
-        children.append(html.Span("soon", className="nav-soon"))
+        children.append(html.Span(tr("soon"), className="nav-soon"))
     return html.Button(children, id=f"nav-{view['key']}",
                        className=rail_btn_class(view, nav), n_clicks=0)
 
@@ -140,22 +147,54 @@ def seg_btn_class(view_key, tab, nav):
     return "view-seg active" if on else "view-seg"
 
 
+def language_switcher():
+    """Translate icon + current language code beside the app title. Menu and
+    switching are handled by assets/i18n.js (sets the language cookie and
+    reloads, so the whole layout re-renders in that language)."""
+    lang = current_lang()
+    opts = []
+    for L in LANGUAGES:
+        draft = L["status"] != "reviewed"
+        opts.append(html.Button(
+            [html.Span(L["name"]),
+             *([html.Span(tr("draft"), className="lang-draft")] if draft else [])],
+            lang=L["code"], role="menuitem",
+            className="lang-opt active" if L["code"] == lang else "lang-opt",
+            **{"data-lang": L["code"], "data-cookie": LANG_COOKIE,
+               "data-skip-cookie": SKIP_NOTICE_COOKIE}))
+    note = ([html.Div(tr("Draft translations are machine-assisted and awaiting "
+                         "review; the English version is authoritative."),
+                      className="lang-menu-note")]
+            if LANG_BY_CODE[lang]["status"] != "reviewed" else [])
+    return html.Div(id="lang-switch", className="lang-switch", children=[
+        html.Button(
+            [html.I(className="bi bi-translate"),
+             html.Span(lang.upper(), className="lang-code")],
+            id="lang-btn", className="lang-btn", title=tr("Language"),
+            **{"aria-haspopup": "true"},
+        ),
+        html.Div(opts + note, className="lang-menu", role="menu"),
+    ])
+
+
 def panel_head():
     """Title, phase switch and the active view's segments — pinned at the top
     of the panel so the phase and view stay visible while the pane scrolls."""
     return html.Div(id="panel-head", children=[
-        html.Div("Global Child Hazard Database", className="panel-title"),
+        # The product name is a proper noun, kept in English in every language.
+        html.Div([html.Div("Global Child Hazard Database", className="panel-title"),
+                  language_switcher()], className="panel-title-row"),
         html.Div(className="phase-switch", role="tablist", children=[
             html.Button(
                 [html.I(className=p["icon"]),
-                 html.Span(p["label"], className="phase-label"),
+                 html.Span(tr(p["label"]), className="phase-label"),
                  *([] if p["enabled"] else
-                   [html.Span("soon", className="phase-soon")])],
+                   [html.Span(tr("soon"), className="phase-soon")])],
                 id=f"phase-{p['key']}", n_clicks=0,
                 className=phase_btn_class(p, DEFAULT_NAV),
                 disabled=not p["enabled"],
                 title=("" if p["enabled"] else
-                       "Damage Assessment — planned, not yet available"),
+                       tr("Damage Assessment — planned, not yet available")),
             )
             for p in PHASES
         ]),
@@ -164,7 +203,7 @@ def panel_head():
             style={"display": "flex" if v["key"] == DEFAULT_NAV["view"]
                    else "none"},
             children=[
-                html.Button(s["label"], n_clicks=0,
+                html.Button(tr(s["label"]), n_clicks=0,
                             id={"type": "seg-btn", "view": v["key"],
                                 "tab": s["tab"]},
                             className=seg_btn_class(v["key"], s["tab"],
@@ -188,21 +227,24 @@ def _fmt_window(start, end):
         b = dt.date.fromisoformat(str(end)[:10])
     except (TypeError, ValueError):
         return ""
-    if a == b:
-        return a.strftime("%d %b %Y")
-    left = a.strftime("%d %b" if a.year == b.year else "%d %b %Y")
-    return f"{left} – {b.strftime('%d %b %Y')}"
+    return fmt_day_range(a, b)
 
 
 def _hazard_label(name):
-    words = [w.capitalize() for w in name.replace("-", " ").split("_")]
-    return " ".join(words[:2])
+    """Short hazard name: the translated descriptive head, plus the first
+    identifier word when the head alone is ambiguous ("Drought Spei")."""
+    head, rest = hazard_name_words(name)
+    if not head:
+        return " ".join(rest[:2])
+    if len(head.split()) >= 2 or not rest:
+        return tr(head)
+    return f"{tr(head)} {rest[0]}"
 
 
-POP_BASIS = "WorldPop under-18 gridded population, 2025, 100 m"
+POP_BASIS = N_("WorldPop under-18 gridded population, 2025, 100 m")
 
 
-_ESTIMATE_CAVEAT = (
+_ESTIMATE_CAVEAT = N_(
     "Figures are the modelled child population in areas where the hazard "
     "exceeds the stated threshold — indicative of relative exposure, not "
     "observed impacts."
@@ -233,11 +275,11 @@ def _provenance_block(extra_lines=None):
     Shared by Analysis and Infrastructure so the two panels can never state it
     differently.
     """
-    lines = [f"Population: {POP_BASIS}", *(extra_lines or [])]
+    lines = [tr("Population: {basis}", basis=tr(POP_BASIS)), *(extra_lines or [])]
     return html.Div(className="ps", children=[
-        html.Div("Methodology", className="hi-label",
+        html.Div(tr("Methodology"), className="hi-label",
                  style={"marginBottom": "6px"}),
-        html.Div(_ESTIMATE_CAVEAT, className="ps-caption"),
+        html.Div(tr(_ESTIMATE_CAVEAT), className="ps-caption"),
         html.Div([html.Div(t) for t in lines],
                  className="ps-caption", style={"lineHeight": "1.7",
                                                 "marginBottom": "0"}),
@@ -251,8 +293,8 @@ def _eff_threshold(h_name, overrides):
     units   = (HAZARD_INFO.get(h_name) or {}).get("units", "")
     if thr is None:
         return ""
-    thr_str = f"{thr:g}"
-    return f"thr {thr_str}" + (f" {units}" if units else "")
+    thr_str = tr("thr {value}", value=f"{thr:g}")
+    return thr_str + (f" {tr(units)}" if units else "")
 
 
 def _no_data_panel(region_name):
@@ -263,12 +305,13 @@ def _no_data_panel(region_name):
     from a measured "no children are exposed here".
     """
     return html.Div(className="ps", children=[
-        html.Div("Data not available", className="hi-label",
+        html.Div(tr("Data not available"), className="hi-label",
                  style={"marginBottom": "6px"}),
         html.Div(
-            f"Hazard and exposure data are not available for {region_name}, "
-            "so no figures are reported. This reflects a gap in the underlying "
-            "global datasets, not an absence of hazard or of children.",
+            tr("Hazard and exposure data are not available for {region}, so no "
+               "figures are reported. This reflects a gap in the underlying "
+               "global datasets, not an absence of hazard or of children.",
+               region=region_name),
             className="ps-caption", style={"marginBottom": "0"},
         ),
     ])
