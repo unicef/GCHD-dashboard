@@ -128,10 +128,17 @@ The app will start on `http://localhost:8050`.
 cd app
 gunicorn app:server \
   --workers 4 \
+  --worker-class gthread --threads 8 \
   --bind 0.0.0.0:8502 \
   --timeout 120 \
   --log-file gunicorn.log
 ```
+
+Use threaded workers (`gthread`). A single click fires a few dozen small
+callback requests, and a Compute holds its request for tens of seconds while
+GEE works; with sync workers each of those occupies a whole worker, so other
+requests queue behind them. Threads share the worker's memory, so this costs
+no extra RAM. `GCHD_TIMING=1` logs each callback request's server time.
 
 The production deployment uses a **Cloudflare Tunnel** to expose port `8502` at `gchd.pixel-aid.com` (aliased as `gchd.unicef.org`).
 

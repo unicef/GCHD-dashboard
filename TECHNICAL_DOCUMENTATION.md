@@ -46,7 +46,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 │   └──────────────────────┬───────────────────────────────┘  │
 │                          │                                  │
 │   ┌──────────────────────▼───────────────────────────────┐  │
-│   │  Gunicorn WSGI server (port 8502, 2 workers)         │  │
+│   │  Gunicorn WSGI server (port 8502, 2 gthread workers) │  │
 │   │  Managed by systemd (hazard-app.service)             │  │
 │   │                                                      │  │
 │   │  Plotly Dash Application (Python 3.12)               │  │
@@ -208,7 +208,7 @@ Inactive (kept in config, superseded by CAMS): Sentinel-5P NO₂ / SO₂ / CO / 
 | Storage | `/mnt/pixel_aid_disk1` (mounted disk) |
 | GEE quota | Standard GEE service account under `unicef-ccri` GCP project |
 | Concurrent users | ~46 registered; light concurrent load (GEE handles compute) |
-| Gunicorn workers | 2 |
+| Gunicorn workers | 2, `gthread` with 8 threads each (see README) |
 
 ---
 
