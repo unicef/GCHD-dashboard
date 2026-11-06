@@ -354,7 +354,10 @@ def tab_elnino():
 
             # 3. Threshold
             html.Div(className="ps", children=[
-                html.Div("3. Probability threshold", className="ps-label"),
+                html.Div([
+                    html.Span("3. Probability threshold"),
+                    html.Span(_en_info("threshold"), id="elnino-thr-info"),
+                ], className="ps-label"),
                 html.Div(className="analysis-threshold-row", children=[
                     html.Div(className="athr-row-head", children=[
                         html.Span("Signal where probability ≥",
@@ -584,19 +587,16 @@ def elnino_layer_for_signal(signal, current):
 @app.callback(
     Output("elnino-period-note",    "children"),
     Output("elnino-signal-note",    "children"),
-    Output("elnino-layer-note",     "children"),
     Input("elnino-period",          "value"),
     Input("elnino-signal",          "data"),
-    Input("elnino-layer",           "value"),
 )
-def elnino_notes(period, signal, layer):
+def elnino_notes(period, signal):
     p = PERIOD_MAP.get(period) or {}
     s = SIGNAL_MAP.get(signal) or {}
-    l = EXPLORE_MAP.get(layer) or {}
     p_note = (f"Forecast issued {p.get('issue_label', '—')}. "
               + ("Three-month total. " if p.get("lead") == 0 else "")
               + f"Dry-area cutoff: {p.get('dry_mask_mm', '—')} mm.")
-    return p_note, s.get("blurb", ""), l.get("desc", "")
+    return p_note, s.get("blurb", "")
 
 
 # Ended months drop out without a restart: rebuilt whenever the tab opens.
