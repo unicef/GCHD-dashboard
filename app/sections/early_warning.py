@@ -24,6 +24,7 @@ from bootstrap import COUNTRY_NAMES
 from ui.components import _fmt, POP_BASIS
 from ui.registry import CATALOG_TABS, FORECAST_TABS
 from ui.threshold import _thr_step_marks
+from ui.xlsx import build_report_xlsx, report_download_links
 from sections.ew_shared import _forecast_cfg, _live_spec
 
 
@@ -1039,6 +1040,68 @@ def _forecast_error(msg):
     ])
 
 
+def _ew_pop_report_xlsx(meta, ex, thr_txt):
+    """EW Pop analysis workbook: the results panel, as a printable sheet."""
+    share = lambda n, d: (n / d) if d else None
+    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", meta["level"] or "")
+    if meta.get("asset_id"):
+        source = meta["asset_id"] + (f" (band {meta['band']})" if meta.get("band") else "")
+    else:
+        source = (FORECAST_MAP.get(meta.get("dataset")) or {}).get("id") or meta.get("dataset", "")
+    items = [
+        ("Hazard layer", meta["label"]),
+        ("Data source", source),
+        ("Window", f"{meta['start']} to {meta['end']} "
+                   f"({meta['n_images']:,} images)"),
+    ]
+    if meta.get("run"):
+        items.append(("Model run", f"{meta['run']} (one run, by valid time)"))
+    items += [
+        ("Aggregation", REDUCERS.get(meta["reducer"], meta["reducer"])),
+        ("Exposed where", f"aggregated value > {thr_txt}"),
+        ("Region", f"{meta['region']} ({level_txt})"),
+        ("Population", POP_BASIS + (f", aggregated to {meta['pop_res']:,} m"
+                                    if meta["pop_res"] != 100 else "")
+                       + ". Children under 18."),
+        ("Live data", "Near-real-time and forecast data change as new images "
+                      "and model runs arrive; the figures are for the window "
+                      "and run above, as available when computed."),
+        ("Produced by", "UNICEF Global Child Hazard Database (GCHD)"),
+    ]
+    blocks = [
+        {"kind": "metrics", "items": [
+            {"label": "Children exposed", "value": ex["children_exposed"],
+             "color": "#e31a1c"},
+            {"label": "Total children", "value": ex["total_children"]},
+            {"label": "Share exposed", "fmt": "pct", "color": "#e31a1c",
+             "value": share(ex["children_exposed"], ex["total_children"])},
+            {"label": "Images used", "value": meta["n_images"]},
+        ]},
+        {"kind": "table", "title": f"Children exposed — {meta['label']}",
+         "label_header": "Group",
+         "columns": [{"label": "Exposed", "fmt": "int"},
+                     {"label": "In region", "fmt": "int"},
+                     {"label": "Share exposed", "fmt": "pct"}],
+         "rows": [
+             {"label": "All children", "swatch": "#e31a1c",
+              "values": [ex["children_exposed"], ex["total_children"],
+                         share(ex["children_exposed"], ex["total_children"])]},
+             {"label": "Boys", "indent": True,
+              "values": [ex["boys_exposed"], ex["total_boys"],
+                         share(ex["boys_exposed"], ex["total_boys"])]},
+             {"label": "Girls", "indent": True,
+              "values": [ex["girls_exposed"], ex["total_girls"],
+                         share(ex["girls_exposed"], ex["total_girls"])]},
+         ]},
+        {"kind": "list", "title": "How this was computed", "items": items},
+    ]
+    computed = ex["computed_utc"][:16].replace("T", " ") + " UTC"
+    return build_report_xlsx(
+        "Exposure", f"Children exposed — {meta['region']}",
+        f"Early Warning · Population analysis · {meta['label']} · "
+        f"computed {computed}", blocks)
+
+
 def render_forecast_results(result, meta):
     """Single-dataset exposure result.
 
@@ -1170,15 +1233,8 @@ def render_forecast_results(result, meta):
                        "color": "var(--lo)", "fontStyle": "italic"})
              if meta["pop_res"] != 100 else None),
         ]),
-        html.Div(className="ps", children=[
-            html.A(
-                "⬇  Download result (JSON)",
-                href="data:application/json;charset=utf-8,"
-                     + _json.dumps(export, indent=2),
-                download=f"gchd_forecast_{safe}.json",
-                className="ps-btn-ghost",
-                style={"display": "block", "textAlign": "center",
-                       "textDecoration": "none", "padding": "9px 16px"},
-            ),
-        ]),
+        report_download_links(
+            _ew_pop_report_xlsx(meta, export, thr_txt),
+            f"gchd_forecast_{safe}.xlsx",
+            _json.dumps(export, indent=2), f"gchd_forecast_{safe}.json"),
     ])

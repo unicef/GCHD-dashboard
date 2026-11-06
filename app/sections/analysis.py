@@ -1,11 +1,13 @@
 """Preparedness Pop analysis, including custom boundaries."""
 import dash
 import dash_leaflet as dl
+import datetime as dt
 import json as _json
 import re
 from config.hazards import (
     ADMIN_DATA, EXCLUDE_ISO3, EXPOSURE_ONLY_TOPICS, FORCE_NULL_RULES,
-    HAZARD_MAP, HAZARD_TOPICS, HAZARDS, is_no_data_ucode, SUB_TOPIC_DETAIL,
+    HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS, HAZARDS, is_no_data_ucode,
+    SUB_TOPIC_DETAIL,
     TOPIC_COLORS,
 )
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
@@ -20,10 +22,12 @@ from dash_app import app
 from bootstrap import ANALYSIS_TOPIC_SLOTS, COUNTRY_NAMES, GEE_ATTR
 from ui.components import (
     _eff_threshold, _fmt, _hazard_label, _info_icon, _no_data_panel,
-    _provenance_block,
+    _provenance_block, POP_BASIS,
 )
 from ui.threshold import _threshold_overrides
-from ui.xlsx import build_xlsx, _thresholds_banner
+from ui.xlsx import (
+    build_report_xlsx, build_xlsx, report_download_links, _thresholds_banner,
+)
 
 
 def tab_analysis():
@@ -416,7 +420,7 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
         data = _apply_force_null(existing, ucode)
         return no_update, render_results(data, name, mhc, mhi,
                                          data.get("_topics"), data.get("_overrides"),
-                                         ucode=ucode), no_update
+                                         ucode=ucode, level=level), no_update
 
     # Compute button pressed → run the analysis for the current selection.
     result = compute_exposure(
@@ -448,7 +452,7 @@ def run_exposure(_n, mhc, mhi, clicked_ucode, clicked_name, country_ucode, count
     }
     return (result,
             render_results(result, name, mhc, mhi, sel_topics, overrides,
-                           ucode=ucode),
+                           ucode=ucode, level=level),
             viz)
 
 
@@ -575,8 +579,82 @@ def _apply_force_null(result, ucode):
     return result
 
 
+def _thr_text(h_name, overrides):
+    default = HAZARD_MAP.get(h_name, {}).get("threshold")
+    thr = (overrides or {}).get(h_name, default)
+    if thr is None:
+        return ""
+    units = (HAZARD_INFO.get(h_name) or {}).get("units", "")
+    tag = "custom" if h_name in (overrides or {}) else "default"
+    op = "<" if thr < 0 else ">"
+    return f"{op} {thr:g}{' ' + units if units else ''} ({tag})"
+
+
+def _pop_report_xlsx(region, level, total, male, fema, topic_data,
+                     no_data_topics, mh_data, result, overrides):
+    """Prep Pop analysis workbook: the results panel, as a printable sheet."""
+    share = lambda n: (n / total) if total else None
+    rows = []
+    for td in topic_data:
+        hazards = HAZARD_TOPICS.get(td["topic"], [])
+        rows.append({"label": td["topic"], "swatch": TOPIC_COLORS.get(td["topic"]),
+                     "values": [td["count"], share(td["count"]),
+                                _thr_text(hazards[0], overrides)
+                                if len(hazards) == 1 else "per hazard, below"]})
+        if len(hazards) > 1:
+            for h in hazards:
+                n = int(round(result.get(h) or 0))
+                rows.append({"label": _hazard_label(h), "indent": True, "muted": True,
+                             "values": [n, share(n), _thr_text(h, overrides)]})
+    for t in no_data_topics:
+        rows.append({"label": t, "swatch": TOPIC_COLORS.get(t), "muted": True,
+                     "values": [None, None, "No hazard data for this region"]})
+
+    blocks = [
+        {"kind": "metrics", "items": [
+            {"label": "Total children", "value": total},
+            {"label": "Boys", "value": male, "color": "#3b82f6"},
+            {"label": "Girls", "value": fema, "color": "#ec4899"},
+            {"label": "Girls %", "value": share(fema), "fmt": "pct",
+             "color": "#ec4899"},
+        ]},
+        {"kind": "table", "title": "Children exposed, by hazard topic",
+         "label_header": "Hazard topic",
+         "columns": [{"label": "Children exposed", "fmt": "int"},
+                     {"label": "% of children", "fmt": "pct"},
+                     {"label": "Threshold", "fmt": "text"}],
+         "rows": rows,
+         "note": "A child can be exposed to several hazards, so the topic "
+                 "figures overlap and must not be added together."},
+    ]
+    if mh_data:
+        blocks.append({
+            "kind": "table", "title": "Multi-hazard filters",
+            "label_header": "Filter",
+            "columns": [{"label": "Children exposed", "fmt": "int"},
+                        {"label": "% of children", "fmt": "pct"}],
+            "rows": [{"label": lbl, "swatch": "#800026" if lbl.startswith("MHC")
+                      else "#de4968", "values": [c, share(c)]}
+                     for lbl, c, _pct in mh_data]})
+    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", level or "")
+    blocks.append({"kind": "list", "title": "How this was computed", "items": [
+        ("Region", f"{region} ({level_txt})" if level_txt else region),
+        ("Population", POP_BASIS + ". Children under 18."),
+        ("Exposure", "A child is counted as exposed when the hazard value in "
+                     "their 100 m cell exceeds the threshold. A topic counts a "
+                     "child exposed to any of its hazards."),
+        ("Thresholds", f"{len(overrides)} custom, the rest default"
+                       if overrides else "Default thresholds"),
+        ("Produced by", "UNICEF Global Child Hazard Database (GCHD)"),
+    ]})
+    computed = dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    return build_report_xlsx(
+        "Exposure", f"Children exposed to hazards — {region}",
+        f"Preparedness · Population analysis · computed {computed}", blocks)
+
+
 def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
-                   overrides=None, ucode=None):
+                   overrides=None, ucode=None, level=None):
     if ucode and is_no_data_ucode(ucode):
         return _no_data_panel(region_name)
     if not result:
@@ -696,7 +774,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
 
     safe = re.sub(r"[^a-zA-Z0-9]", "_", region_name or "result")
 
-    mh_rows = []
+    mh_rows, mh_rows_data = [], []
     for val, key, fallback_key, color, label in [
         (mhc_val, f"count_filter_{mhc_val}",     None,                      "#800026", f"MHC (≥{mhc_val} topics)"),
         (mhi_val, f"intensity_filter_{mhi_val}", "active_intensity_filter", "#de4968", f"MHI (≥P{mhi_val})"),
@@ -709,6 +787,7 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
         if val and raw > 0:
             c   = int(round(raw))
             pct = c / total * 100 if total else 0
+            mh_rows_data.append((label, c, pct))
             mh_rows.append(html.Div([
                 html.Div(className="info-row", children=[
                     html.Span(className="info-lbl", children=[
@@ -768,16 +847,11 @@ def render_results(result, region_name, mhc_val, mhi_val, sel_topics=None,
             ),
         ]) if no_data_topics else None,
         _provenance_block([f"Region: {region_name}"]),
-        html.Div(className="ps", children=[
-            html.A(
-                "⬇  Download results (JSON)",
-                href=f"data:application/json;charset=utf-8,{_json.dumps(export_data, indent=2)}",
-                download=f"ccri_{safe}.json",
-                className="ps-btn-ghost",
-                style={"display": "block", "textAlign": "center",
-                       "textDecoration": "none", "padding": "9px 16px"},
-            ),
-        ]),
+        report_download_links(
+            _pop_report_xlsx(region_name, level, total, male, fema, topic_data,
+                             no_data_topics, mh_rows_data, result, overrides),
+            f"gchd_exposure_{safe}.xlsx",
+            _json.dumps(export_data, indent=2), f"ccri_{safe}.json"),
     ])
 
 
