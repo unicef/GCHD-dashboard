@@ -46,7 +46,7 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 │   └──────────────────────┬───────────────────────────────┘  │
 │                          │                                  │
 │   ┌──────────────────────▼───────────────────────────────┐  │
-│   │  Gunicorn WSGI server (port 8502, 2 workers)         │  │
+│   │  Gunicorn WSGI server (port 8502, 2 gthread workers) │  │
 │   │  Managed by systemd (hazard-app.service)             │  │
 │   │                                                      │  │
 │   │  Plotly Dash Application (Python 3.12)               │  │
@@ -72,23 +72,39 @@ The Global Child Hazard Database (GCHD) is a web application that visualises glo
 - **No raster data on the app server.** All raster processing (thresholding, masking, zonal statistics) runs in Google Earth Engine. The app server only constructs GEE expressions and returns tile URLs to the browser.
 - **No file IO at request time.** All reference data lives as GEE assets (`projects/unicef-ccri/assets/`). No CSV, raster, or vector files are loaded from disk during a request.
 - **Boundary files handled client-side.** Uploaded GeoJSON is parsed, validated, and rendered on the browser. Only the geometry and a single name field are sent to the app server for GEE computation.
-- **Static hazards are cached for the server's lifetime; live data never is.** `gee_core.build_core_images()` is `@lru_cache(maxsize=1)` and holds the whole static hazard image graph. Anything parameterised by time is built on demand in `forecast_core` instead (see below).
+- **Static hazards are cached for the server's lifetime; live data never is.** `core.gee.build_core_images()` is `@lru_cache(maxsize=1)` and holds the whole static hazard image graph. Anything parameterised by time is built on demand in `core.forecast` instead (see below).
+
+### Navigation: phases, views and panes
+
+`ui/registry.py` holds a three-level registry, and every navigation control and callback output is generated from it:
+
+- `PHASES`: the phase switch under the panel title (Preparedness, Early Warning, Damage Assessment). The phase sets the rail's contents and the accent colour (`#main-app.phase-<key>`, CSS `--accent`).
+- `VIEWS`: the rail buttons of each phase. A view with several `segments` shows a segmented control at the top of the panel.
+- `TABS`: the panes. A segment opens one pane, and `store-tab` holds its key. Pane keys are load-bearing (many callbacks compare against them) and never change with labels.
+
+`leave_guard` is the only writer of `store-pending-tab` (a `{phase, view, tab}` dict). It resolves rail, phase, segment, hand-off and URL triggers, and holds the destination behind a confirmation when results would be lost. `switch_tab` renders the state.
+
+**URL sync.** The URL follows navigation through `history.pushState` in a clientside callback. `dcc.Location` does not observe that, so there is no `url -> leave_guard -> switch_tab -> url` cycle; Back and Forward still reach `leave_guard` through `popstate`.
+
+**EW Hazard card.** One `#ew-hazard-card` above the panes holds the EW hazard (dataset, window, aggregation, threshold) for Visualization, Pop and Infra analysis, so it is picked once and stays editable in every task. `ewh-mode-vis` hides its dropdown and threshold (the catalogue list is the picker there); `ewh-mode-analysis` hides the hand-off buttons. EW Pop analysis has its own pane (`ewpop`, region + Compute from `fc_controls`). A result computed on a different hazard than the card shows gets a "compute again" notice (`ew_hazard_stale`). `FORECAST_TABS` = panes on the forecast map layers; `CATALOG_TABS` = the Observed/Forecast list panes. Preparedness and EW Infra analysis share the infrastructure pane (`infra-mode-prep` / `infra-mode-ew`). In EW Infra the live layer stays on the map (preview before Compute; afterwards the district's hazard area is shown and the full layer is one legend click away). **Leaving resets.** Every view change resets all analysis forms (country, level, facility layer, topics, results, map layers) via `reset_forms_on_view`; nothing is rebuilt from half-kept state. The EW Hazard card is the one exception: it survives moves between EW tasks and is cleared when the phase changes (`reset_hazard_card_on_phase`). In EW, `core.gee.compute_facility_combined(..., live=...)` replaces the static topics with the Visualization layer (`core.forecast.build_live_hazard`: footprint where value > threshold, plus raw values sampled per facility). Population stays on the 100 m grid: the 1 km grid misallocates Voronoi catchments (median per-facility error 7–33% in tests), so infra figures match Preparedness for the same district.
+
+The map's top-left badge names the phase and hazard source (and the dataset and window for Observed/Forecast).
 
 ### Observed & Forecast subsystem
 
-Two tabs, **Observed** and **Forecast**, share one dataset registry (`forecast_config.py`) and one exposure module (`forecast_core.py`); the `kind` field decides which tab lists a dataset. Each tab has its own controls and resets when entered. Design decisions:
+The **Observed** and **Forecast** segments of Early Warning share one dataset registry (`config/forecast.py`) and one exposure module (`core/forecast.py`); the `kind` field decides which tab lists a dataset. Each tab has its own controls and resets when entered. Design decisions:
 
-1. **Kept out of the static pipeline.** `build_core_images()` is cached once per server lifetime, so date-parameterised layers would poison it. `forecast_core` builds its own image per `(dataset, window, reducer)` behind a short TTL.
+1. **Kept out of the static pipeline.** `build_core_images()` is cached once per server lifetime, so date-parameterised layers would poison it. `core.forecast` builds its own image per `(dataset, window, reducer)` behind a short TTL.
 2. **One model run per forecast.** GFS and CAMS hold overlapping runs. `_select_run` takes the latest run initialised at or before the window start, and images are filtered by valid time (`run` in config). The run is shown in the results and exported as `model_run`. GFS rainfall keeps only 6-hour block ends (it accumulates within each block).
 3. **Daily rainfall.** GFS and IMERG offer *Wettest day* and *Average daily total* (mm/day, UTC days). A day's total is its mean step × `steps_per_day`, so missing IMERG half-hours do not lower it.
 4. **Shared scales.** Same-variable datasets share one range and threshold set (`RAINFALL`, `AIR_TEMPERATURE`). Each reducer has its own default threshold with a source (`thresholds`), shown under the slider; ranges come from a populated-land probe (`range_source`). Only international sources are cited.
-5. **Exposure on the 1 km population grid.** `compute_forecast_exposure` reduces the 1 km child-population grid (rescaled to the 100 m totals, within 0.05%) with the same `chunk_asset` / `reduceRegions` pattern as `gee_core.compute_exposure`. There is no ADM0 fast path, so **thresholds take effect at ADM0 here**, unlike the Analysis tab.
+5. **Exposure on the 1 km population grid.** `compute_forecast_exposure` reduces the 1 km child-population grid (rescaled to the 100 m totals, within 0.05%) with the same `chunk_asset` / `reduceRegions` pattern as `core.gee.compute_exposure`. There is no ADM0 fast path, so **thresholds take effect at ADM0 here**, unlike the Analysis tab.
 
 **Runtime dataset flags.** An optional GEE table (`projects/unicef-ccri/assets/config/forecast_datasets`, 10-minute TTL) overrides the `active` flags without a redeploy; a read failure falls back to the config. Managed with `scripts/forecast_flags.py`.
 
 **Failure handling.** An empty window raises `ForecastError` instead of reporting zero exposed; the image count is shown in the results and export. Per-dataset transforms handle units (Sentinel-5P mol/m², MODIS scaled Kelvin, IMERG mm/hr, CAMS kg/m³) and derived bands (GFS wind from U/V, FIRMS fire days from mask presence).
 
-**Metadata.** `docs/Forecast Data catalog.xlsx` is generated by `scripts/build_forecast_catalog.py`, which reads every config-held field from `forecast_config.py`. Each dataset's (i) panel shows resolution from `_META`.
+**Metadata.** `docs/Forecast Data catalog.xlsx` is generated by `scripts/build_forecast_catalog.py`, which reads every config-held field from `config/forecast.py`. Each dataset's (i) panel shows resolution from `_META`.
 
 ---
 
@@ -149,7 +165,7 @@ All hazard raster data and administrative boundary files are stored as GEE asset
 
 ### Observed & Forecast datasets
 
-Read live from the **public GEE catalog** and reduced over a user-selected window, unlike the fixed assets above. Catalogued in `app/forecast_config.py`; full metadata in `docs/Forecast Data catalog.xlsx`.
+Read live from the **public GEE catalog** and reduced over a user-selected window, unlike the fixed assets above. Catalogued in `app/config/forecast.py`; full metadata in `docs/Forecast Data catalog.xlsx`.
 
 | Dataset | Collection | Topic | Tab | Resolution | Latency |
 |---|---|---|---|---|---|
@@ -163,7 +179,7 @@ Read live from the **public GEE catalog** and reduced over a user-selected windo
 | Active fire brightness / fire days | `FIRMS` | Fire | Observed | 1 km · daily | ~2 d |
 | Absorbing aerosol index | `COPERNICUS/S5P/NRTI/L3_AER_AI` | Sand & Dust Storm | Observed | ~5.5 × 3.5 km · daily | ~3 h |
 
-Inactive (kept in config, superseded by CAMS): Sentinel-5P NO₂ / SO₂ / CO / O₃. Rejected candidates and their reasons are in the `DROPPED` block of `forecast_config.py`.
+Inactive (kept in config, superseded by CAMS): Sentinel-5P NO₂ / SO₂ / CO / O₃. Rejected candidates and their reasons are in the `DROPPED` block of `config/forecast.py`.
 
 ### Population data
 
@@ -192,7 +208,7 @@ Inactive (kept in config, superseded by CAMS): Sentinel-5P NO₂ / SO₂ / CO / 
 | Storage | `/mnt/pixel_aid_disk1` (mounted disk) |
 | GEE quota | Standard GEE service account under `unicef-ccri` GCP project |
 | Concurrent users | ~46 registered; light concurrent load (GEE handles compute) |
-| Gunicorn workers | 2 |
+| Gunicorn workers | 2, `gthread` with 8 threads each (see README) |
 
 ---
 

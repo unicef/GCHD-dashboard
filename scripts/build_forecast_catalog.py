@@ -968,12 +968,12 @@ for c, (name, width) in enumerate(COLUMNS):
     ws.set_column(c, c, width)
 ws.set_row(HDR_ROW, 34)
 
-# `Active` is read from the live forecast_config rather than hand-maintained
+# `Active` is read from the live config.forecast rather than hand-maintained
 # here, so the workbook can never disagree with what the app actually shows.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "app"))
 try:
-    from forecast_config import FORECAST_MAP as _LIVE
+    from config.forecast import FORECAST_MAP as _LIVE
 except ImportError as _e:
     # Narrow: only a genuinely missing module is tolerable. Anything else is a
     # real bug and should not be masked into a column full of "?".
@@ -983,7 +983,7 @@ except ImportError as _e:
 
 
 def _thresholds_text(cfg):
-    from forecast_config import REDUCERS, threshold_for
+    from config.forecast import REDUCERS, threshold_for
     parts = []
     for r in cfg.get("reducers") or []:
         v, src = threshold_for(cfg, r)
@@ -997,7 +997,7 @@ def _live(row):
     cfg = _LIVE.get(row.get("Layer ID (app)")) if row["Status"] == "Implemented" else None
     if not cfg:
         return row
-    from forecast_config import REDUCERS
+    from config.forecast import REDUCERS
     space, _, time_ = (cfg.get("resolution") or "").partition(" · ")
     reds = cfg.get("reducers") or []
     run = cfg.get("run")

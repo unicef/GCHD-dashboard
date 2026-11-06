@@ -6,16 +6,19 @@ A web application for visualising global child exposure to climate and geophysic
 
 ## Features
 
-| Tab | Description |
-|---|---|
-| **Hazard Layers** | Browse and display 20 individual hazard layers on an interactive world map |
-| **Children's Exposure** | View population of children (under 18) exposed to each hazard topic |
-| **Multi Hazard** | Multi Hazard Count (MHC) and Multi Hazard Intensity (MHI) combined indicators |
-| **Exposure Analysis** | Compute child exposure by country, province, or district; supports custom GeoJSON upload and GEE asset paths |
-| **Infrastructure** | Correlate schools, health facilities and water points with hazard footprints and child population |
-| **Observed** | Child exposure to recently observed conditions (GPM IMERG, ERA5-Land, MODIS LST, FIRMS, Sentinel-5P) over a user-selected date window |
-| **Forecast** | Child exposure to forecast conditions (NOAA GFS, CAMS) over a user-selected window, using a single model run; also accepts any pasted GEE Image/ImageCollection id |
-| **AI Assistant** | Gemini-powered assistant for natural language hazard queries (under development) |
+The app is organised by disaster-risk-management phase. A phase switch under the title selects the phase; the left rail shows that phase's tasks, and the views with several data sources show a segmented control at the top of the panel. Every view has its own URL (`/ew/<phase>/<view>[/<segment>]`), so it can be bookmarked and shared.
+
+| Phase | Rail view | Segments / description |
+|---|---|---|
+| **Preparedness** | Visualization | **Hazard** (20 hazard layers), **Multi-hazard** (MHC and MHI indicators), **Exposure** (children under 18 exposed to each hazard topic) |
+| | Pop analysis | Compute child exposure by country, province or district; supports custom GeoJSON upload and GEE asset paths |
+| | Infra analysis | Correlate schools, health facilities and water points with hazard footprints and child population |
+| **Early Warning** | Visualization | **Observed** (GPM IMERG, ERA5-Land, MODIS LST, FIRMS, Sentinel-5P) and **Forecast** (NOAA GFS, CAMS, or any pasted GEE Image/ImageCollection id) over a user-selected window |
+| | Pop analysis | Child exposure to the observed or forecast layer in the shared Hazard card (picked in Visualization or right in the analysis form) |
+| | Infra analysis | Facility exposure to the Hazard card's layer (same Voronoi catchments and 100 m population grid as Preparedness) |
+| | Seasonal | El Niño seasonal rainfall and temperature outlook and children in areas with a dry or wet signal |
+| **Damage Assessment** | — | Planned |
+| All phases | AI | Gemini-powered assistant for natural language hazard queries (under development) |
 
 ### Hazard topics covered
 River Flood · Coastal Flood · Tropical Storm · Drought · Heatwave · Extreme Heat · Fire · Sand & Dust Storm · Air Pollution · Malaria · Landslide · Earthquake · Volcanoes
@@ -27,13 +30,23 @@ River Flood · Coastal Flood · Tropical Storm · Drought · Heatwave · Extreme
 ```
 hazard_database_app/
 ├── app/
-│   ├── app.py              # Main Dash application, layout, callbacks, auth routes
-│   ├── config.py           # Hazard definitions, topics, colors, admin levels
-│   ├── gee_core.py         # Google Earth Engine integration (tile URLs, exposure computation)
-│   ├── forecast_config.py  # Observed / Forecast dataset catalog (ranges, thresholds, sources)
-│   ├── forecast_core.py    # Date-windowed GEE loading, model-run selection, reduction, exposure
-│   ├── ai_core.py          # Google Gemini AI integration
-│   ├── auth.py             # Email OTP authentication logic
+│   ├── app.py              # Entry point (Gunicorn `app:server`); imports the modules below
+│   ├── dash_app.py         # The Dash app instance (served under /ew)
+│   ├── bootstrap.py        # GEE init and static data shared across sections
+│   ├── config/             # Plain data, no GEE import (also read by scripts/)
+│   │   ├── hazards.py      #   Hazard definitions, topics, colors, admin levels
+│   │   ├── forecast.py     #   Observed / Forecast dataset catalog (ranges, thresholds, sources)
+│   │   └── elnino.py       #   El Niño / SEAS5 seasonal outlook catalog
+│   ├── core/               # Earth Engine and compute logic, no Dash
+│   │   ├── gee.py          #   Tile URLs, exposure and facility computation
+│   │   ├── forecast.py     #   Date-windowed loading, model-run selection, reduction, exposure
+│   │   ├── elnino.py       #   El Niño outlook layers and exposure
+│   │   └── ai.py           #   Google Gemini integration
+│   ├── auth/               # Email OTP logic (otp.py) and the Flask login routes (routes.py)
+│   ├── ui/                 # Shared UI: navigation registry, components, map, legend,
+│   │                       #   threshold editors, info popover, xlsx builder, page layout
+│   ├── sections/           # One module per section: layout + its callbacks
+│   │                       #   (layers, analysis, infrastructure, early_warning, elnino, ai…)
 │   ├── requirements.txt    # Python dependencies
 │   ├── assets/             # Static files (CSS, images, favicon)
 │   └── credentials/        # Secret files — NOT committed (see setup below)
@@ -115,10 +128,17 @@ The app will start on `http://localhost:8050`.
 cd app
 gunicorn app:server \
   --workers 4 \
+  --worker-class gthread --threads 8 \
   --bind 0.0.0.0:8502 \
   --timeout 120 \
   --log-file gunicorn.log
 ```
+
+Use threaded workers (`gthread`). A single click fires a few dozen small
+callback requests, and a Compute holds its request for tens of seconds while
+GEE works; with sync workers each of those occupies a whole worker, so other
+requests queue behind them. Threads share the worker's memory, so this costs
+no extra RAM. `GCHD_TIMING=1` logs each callback request's server time.
 
 The production deployment uses a **Cloudflare Tunnel** to expose port `8502` at `gchd.pixel-aid.com` (aliased as `gchd.unicef.org`).
 
@@ -131,7 +151,7 @@ Access is restricted to `@unicef.org` email addresses via a one-time passcode (O
 1. User enters their UNICEF email address
 2. A 6-digit code is sent via SMTP
 3. User enters the code to access the app
-4. Session persists for the duration configured in `auth.py`
+4. Session persists for the duration configured in `auth/otp.py`
 
 ---
 
@@ -157,7 +177,7 @@ The app server must not read or write files at request time. If a feature requir
 
 ### 3. Boundary files are handled client-side
 
-When a user uploads a GeoJSON boundary, all parsing, validation, and geometry processing happens in the browser (see the `clientside_callback` in `app.py`). Only the minimal stripped GeoJSON (geometry + one name field) is sent to the app server for the GEE exposure computation. Property tables, large feature collections, and display rendering stay on the client.
+When a user uploads a GeoJSON boundary, all parsing, validation, and geometry processing happens in the browser (see the `clientside_callback` in `sections/analysis.py`). Only the minimal stripped GeoJSON (geometry + one name field) is sent to the app server for the GEE exposure computation. Property tables, large feature collections, and display rendering stay on the client.
 
 ```
 Client:  parse → validate → render on Leaflet → strip to geometry + name field

@@ -88,7 +88,7 @@ class TestAppDiscoveryContract(unittest.TestCase):
             raise unittest.SkipTest("app/ not present")
         sys.path.insert(0, app_dir)
         try:
-            import gee_core
+            import core.gee as gee_core
         except Exception as e:                      # ee missing in this env
             raise unittest.SkipTest(f"cannot import gee_core: {e}")
         cls.gee_core = gee_core
@@ -112,7 +112,7 @@ class TestAppDiscoveryContract(unittest.TestCase):
     def test_layer_labels_match_the_styling_keys(self):
         """Labels are '<Type> (<Source>)' and styling keys off '<Type>' — if
         they drift, layers render in the fallback colour."""
-        from config import INFRA_TYPE_META
+        from config.hazards import INFRA_TYPE_META
         for label in self.gee_core._LAYER_LABELS.values():
             self.assertIn(label, INFRA_TYPE_META)
 

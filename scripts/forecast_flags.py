@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 import ee
 
-from forecast_config import FORECAST_DATASETS, FORECAST_MAP
+from config.forecast import FORECAST_DATASETS, FORECAST_MAP
 
 KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "..", "app", "credentials", "service_account.json")

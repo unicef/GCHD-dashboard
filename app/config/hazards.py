@@ -1,5 +1,5 @@
 # =============================================================================
-# config.py — Static configuration: hazards, topics, colors, admin levels
+# config/hazards.py — Static configuration: hazards, topics, colors, admin levels
 # No GEE imports here so this loads instantly.
 # =============================================================================
 
@@ -163,7 +163,7 @@ ALLOW_NEGATIVE = []  # TerraClimate droughts now use positive probability thresh
 TOPIC_COLORS = {
     "River Flood":         "#1f78b4",
     # Forecast-catalog topic: those layers measure rainfall, not modelled
-    # flood extent (see forecast_config.py).
+    # flood extent (see config/forecast.py).
     "Rainfall":            "#1f78b4",
     "Coastal Flood":       "#a6cee3",
     "Tropical Storm":      "#33a02c",
@@ -225,7 +225,7 @@ SELF_MASK_HAZARDS = [
 
 # =============================================================================
 # Population layers (WorldPop 2025, 100 m) — shown as their own Layers-tab
-# section and reused as the exposure denominator in gee_core.build_core_images.
+# section and reused as the exposure denominator in core.gee.build_core_images.
 # =============================================================================
 
 POP_ASSET_TMPL = "projects/unicef-ccri/assets/population/worldpop_{}_2025_CN_100m"
@@ -319,7 +319,7 @@ ADMIN_DATA = {
 # Infrastructure point layers for the Infrastructure analysis tab.
 #
 # The countries and layers themselves are NOT listed here — they are discovered
-# at runtime from the GEE infrastructure folder by gee_core.discover_infra_assets(),
+# at runtime from the GEE infrastructure folder by core.gee.discover_infra_assets(),
 # so uploading a new country's assets makes it appear with no code change and no
 # redeploy. What stays here is only the styling, which is a display choice.
 
@@ -534,9 +534,9 @@ for _p in POPULATION_LAYERS:
 
 # Forecast datasets reuse the same info panel too, keyed by a "fc:" prefix so
 # their names can never collide with a hazard name. Same pattern as the
-# population loop above. forecast_config has no imports of its own, so this
+# population loop above. config.forecast has no imports of its own, so this
 # introduces no cycle and no load-time cost.
-from forecast_config import FORECAST_DATASETS as _FC_DATASETS   # noqa: E402
+from config.forecast import FORECAST_DATASETS as _FC_DATASETS   # noqa: E402
 
 FC_INFO_PREFIX = "fc:"
 

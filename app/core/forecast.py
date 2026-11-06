@@ -1,12 +1,12 @@
 # =============================================================================
-# forecast_core.py — GEE logic for the Forecast & Live tab
+# core/forecast.py — GEE logic for the Forecast & Live tab
 #
-# Kept out of gee_core.build_core_images() on purpose: that function is
+# Kept out of core.gee.build_core_images() on purpose: that function is
 # @lru_cache(maxsize=1) and holds the static hazard image graph for the server's
 # lifetime. Everything here is parameterised by a date window, so it is built on
 # demand and cached per (dataset, window, reducer) tuple instead.
 #
-# The child-population grid is imported FROM gee_core so the exposure
+# The child-population grid is imported FROM core.gee so the exposure
 # denominator is identical to the rest of the dashboard — a forecast result must
 # reconcile with an Analysis-tab result for the same region.
 # =============================================================================
@@ -18,13 +18,13 @@ from threading import RLock
 import ee
 from cachetools import TTLCache, cached as _ttl_cached
 
-from config import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
-from forecast_config import (
+from config.hazards import ADMIN_DATA, POP_VIS, GLOBAL_GEOMETRY
+from config.forecast import (
     FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS,
 )
-from gee_core import build_core_images, _admin_region
+from core.gee import build_core_images, _admin_region
 
-# Same TTL rationale as gee_core: GEE map tokens expire, so tiles are refreshed
+# Same TTL rationale as core.gee: GEE map tokens expire, so tiles are refreshed
 # well before then. Reduction results are cached more briefly because live
 # collections gain images during the day.
 _TILE_TTL   = 3000   # 50 min
@@ -48,7 +48,7 @@ def _result_cache(maxsize):
 #
 # The static hazard layers deliberately stay on the 100 m grid — that is what
 # keeps the Analysis tab comparable with the published CCRR figures — so this
-# does NOT touch gee_core.build_core_images().
+# does NOT touch core.gee.build_core_images().
 
 _POP_1KM_TMPL = "projects/unicef-ccri/assets/population/worldpop_{}_2025_CN_1km"
 _POP_1KM_SCALE = 1000
@@ -101,7 +101,7 @@ class ForecastError(Exception):
 #
 # A small GEE FeatureCollection lets datasets be switched on or off without a
 # code change or redeploy — the same principle the Infrastructure tab already
-# uses (gee_core.discover_infra_assets). Edit the asset in the Code Editor and
+# uses (core.gee.discover_infra_assets). Edit the asset in the Code Editor and
 # the running app reflects it within the TTL; no restart.
 #
 # Two guardrails:
@@ -282,6 +282,29 @@ def _to_date(v):
     return dt.date.fromisoformat(str(v)[:10])
 
 
+@_ttl_cached(cache=_result_cache(8), lock=_lock)
+def latest_complete_day(name):
+    """Last UTC day with all its steps published, for sub-daily NRT datasets
+    (IMERG); None for the rest, or when the lookup fails."""
+    cfg = FORECAST_MAP.get(name) or {}
+    per_day = cfg.get("steps_per_day")
+    if cfg.get("kind") != "nrt" or not per_day:
+        return None
+    today = dt.date.today()
+    try:
+        t = (ee.ImageCollection(cfg["id"])
+             .filterDate((today - dt.timedelta(days=30)).isoformat(),
+                         (today + dt.timedelta(days=1)).isoformat())
+             .aggregate_max("system:time_start").getInfo())
+    except Exception:
+        return None
+    if t is None:
+        return None
+    last_step_end = (dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc)
+                     + dt.timedelta(days=1 / per_day))
+    return last_step_end.date() - dt.timedelta(days=1)
+
+
 def default_window(name):
     """(start, end) ISO strings for a dataset's initial picker state.
 
@@ -296,23 +319,31 @@ def default_window(name):
     span = int(cfg.get("default_span_days", 7))
     if cfg.get("kind") == "forecast":
         return today.isoformat(), (today + dt.timedelta(days=span)).isoformat()
-    end = today - dt.timedelta(days=int(cfg.get("lag_days", 0)))
+    end = (latest_complete_day(name)
+           or today - dt.timedelta(days=int(cfg.get("lag_days", 0))))
     return (end - dt.timedelta(days=span)).isoformat(), end.isoformat()
 
 
 def clamp_window(name, start, end):
-    """Clamp a window to the dataset's max_span_days. Returns (start, end, msg);
-    msg is None when nothing was changed."""
+    """Clamp a window to the dataset's max_span_days and, where known, its
+    latest complete day. Returns (start, end, msg); msg is None when nothing
+    was changed."""
     cfg = FORECAST_MAP.get(name) or {}
     s, e = _to_date(start), _to_date(end)
     if e < s:
         s, e = e, s
+    msgs = []
     cap = int(cfg.get("max_span_days", 30))
     if (e - s).days > cap:
         e = s + dt.timedelta(days=cap)
-        return s.isoformat(), e.isoformat(), (
-            f"Window capped at {cap} days for this dataset.")
-    return s.isoformat(), e.isoformat(), None
+        msgs.append(f"Window capped at {cap} days for this dataset.")
+    latest = latest_complete_day(name)
+    if latest and e > latest:
+        e = latest
+        s = min(s, e)
+        msgs.append(f"Data is complete through {latest:%d %b %Y} (UTC); "
+                    "the window now ends there.")
+    return s.isoformat(), e.isoformat(), " ".join(msgs) or None
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +446,10 @@ def _daily(coll, cfg, s, e1, reducer):
         else:
             f = ee.Filter.And(ee.Filter.gte(prop, lo), ee.Filter.lt(prop, hi))
         day = coll.filter(f)
-        days.append(day.mean().multiply(per_day).set("n", day.size()))
-    totals = ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+        days.append(day.mean().set("n", day.size()))
+    # Drop empty days before the multiply: an empty day's mean has no bands.
+    totals = (ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+              .map(lambda im: im.multiply(per_day)))
     return totals.max() if reducer == "daily_max" else totals.mean()
 
 
@@ -503,7 +536,7 @@ def build_forecast_image(name, start, end, reducer,
 
 
 # ---------------------------------------------------------------------------
-# Exposure — mirrors gee_core.compute_exposure so numbers reconcile
+# Exposure — mirrors core.gee.compute_exposure so numbers reconcile
 # ---------------------------------------------------------------------------
 
 def compute_forecast_exposure(name, start, end, reducer, threshold,
@@ -530,7 +563,7 @@ def compute_forecast_exposure(name, start, end, reducer, threshold,
     layer, n_images = build_forecast_image(
         name, start, end, reducer, custom_id, custom_band)
 
-    # Strict > matches _exposed_for_hazard in gee_core.
+    # Strict > matches _exposed_for_hazard in core.gee.
     mask = layer.gt(threshold)
     exposed = childpop.updateMask(mask).rename("exposed")
 
@@ -649,6 +682,34 @@ def get_forecast_exposed_tile(name, start, end, reducer, threshold,
     masked = childpop.updateMask(img.gt(threshold)).clip(region).selfMask()
     mid    = masked.getMapId(POP_VIS)
     return mid["tile_fetcher"].url_format, POP_VIS
+
+
+# ---------------------------------------------------------------------------
+# Live hazard for the facility analysis (Early Warning › Infra analysis)
+# ---------------------------------------------------------------------------
+
+def build_live_hazard(name, start, end, reducer, threshold,
+                      custom_id=None, custom_band=None):
+    """The reduced layer as gee_core's `live` hazard: footprint where the value
+    exceeds `threshold` (strict >, as everywhere else) plus the raw values for
+    sampling at each facility. Returns (live, n_images)."""
+    cfg = _resolve_cfg(name, custom_id, custom_band)
+    img, n = build_forecast_image(name, start, end, reducer,
+                                  custom_id, custom_band)
+    return {"label": cfg["label"], "mask": img.gt(threshold).selfMask(),
+            "value": img}, n
+
+
+@_ttl_cached(cache=_tile_cache(32), lock=_lock)
+def get_live_hazard_area_tile(name, start, end, reducer, threshold, adm2_ucode,
+                              color, custom_id=None, custom_band=None):
+    """Hazard footprint clipped to the district — the live twin of
+    gee_core.get_topic_tile_url_clipped for the facility map."""
+    img, _ = build_forecast_image(name, start, end, reducer,
+                                  custom_id, custom_band)
+    region = _admin_region("adm2 (Districts/Counties)", adm2_ucode)
+    area = img.gt(threshold).selfMask().clip(region)
+    return area.getMapId({"palette": [color.lstrip("#")]})["tile_fetcher"].url_format
 
 
 # ---------------------------------------------------------------------------

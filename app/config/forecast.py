@@ -1,13 +1,13 @@
 # =============================================================================
-# forecast_config.py — Forecast & near-real-time dataset catalog
+# config/forecast.py — Forecast & near-real-time dataset catalog
 #
 # Deliberately separate from config.HAZARDS. Those are frozen return-period
-# assets folded into gee_core.build_core_images(), which is @lru_cache(maxsize=1)
+# assets folded into core.gee.build_core_images(), which is @lru_cache(maxsize=1)
 # and must stay date-independent: a date-parameterised layer inside it would
 # either poison that cache or force a rebuild per date range. Everything here is
 # loaded on demand with an explicit time window instead.
 #
-# No GEE import — same rule as config.py, so this loads instantly.
+# No GEE import — same rule as config/hazards.py, so this loads instantly.
 #
 # Every id, band name, scale and value range below was verified against the live
 # catalog with the unicef-ccri service account (Aug 2026). Datasets that did not
@@ -22,7 +22,7 @@ REDUCERS = {
     "max":    "Peak over period",
     "min":    "Minimum over period",
     "median": "Median over period",
-    # Daily totals (UTC days) — needs `steps_per_day`; see forecast_core._daily.
+    # Daily totals (UTC days) — needs `steps_per_day`; see core.forecast._daily.
     "daily_mean": "Average daily total",
     "daily_max":  "Wettest day (highest daily total)",
 }
@@ -53,13 +53,13 @@ DAILY_REDUCERS = ("daily_mean", "daily_max")
 #   filters           [{"prop","op","value"}] applied before reduction
 #   run               forecast datasets only: {"init", "valid", "init_ms"} — the
 #                     init-time and valid-time properties. One run is reduced
-#                     (forecast_core._select_run); without it every overlapping
+#                     (core.forecast._select_run); without it every overlapping
 #                     run and its full horizon would be mixed.
 #   accumulated       values are amounts per step: the window is (start, end] so
 #                     a step ending at 00:00 belongs to the previous day
 #   steps_per_day     images per complete UTC day; enables the daily reducers
 #                     (a day's total = mean step amount × steps_per_day)
-#   transform         key into forecast_core._TRANSFORMS for derived bands
+#   transform         key into core.forecast._TRANSFORMS for derived bands
 #   note              caveat shown under the dataset in the panel
 #   (_META below adds provider, temporal = run cadence, resolution = space · time)
 

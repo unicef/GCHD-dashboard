@@ -71,7 +71,7 @@ HERE = Path(__file__).resolve().parent
 APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
-from elnino_config import (            # noqa: E402
+from config.elnino import (            # noqa: E402
     ELNINO_ROOT, HINDCAST, HC_YEARS, SYSTEM, issue_collection, issue_asset,
     BRIER_BANDS, parse_issue, window_suffix,
     staged_obs_name,

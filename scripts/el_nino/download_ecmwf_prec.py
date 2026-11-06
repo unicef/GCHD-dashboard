@@ -124,11 +124,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))          # scripts/ — for _common
 sys.path.insert(0, str(HERE.parent.parent / "app"))
 from _common import load_env                  # noqa: E402
-from elnino_config import (                   # noqa: E402
+from config.elnino import (                   # noqa: E402
     LEADS, HC_YEARS, SYSTEM, issue_periods, season_code)
 
 # ---------------- CONFIG ----------------
-# LEADS, HC_YEARS and SYSTEM come from app/elnino_config (single source).
+# LEADS, HC_YEARS and SYSTEM come from app/config.elnino (single source).
 # Set from --init by set_init(); lead 1 is the init month, never used.
 INIT_TAG = INIT_YEAR = INIT_MONTH = None
 # Both of these only LABEL pixels (cat, dry_mask); neither drops data. Change

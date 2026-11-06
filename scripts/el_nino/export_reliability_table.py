@@ -58,7 +58,7 @@ HERE = Path(__file__).resolve().parent
 APP = HERE.parent.parent / "app"
 sys.path.insert(0, str(APP))
 
-from elnino_config import (            # noqa: E402
+from config.elnino import (            # noqa: E402
     issue_asset,
     SIGNALS, SIGNAL_MAP,
     HINDCAST, SYSTEM, SKILL_REFERENCE, to_fraction, parse_issue, window_suffix,
@@ -104,7 +104,7 @@ DEFAULT_THRESHOLD_COMPOUND = 25
 #
 # This is the difference between "children under a forecast signal" and
 # "children under a forecast signal that El Nino plausibly caused".
-# From elnino_config so a workbook figure and a dashboard figure cannot drift.
+# From config.elnino so a workbook figure and a dashboard figure cannot drift.
 # Compound signals inherit their RAINFALL component's direction; the mask says
 # nothing about temperature, which the Method sheet states.
 ENSO_MASK_DIR = dict(CFG_ENSO_DIR)

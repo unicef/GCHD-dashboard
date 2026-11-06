@@ -1,13 +1,13 @@
 # =============================================================================
-# elnino_config.py — El Niño / SEAS5 seasonal outlook catalog
+# config/elnino.py — El Niño / SEAS5 seasonal outlook catalog
 #
-# Separate from forecast_config.py for the same reason that one is separate from
+# Separate from config/forecast.py for the same reason that one is separate from
 # config.HAZARDS: the layers here are neither a frozen return-period asset nor a
 # date-windowed live collection. They are monthly forecast issues (ISSUES)
 # whose images are selected by period, not by date range — so the date
 # picker, reducer and lag machinery of the Forecast tab do not apply at all.
 #
-# No GEE import — same rule as config.py and forecast_config.py, so this loads
+# No GEE import — same rule as config/hazards.py and config/forecast.py, so this loads
 # instantly and can be imported by tooling that has no Earth Engine session.
 #
 # Produced by scripts/el_nino/download_ecmwf_prec.py. That script is the single
@@ -67,7 +67,7 @@ SYSTEM   = "51"
 # image's `band_names` property and are re-applied with .rename().
 #
 # This list must stay byte-identical to the terciles() return order in
-# scripts/el_nino/download_ecmwf_prec.py. elnino_core verifies it against the
+# scripts/el_nino/download_ecmwf_prec.py. core.elnino verifies it against the
 # live asset on first use rather than trusting this copy.
 TERCILE_BANDS = [
     "p_below", "p_normal", "p_above", "cat",
@@ -310,7 +310,7 @@ def is_compound(signal):
 # ── Threshold contract ──────────────────────────────────────────────────────
 # Everything user-facing is a PERCENTAGE (0-100). The GEE bands are raw
 # fractions (0-1), because that is what an ensemble count is, so exactly one
-# conversion happens — at the boundary, in elnino_core, via to_fraction().
+# conversion happens — at the boundary, in core.elnino, via to_fraction().
 # Keeping the split at that single point is what stops a 0.5-vs-50 mix-up
 # silently producing a threshold 100x too small.
 #
@@ -497,7 +497,7 @@ ENSO_YEARS = {
 # "confidently slightly wetter" from "confidently much wetter".
 #
 #   band      band to display (or None when `derived` builds it)
-#   derived   key into elnino_core._DERIVED
+#   derived   key into core.elnino._DERIVED
 #   diverging palette runs low->high through a neutral midpoint
 EXPLORE_LAYERS = [
     {"name": "signal_prob", "label": "Signal probability",
@@ -578,7 +578,7 @@ EXPLORE_LAYERS = [
 
     # ── Skill and ENSO context ──────────────────────────────────────────────
     # These describe the FORECAST rather than this season's rainfall, so they
-    # are exempt from the dry mask (see elnino_core.build_explore_image) and
+    # are exempt from the dry mask (see core.elnino.build_explore_image) and
     # need the skill collection to exist — the tab hides them otherwise.
     {"name": "skill_class", "label": "Rainfall skill (classified)",
      "band": None, "derived": "skill_class",
