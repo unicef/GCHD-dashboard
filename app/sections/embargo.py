@@ -2,6 +2,37 @@
 from dash import ctx, Input, no_update, Output, State
 
 from dash_app import app
+from i18n import js_strings, N_
+
+js_strings(
+    N_("Error"), N_("Check"),
+    N_("Not ready to send - fix the errors above."),
+    N_("{ok} of {total} rows usable. Review the points above, then send."),
+    N_("All checks passed - {ok} rows ready to send."),
+    N_("The file has no data rows."),
+    N_("No longitude column. Name it 'longitude' (also accepted: lon, long, x)."),
+    N_("No latitude column. Name it 'latitude' (also accepted: lat, y)."),
+    N_("No name column - facilities will be unlabelled."),
+    N_("No facility_id column - ids will be generated, so a re-submission "
+       "cannot update existing records."),
+    N_("Column '{col}' is ignored - country, type and source are set when the "
+       "layer is registered."),
+    N_("Rows with a missing or non-numeric coordinate (dropped): {n} of {total}."),
+    N_("No row has a usable coordinate pair."),
+    N_("Rows with longitude outside -180..180: {n}."),
+    N_("Rows with latitude outside -90..90: {n}. If these look like longitudes, "
+       "the two columns are swapped."),
+    N_("Coordinates look like metres, not degrees - reproject to WGS84 "
+       "(EPSG:4326) before exporting."),
+    N_("Rows at exactly 0,0 (usually a blank coordinate rather than a real "
+       "location): {n}."),
+    N_("Latitudes span both hemispheres - check for a missing minus sign if the "
+       "country is entirely north or south of the equator."),
+    N_("Rows sharing a coordinate with another row (possible duplicates): {n}."),
+    N_("Names containing a line break: {n}. These are collapsed automatically, "
+       "but a line break can shift columns in some exports."),
+    N_("Could not read that file as CSV: {error}"),
+)
 
 
 # ── Embargo ──────────────────────────────────────────────────────────────────
@@ -13,8 +44,9 @@ from dash_app import app
 # change rarely.
 app.clientside_callback(
     """
-    function(contents, filename) {
+    function(contents, filename, i18n) {
         if (!contents) { return ""; }
+        function T(k, p) { return window.gchdT(i18n, k, p); }
         var LON = ["longitude","lon","long","x"];
         var LAT = ["latitude","lat","y"];
         var NAME = ["name","facility_name","school_name","water_source"];
@@ -24,18 +56,22 @@ app.clientside_callback(
         function report(errs, warns, nOk, total) {
             var h = "";
             errs.forEach(function(e){
-                h += '<div class="co-v-err"><b>Error</b> ' + esc(e) + '</div>'; });
+                h += '<div class="co-v-err"><b>' + esc(T("Error")) + '</b> '
+                   + esc(e) + '</div>'; });
             warns.forEach(function(w){
-                h += '<div class="co-v-warn"><b>Check</b> ' + esc(w) + '</div>'; });
+                h += '<div class="co-v-warn"><b>' + esc(T("Check")) + '</b> '
+                   + esc(w) + '</div>'; });
             if (errs.length) {
-                h += '<div class="co-v-sum co-v-bad">Not ready to send - '
-                   + 'fix the errors above.</div>';
+                h += '<div class="co-v-sum co-v-bad">'
+                   + esc(T("Not ready to send - fix the errors above.")) + '</div>';
             } else if (warns.length) {
-                h += '<div class="co-v-sum co-v-ok">' + nOk + ' of ' + total
-                   + ' rows usable. Review the points above, then send.</div>';
+                h += '<div class="co-v-sum co-v-ok">' + esc(T(
+                    "{ok} of {total} rows usable. Review the points above, then send.",
+                    {ok: nOk, total: total})) + '</div>';
             } else {
-                h += '<div class="co-v-sum co-v-ok">All checks passed - '
-                   + nOk + ' rows ready to send.</div>';
+                h += '<div class="co-v-sum co-v-ok">' + esc(T(
+                    "All checks passed - {ok} rows ready to send.", {ok: nOk}))
+                   + '</div>';
             }
             return h;
         }
@@ -47,7 +83,7 @@ app.clientside_callback(
             var lines = raw.split(/\\r\\n|\\n|\\r/).filter(function(l){
                 return l.trim().length; });
             if (lines.length < 2) {
-                return report(["The file has no data rows."], [], 0, 0);
+                return report([T("The file has no data rows.")], [], 0, 0);
             }
             // Split on commas outside quotes, so a quoted name with a comma
             // does not shift every column after it.
@@ -75,19 +111,20 @@ app.clientside_callback(
                 iName = find(NAME), iId = find(ID);
 
             var errs = [], warns = [];
-            if (iLon < 0) { errs.push("No longitude column. Name it 'longitude' "
-                                      + "(also accepted: lon, long, x)."); }
-            if (iLat < 0) { errs.push("No latitude column. Name it 'latitude' "
-                                      + "(also accepted: lat, y)."); }
-            if (iName < 0) { warns.push("No name column - facilities will be "
-                                        + "unlabelled."); }
-            if (iId < 0) { warns.push("No facility_id column - ids will be "
-                                      + "generated, so a re-submission cannot "
-                                      + "update existing records."); }
+            if (iLon < 0) { errs.push(T("No longitude column. Name it 'longitude' "
+                                        + "(also accepted: lon, long, x).")); }
+            if (iLat < 0) { errs.push(T("No latitude column. Name it 'latitude' "
+                                        + "(also accepted: lat, y).")); }
+            if (iName < 0) { warns.push(T("No name column - facilities will be "
+                                          + "unlabelled.")); }
+            if (iId < 0) { warns.push(T("No facility_id column - ids will be "
+                                        + "generated, so a re-submission cannot "
+                                        + "update existing records.")); }
             ["iso3","country","source","facility_type"].forEach(function(c){
                 if (hdr.indexOf(c) >= 0) {
-                    warns.push("Column '" + c + "' is ignored - country, type "
-                             + "and source are set when the layer is registered.");
+                    warns.push(T("Column '{col}' is ignored - country, type and "
+                                 + "source are set when the layer is registered.",
+                                 {col: c}));
                 }
             });
             if (errs.length) { return report(errs, warns, 0, lines.length - 1); }
@@ -111,38 +148,41 @@ app.clientside_callback(
             }
 
             var total = lines.length - 1;
-            if (nBad) { warns.push(nBad + " of " + total + " rows have a missing "
-                      + "or non-numeric coordinate and will be dropped."); }
-            if (!nOk) { return report(["No row has a usable coordinate pair."],
+            if (nBad) { warns.push(T("Rows with a missing or non-numeric "
+                      + "coordinate (dropped): {n} of {total}.",
+                      {n: nBad, total: total})); }
+            if (!nOk) { return report([T("No row has a usable coordinate pair.")],
                                       warns, 0, total); }
-            if (nLonR) { errs.push(nLonR + " rows have longitude outside "
-                       + "-180..180."); }
-            if (nLatR) { errs.push(nLatR + " rows have latitude outside -90..90. "
+            if (nLonR) { errs.push(T("Rows with longitude outside -180..180: {n}.",
+                                     {n: nLonR})); }
+            if (nLatR) { errs.push(T("Rows with latitude outside -90..90: {n}. "
                        + "If these look like longitudes, the two columns are "
-                       + "swapped."); }
-            if (nMetres) { errs.push("Coordinates look like metres, not degrees "
-                         + "- reproject to WGS84 (EPSG:4326) before exporting."); }
-            if (nNull) { warns.push(nNull + " rows sit at exactly 0,0 - usually "
-                       + "a blank coordinate rather than a real location."); }
-            if (nPos && nNeg) { warns.push("Latitudes span both hemispheres - "
+                       + "swapped.", {n: nLatR})); }
+            if (nMetres) { errs.push(T("Coordinates look like metres, not degrees "
+                         + "- reproject to WGS84 (EPSG:4326) before exporting.")); }
+            if (nNull) { warns.push(T("Rows at exactly 0,0 (usually a blank "
+                       + "coordinate rather than a real location): {n}.",
+                       {n: nNull})); }
+            if (nPos && nNeg) { warns.push(T("Latitudes span both hemispheres - "
                               + "check for a missing minus sign if the country "
-                              + "is entirely north or south of the equator."); }
-            if (nDup) { warns.push(nDup + " rows share a coordinate with another "
-                      + "row - possible duplicates."); }
-            if (nMulti) { warns.push(nMulti + " names contain a line break. "
+                              + "is entirely north or south of the equator.")); }
+            if (nDup) { warns.push(T("Rows sharing a coordinate with another row "
+                      + "(possible duplicates): {n}.", {n: nDup})); }
+            if (nMulti) { warns.push(T("Names containing a line break: {n}. "
                         + "These are collapsed automatically, but a line break "
-                        + "can shift columns in some exports."); }
+                        + "can shift columns in some exports.", {n: nMulti})); }
 
             return report(errs, warns, nOk, total);
         } catch (e) {
-            return report(["Could not read that file as CSV: " + e.message],
-                          [], 0, 0);
+            return report([T("Could not read that file as CSV: {error}",
+                             {error: e.message})], [], 0, 0);
         }
     }
     """,
     Output("co-validate-report", "children"),
     Input("co-validate-upload",  "contents"),
     State("co-validate-upload",  "filename"),
+    State("store-i18n",          "data"),
     prevent_initial_call=True,
 )
 

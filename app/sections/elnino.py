@@ -5,10 +5,9 @@ from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
 from config.elnino import (
     active_periods, CAVEATS, DEFAULT_EXPLORE, default_period, DEFAULT_SIGNAL,
     ENSO_EVENT_MIN, EXPLORE_LAYERS, EXPLORE_MAP, HINDCAST, is_compound,
-    is_window, issue_label, ISSUES, METHOD_STEPS, period_issue_label,
-    period_label, PERIOD_MAP, PROB_DEFAULT, PROB_MARKS, PROB_MAX, PROB_MIN,
+    is_window, ISSUES, METHOD_STEPS, PERIOD_MAP, PROB_DEFAULT, PROB_MARKS, PROB_MAX, PROB_MIN,
     PROB_STEP, SIGNAL_MAP, SKILL_REFERENCE, SKILL_USABLE_MIN, SOURCE_URL,
-    SYSTEM as ELNINO_SYSTEM, threshold_contract,
+    SYSTEM as ELNINO_SYSTEM, TEXT_VARS, threshold_contract,
 )
 from core.elnino import (
     compound_available, compute_elnino_exposure, elnino_available, ElNinoError,
@@ -20,9 +19,10 @@ from core.elnino import (
 from core.gee import get_country_bounds, get_country_ucode, get_feature_bounds
 
 from dash_app import app
+from i18n import fmt_int, fmt_num, fmt_pct, N_, tr, trc
 from bootstrap import COUNTRY_NAMES
 from ui.components import _fmt
-from sections.elnino_export import _elnino_export_payload
+from sections.elnino_export import _elnino_export_payload, issue_text, period_text
 
 
 # The layer that renders the SIGNAL itself. Section 2 chooses the signal and
@@ -35,23 +35,24 @@ SIGNAL_LAYER = "signal_prob"
 # Popover headings for the El Nino concept icons. Separate from EN_INFO so the
 # config stays pure data and the heading can read as a question.
 EN_INFO_TITLES = {
-    "threshold":          "Probability threshold",
-    "threshold_compound": "Combined threshold",
-    "signal":             "What a signal means",
-    "heat":               "Adding the heat requirement",
-    "sensitivity":        "Why the threshold matters",
-    "history":            "Historical context",
-    "skill":              "Forecast skill",
-    "anomaly":            "How unusual is it",
-    "enso_attrib":        "Historically linked to El Nino",
-    "enso":               "ENSO conditions",
+    "threshold":          N_("Probability threshold"),
+    "threshold_compound": N_("Combined threshold"),
+    "signal":             N_("What a signal means"),
+    "heat":               N_("Adding the heat requirement"),
+    "sensitivity":        N_("Why the threshold matters"),
+    "history":            N_("Historical context"),
+    "skill":              N_("Forecast skill"),
+    "anomaly":            N_("How unusual is it"),
+    "enso_attrib":        N_("Historically linked to El Nino"),
+    "enso":               N_("ENSO conditions"),
 }
 
 
 def _elnino_period_options():
     multi = len({p["init"] for p in active_periods()}) > 1
-    return [{"label": p["label"] + (f" · issued {p['issue_label']}"
-                                    if multi else ""),
+    return [{"label": period_text(p["id"])
+             + (" · " + tr("issued {issue}", issue=issue_text(p["init"]))
+                if multi else ""),
              "value": p["id"]} for p in active_periods()]
 
 
@@ -107,7 +108,8 @@ def _en_layer_info(layer_name):
 def _elnino_radio(id_, options, value, inline=True):
     """Small labelled radio group matching the .ps control styling."""
     return dcc.RadioItems(
-        id=id_, options=options, value=value,
+        id=id_, options=[{**o, "label": tr(o["label"])} for o in options],
+        value=value,
         className="en-radio" + (" en-radio-inline" if inline else ""),
         inputClassName="en-radio-input", labelClassName="en-radio-label",
     )
@@ -121,55 +123,56 @@ def _elnino_method_block():
     to judge whether the figure suits their purpose.
     """
     return html.Div(className="ps", children=[
-        html.Div("Methodology", className="ps-label"),
+        html.Div(tr("Methodology"), className="ps-label"),
         # The four-sentence version, always visible. The numbered steps are
         # the auditable detail and stay one click away — a reader who needs to
         # judge a defensible-but-arguable choice can still see every one.
         html.Div(className="en-method-tldr", children=[
-            html.P([html.Strong("In short. "),
-                    "A seasonal forecast is run 51 times with slightly "
-                    "different starting conditions. We count how many of "
-                    "those 51 runs put this season in the driest (or "
-                    "wettest) third of what the model normally predicts."],
+            html.P(trc("{lead} A seasonal forecast is run 51 times with "
+                       "slightly different starting conditions. We count how "
+                       "many of those 51 runs put this season in the driest (or "
+                       "wettest) third of what the model normally predicts.",
+                       lead=html.Strong(tr("In short."))),
                    className="en-method-body"),
-            html.P([html.Strong("The threshold "),
-                    "is how many runs must agree before a place counts. "
-                    "Raising it is more demanding, so fewer children are "
-                    "counted."],
+            html.P(trc("{subject} is how many runs must agree before a place "
+                       "counts. Raising it is more demanding, so fewer children "
+                       "are counted.",
+                       subject=html.Strong(tr("The threshold"))),
                    className="en-method-body"),
-            html.P([html.Strong("The figure "),
-                    "is how many children live in those places — not how "
-                    "many will be harmed. Whether unusual weather becomes a "
-                    "crisis depends on water, harvests, drainage and health "
-                    "services, none of which are measured here."],
+            html.P(trc("{subject} is how many children live in those places — "
+                       "not how many will be harmed. Whether unusual weather "
+                       "becomes a crisis depends on water, harvests, drainage "
+                       "and health services, none of which are measured here.",
+                       subject=html.Strong(tr("The figure"))),
                    className="en-method-body"),
-            html.P([html.Strong("Reliability varies. "),
-                    "The forecast has a real track record in some regions "
-                    "and almost none in others; each result says which."],
+            html.P(trc("{lead} The forecast has a real track record in some "
+                       "regions and almost none in others; each result says "
+                       "which.", lead=html.Strong(tr("Reliability varies."))),
                    className="en-method-body", style={"marginBottom": "0"}),
         ]),
-        _en_collapse("method", "Step by step", [
+        _en_collapse("method", tr("Step by step"), [
             html.Div(className="en-method", children=[
                 html.Div(className="en-method-step", children=[
-                    html.Div(f"{i}", className="en-method-num"),
+                    html.Div(fmt_int(i), className="en-method-num"),
                     html.Div([
-                        html.Div(title, className="en-method-title"),
-                        html.Div(body, className="en-method-body"),
+                        html.Div(tr(title), className="en-method-title"),
+                        html.Div(tr(body, **TEXT_VARS), className="en-method-body"),
                     ]),
                 ]) for i, (title, body) in enumerate(METHOD_STEPS, 1)
             ]),
         ]),
-        _en_collapse("caveats", "Read this before quoting a number", [
+        _en_collapse("caveats", tr("Read this before quoting a number"), [
             html.Ul(className="en-caveats",
-                    children=[html.Li(c) for c in CAVEATS]),
+                    children=[html.Li(tr(c)) for c in CAVEATS]),
         ]),
         html.Div(className="ps-caption", style={"marginTop": "8px"}, children=[
-            html.Span("Source: "),
-            html.A("Copernicus CDS — seasonal-monthly-single-levels",
+            html.Span(tr("Source: ")),
+            html.A(tr("Copernicus CDS — seasonal-monthly-single-levels"),
                    href=SOURCE_URL, target="_blank", className="hi-link"),
-            html.Span(f" · ECMWF SEAS5 system {ELNINO_SYSTEM} · "
-                      f"issued {', '.join(issue_label(t) for t in ISSUES)}"
-                      f" · hindcast {HINDCAST}"),
+            html.Span(" · " + tr("ECMWF SEAS5 system {system} · issued "
+                                 "{issues} · hindcast {hindcast}",
+                                 system=ELNINO_SYSTEM, hindcast=HINDCAST,
+                                 issues=", ".join(issue_text(t) for t in ISSUES))),
         ]),
     ])
 
@@ -185,12 +188,12 @@ EN_LAYER_GROUPS = [
     # always drawn on its own tile. Offering signal_prob / cat here too
     # implied this panel could change the signal, which is the confusion
     # the two-tile split exists to remove.
-    ("Rainfall",     ["anom_mm", "anom_pct", "signal_strength",
-                      "fc_mean_mm", "clim_mean_mm", "dry_mask"]),
-    ("Temperature",  ["anom_c", "fc_mean_c", "t2m_signal_prob"]),
-    ("Combined",     ["compound_prob", "cat_compound", "dependence_ratio"]),
-    ("Reliability",  ["skill_class", "skill_r", "skill_r_t2m"]),
-    ("Attribution",  ["enso_composite"]),
+    (N_("Rainfall"),     ["anom_mm", "anom_pct", "signal_strength",
+                          "fc_mean_mm", "clim_mean_mm", "dry_mask"]),
+    (N_("Temperature"),  ["anom_c", "fc_mean_c", "t2m_signal_prob"]),
+    (N_("Combined"),     ["compound_prob", "cat_compound", "dependence_ratio"]),
+    (N_("Reliability"),  ["skill_class", "skill_r", "skill_r_t2m"]),
+    (N_("Attribution"),  ["enso_composite"]),
 ]
 
 
@@ -213,7 +216,7 @@ def _en_layer_detail(cfg):
         kids += [html.Div(className="en-lg-class", children=[
                      html.Span(className="en-lg-swatch",
                                style={"background": c["color"]}),
-                     html.Span(c["label"], className="en-lg-lbl"),
+                     html.Span(tr(c["label"]), className="en-lg-lbl"),
                  ]) for c in cfg["classes"]]
     elif cfg.get("palette"):
         grad = ", ".join(cfg["palette"])
@@ -223,7 +226,8 @@ def _en_layer_detail(cfg):
                             f"linear-gradient(to right, {grad})"}),
             html.Div(className="en-lg-ends", children=[
                 html.Span(f"{cfg.get('min', '')}"),
-                html.Span(cfg.get("units") or "", className="en-lg-units"),
+                html.Span(tr(cfg.get("units")) if cfg.get("units") else "",
+                          className="en-lg-units"),
                 html.Span(f"{cfg.get('max', '')}"),
             ]),
         ]
@@ -248,11 +252,11 @@ def _elnino_layer_panel():
     return html.Div(id="elnino-layer-panel", className="en-layer-panel",
                     style={"display": "none"}, children=[
         html.Div(className="en-layer-head", children=[
-            html.Span("Map layer", className="en-layer-title"),
+            html.Span(tr("Map layer"), className="en-layer-title"),
             html.I(className="bi bi-chevron-up", id="en-layer-chevron"),
         ], id="en-layer-header", n_clicks=0),
         html.Div(id="elnino-layer-body", className="en-layer-body", children=[
-            html.Div("Changes what the map shows, not the numbers.",
+            html.Div(tr("Changes what the map shows, not the numbers."),
                      className="en-layer-note"),
             # One radio over every layer; the group headings are rendered
             # separately so dcc.RadioItems stays a single component with one
@@ -270,23 +274,23 @@ def tab_elnino():
         html.Div(className="exposure-method-note",
                  style={"margin": "12px 10px 0"}, children=[
             html.P([
-                html.Strong("A signal is a reason to look closer, not a "
-                            "forecast of drought or flooding."),
+                html.Strong(tr("A signal is a reason to look closer, not a "
+                            "forecast of drought or flooding.")),
             ], className="exposure-method-p", style={"marginBottom": "0"}),
-            _en_collapse("intro", "What this tab shows", [
+            _en_collapse("intro", tr("What this tab shows"), [
                 html.P(
-                    f"Monthly ECMWF SEAS5 forecasts (latest issued "
-                    f"{issue_label(ISSUES[-1])}), not a live feed. Each "
-                    f"period is labelled with its issue. It shows where the season is likely to fall "
-                    f"in the driest or wettest third of what this model "
-                    f"normally predicts, during a period when El Niño "
-                    f"conditions are present.",
+                    tr("Monthly ECMWF SEAS5 forecasts (latest issued {issue}), "
+                       "not a live feed. Each period is labelled with its issue. "
+                       "It shows where the season is likely to fall in the "
+                       "driest or wettest third of what this model normally "
+                       "predicts, during a period when El Niño conditions are "
+                       "present.", issue=issue_text(ISSUES[-1])),
                     className="exposure-method-p"),
                 html.P(
-                    "Co-occurrence with El Niño is not proof of causation: "
+                    tr("Co-occurrence with El Niño is not proof of causation: "
                     "the forecast is the model's response to every initial "
                     "condition it was given, and El Niño is never isolated "
-                    "within it.",
+                    "within it."),
                     className="exposure-method-p",
                     style={"marginBottom": "0"}),
             ]),
@@ -298,7 +302,7 @@ def tab_elnino():
         html.Div(id="elnino-controls", children=[
             # 1. Period
             html.Div(className="ps", children=[
-                html.Div("1. Period", className="ps-label"),
+                html.Div(tr("1. Period"), className="ps-label"),
                 dcc.Dropdown(
                     id="elnino-period", className="ps-select",
                     options=_elnino_period_options(),
@@ -315,9 +319,9 @@ def tab_elnino():
             # reading ONE signal value and none of the computation moves.
             html.Div(className="ps", children=[
                 html.Div([
-                    html.Span("2. Signal"), _en_info("signal"),
+                    html.Span(tr("2. Signal")), _en_info("signal"),
                 ], className="ps-label"),
-                html.Div("Rainfall", className="en-sub-label"),
+                html.Div(tr("Rainfall"), className="en-sub-label"),
                 _elnino_radio(
                     "elnino-rain",
                     [{"label": SIGNAL_MAP[n]["label"], "value": n}
@@ -327,8 +331,8 @@ def tab_elnino():
                     html.Div([
                         dcc.Checklist(
                             id="elnino-heat-on", className="en-check",
-                            options=[{"label": " Also require unusual "
-                                               "temperature", "value": "on"}],
+                            options=[{"label": tr(" Also require unusual "
+                                               "temperature"), "value": "on"}],
                             value=[],
                         ),
                         _en_info("heat"),
@@ -342,8 +346,8 @@ def tab_elnino():
                              style={"display": "none"}, children=[
                         _elnino_radio(
                             "elnino-heat",
-                            [{"label": "Unusually hot", "value": "hot"},
-                             {"label": "Unusually cool", "value": "cool"}],
+                            [{"label": N_("Unusually hot"), "value": "hot"},
+                             {"label": N_("Unusually cool"), "value": "cool"}],
                             "hot", inline=True),
                     ]),
                 ], style={"marginTop": "8px"}),
@@ -355,12 +359,12 @@ def tab_elnino():
             # 3. Threshold
             html.Div(className="ps", children=[
                 html.Div([
-                    html.Span("3. Probability threshold"),
+                    html.Span(tr("3. Probability threshold")),
                     html.Span(_en_info("threshold"), id="elnino-thr-info"),
                 ], className="ps-label"),
                 html.Div(className="analysis-threshold-row", children=[
                     html.Div(className="athr-row-head", children=[
-                        html.Span("Signal where probability ≥",
+                        html.Span(tr("Signal where probability ≥"),
                                   className="athr-label"),
                         dcc.Input(id="elnino-threshold", type="number",
                                   min=PROB_MIN, max=PROB_MAX, step=PROB_STEP,
@@ -390,17 +394,17 @@ def tab_elnino():
 
             # 4. Dry mask
             html.Div(className="ps", children=[
-                html.Div("4. Arid-area handling", className="ps-label"),
+                html.Div(tr("4. Arid-area handling"), className="ps-label"),
                 dcc.Checklist(
                     id="elnino-dry-mask",
-                    options=[{"label": " Exclude areas too dry to interpret",
+                    options=[{"label": tr(" Exclude areas too dry to interpret"),
                               "value": "on"}],
                     value=["on"], className="en-check",
                 ),
-                html.Div("Recommended. Where normal rainfall is a fraction of "
+                html.Div(tr("Recommended. Where normal rainfall is a fraction of "
                          "a millimetre, a “wettest third” is rounding noise at "
                          "any threshold — without this, desert children are "
-                         "counted as flood-exposed.",
+                         "counted as flood-exposed."),
                          className="ps-caption"),
             ]),
 
@@ -414,11 +418,11 @@ def tab_elnino():
 
             # 6. Country
             html.Div(className="ps", children=[
-                html.Div("6. Select country / territory", className="ps-label"),
+                html.Div(tr("6. Select country / territory"), className="ps-label"),
                 dcc.Dropdown(
                     id="elnino-country", className="ps-select",
                     options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
-                    value=None, placeholder="Search country / territory…",
+                    value=None, placeholder=tr("Search country / territory…"),
                     clearable=False, searchable=True,
                 ),
             ]),
@@ -427,15 +431,15 @@ def tab_elnino():
             html.Div(id="elnino-level-section", style={"display": "none"},
                      children=[
                 html.Div(className="ps", children=[
-                    html.Div("7. Analysis level", className="ps-label"),
+                    html.Div(tr("7. Analysis level"), className="ps-label"),
                     dcc.Dropdown(
                         id="elnino-level", className="ps-select",
                         options=[{"label": l, "value": l}
                                  for l in ADMIN_DATA.keys()],
-                        value=None, placeholder="— select level —",
+                        value=None, placeholder=tr("— select level —"),
                         clearable=False, searchable=False,
                     ),
-                    html.Div("For ADM1/ADM2, click the region on the map.",
+                    html.Div(tr("For ADM1/ADM2, click the region on the map."),
                              className="ps-caption"),
                 ]),
             ]),
@@ -443,9 +447,9 @@ def tab_elnino():
             html.Div(id="elnino-compute-wrap", style={"display": "none"},
                      children=[
                 html.Div(className="ps", children=[
-                    html.Button("▶  Compute exposure", id="elnino-compute-btn",
+                    html.Button("▶  " + tr("Compute exposure"), id="elnino-compute-btn",
                                 className="ps-btn", n_clicks=0, disabled=True),
-                    html.Div("Select a region, then Compute.",
+                    html.Div(tr("Select a region, then Compute."),
                              id="elnino-compute-hint", className="ps-caption",
                              style={"marginTop": "6px"}),
                 ]),
@@ -544,7 +548,7 @@ def elnino_status(tab):
     if ok:
         return None, {"display": "block"}
     return html.Div(className="ps", children=[
-        html.Div("Outlook unavailable", className="ps-label"),
+        html.Div(tr("Outlook unavailable"), className="ps-label"),
         html.Div(msg, className="ps-caption", style={"color": "var(--red)"}),
     ]), {"display": "none"}
 
@@ -593,10 +597,13 @@ def elnino_layer_for_signal(signal, current):
 def elnino_notes(period, signal):
     p = PERIOD_MAP.get(period) or {}
     s = SIGNAL_MAP.get(signal) or {}
-    p_note = (f"Forecast issued {p.get('issue_label', '—')}. "
-              + ("Three-month total. " if p.get("lead") == 0 else "")
-              + f"Dry-area cutoff: {p.get('dry_mask_mm', '—')} mm.")
-    return p_note, s.get("blurb", "")
+    issue = issue_text(p["init"]) if p.get("init") else "—"
+    cutoff = p.get("dry_mask_mm", "—")
+    p_note = (tr("Forecast issued {issue}. Three-month total. Dry-area cutoff: "
+                 "{mm} mm.", issue=issue, mm=cutoff) if p.get("lead") == 0 else
+              tr("Forecast issued {issue}. Dry-area cutoff: {mm} mm.",
+                 issue=issue, mm=cutoff))
+    return p_note, tr(s.get("blurb", ""))
 
 
 # Ended months drop out without a restart: rebuilt whenever the tab opens.
@@ -659,10 +666,10 @@ def elnino_layer_panel(tab, current, extra_on):
         live = [n for n in names if ok(n)]
         if not live:
             continue
-        rows.append(html.Div(group, className="en-layer-group"))
+        rows.append(html.Div(tr(group), className="en-layer-group"))
         for n in live:
             cfg = EXPLORE_MAP[n]
-            opts.append({"label": cfg["label"], "value": n})
+            opts.append({"label": tr(cfg["label"]), "value": n})
             # "Enabled" means chosen AND switched on. The legend expands only
             # then, because a key for a layer that is not drawn is noise.
             is_sel = (n == current)
@@ -679,12 +686,12 @@ def elnino_layer_panel(tab, current, extra_on):
                                            else "en-layer-eye "
                                                 "en-layer-eye-off"),
                                 n_clicks=0,
-                                title="Show / hide on map"),
+                                title=tr("Show / hide on map")),
                     # Title enables the layer (same as the eye).
-                    html.Button(cfg["label"],
+                    html.Button(tr(cfg["label"]),
                                 id={"type": "en-layer-pick", "index": n},
                                 className="en-layer-btn", n_clicks=0,
-                                title="Show this layer on the map"),
+                                title=tr("Show this layer on the map")),
                     # The (i) explains the layer and does NOT change the map —
                     # a separate concern, so a separate control.
                     _en_layer_info(n),
@@ -863,10 +870,10 @@ def elnino_resolve_signal(rain, heat_on, heat, tab, wrap_style):
     direction = heat if heat in ("hot", "cool") else "hot"
     on = bool(heat_on) and not is_union and have_compound
 
-    opts = [{"label": "Unusually hot", "value": "hot"},
-            {"label": "Unusually cool", "value": "cool"}]
+    opts = [{"label": tr("Unusually hot"), "value": "hot"},
+            {"label": tr("Unusually cool"), "value": "cool"}]
     # Disabled rather than hidden for a union, so the reason is visible.
-    check_opts = [{"label": " Also require unusual temperature",
+    check_opts = [{"label": " " + tr("Also require unusual temperature"),
                    "value": "on", "disabled": is_union}]
     dir_style = {"display": "block" if on else "none",
                  "marginTop": "5px", "marginLeft": "18px"}
@@ -874,15 +881,13 @@ def elnino_resolve_signal(rain, heat_on, heat, tab, wrap_style):
     signal = pair.get((rain, direction), rain) if on else rain
     cfg = SIGNAL_MAP.get(signal) or {}
     if is_union:
-        resolved = html.Span([
-            "Temperature cannot be combined with ", html.Em("Either signal"),
-            " — the two rainfall directions verify separately, so there is no "
-            "single combined probability to threshold.",
-        ])
+        resolved = html.Span(trc(
+            "Temperature cannot be combined with {either} — the two rainfall "
+            "directions verify separately, so there is no single combined "
+            "probability to threshold.", either=html.Em(tr("Either signal"))))
     else:
-        resolved = html.Span([
-            "Showing: ", html.Strong(cfg.get("label", signal)),
-        ])
+        resolved = html.Span(trc("Showing: {signal}",
+                                 signal=html.Strong(tr(cfg.get("label", signal)))))
     return (signal, resolved, opts, direction, style, dir_style,
             check_opts, (["on"] if on else []))
 
@@ -934,32 +939,36 @@ def elnino_sync_threshold(box, slider, signal):
     val = int(round(max(lo, min(hi, val))))
 
     margin = val - chance
+    v, m = fmt_pct(val, 0), f"{margin:+.0f}"
     if is_compound(signal):
         if val <= chance + 3:
-            note = (f"{val}% is barely above the {chance:.1f}% joint baseline "
-                    f"— for two conditions at once, chance is 1/9, not 1/3.")
+            note = tr("{value} is barely above the {chance} joint baseline — for "
+                      "two conditions at once, chance is 1/9, not 1/3.",
+                      value=v, chance=fmt_pct(chance))
         else:
-            note = (f"{val}% of the 51 members have BOTH conditions at once "
-                    f"— {margin:+.0f} points above the {chance:.1f}% joint "
-                    f"baseline. Not comparable with a single-variable "
-                    f"threshold: 25% here is as far above chance as 50% there.")
+            note = tr("{value} of the 51 members have BOTH conditions at once — "
+                      "{margin} points above the {chance} joint baseline. Not "
+                      "comparable with a single-variable threshold: 25% here is "
+                      "as far above chance as 50% there.",
+                      value=v, margin=m, chance=fmt_pct(chance))
     elif val <= 36:
-        note = (f"{val}% is barely above the {chance:.0f}% "
-                f"no-information baseline — almost every cell will qualify.")
+        note = tr("{value} is barely above the {chance} no-information "
+                  "baseline — almost every cell will qualify.",
+                  value=v, chance=fmt_pct(chance, 0))
     elif val >= 65:
-        note = (f"{val}% demands strong ensemble agreement; expect few "
-                f"cells and a conservative count.")
+        note = tr("{value} demands strong ensemble agreement; expect few cells "
+                  "and a conservative count.", value=v)
     else:
-        note = (f"{val}% of the 51 members — {margin:+.0f} points above the "
-                f"{chance:.0f}% baseline. ECMWF's own charts shade from "
-                f"about 40%.")
+        note = tr("{value} of the 51 members — {margin} points above the "
+                  "{chance} baseline. ECMWF's own charts shade from about 40%.",
+                  value=v, margin=m, chance=fmt_pct(chance, 0))
     ratio = (val / chance) if chance else 0
-    readout = html.Span([
-        html.Strong(f"{ratio:.1f}x"),
-        f" more likely than chance ({chance:.1f}%).",
-    ] + ([" Not comparable with the rainfall threshold — a combined event "
-          "is rarer, so its whole scale sits lower."]
-         if is_compound(signal) else []))
+    readout = html.Span(
+        trc("{ratio} more likely than chance ({chance}).",
+            ratio=html.Strong(fmt_num(ratio, 1) + "x"), chance=fmt_pct(chance))
+        + ([" " + tr("Not comparable with the rainfall threshold — a combined "
+                     "event is rarer, so its whole scale sits lower.")]
+           if is_compound(signal) else []))
     slug = "threshold_compound" if is_compound(signal) else "threshold"
     return (val, val, note, lo, hi, lo, hi, mark_dict,
             readout, _en_info(slug))
@@ -1024,10 +1033,10 @@ def elnino_toggle_compute(level, ucode, clicked, tab):
         return {"display": "none"}, True, no_update
     if level == "adm0 (Country)":
         ready = bool(ucode)
-        hint = "Ready." if ready else "Select a country first."
+        hint = tr("Ready.") if ready else tr("Select a country first.")
     else:
         ready = bool(clicked)
-        hint = "Ready." if ready else "Click the region on the map."
+        hint = tr("Ready.") if ready else tr("Click the region on the map.")
     return {"display": "block"}, (not ready), hint
 
 
@@ -1073,7 +1082,7 @@ def elnino_compute(_n, period, signal, threshold, layer, dry_mask,
     except ElNinoError as ex:
         return None, _elnino_error(str(ex)), None, None
     except Exception as ex:
-        return (None, _elnino_error(f"Computation failed: {str(ex)[:200]}"),
+        return (None, _elnino_error(tr("Computation failed: {e}", e=str(ex)[:200])),
                 None, None)
 
     # Historical context is best-effort — the numbers stand without it.
@@ -1272,28 +1281,30 @@ def _elnino_enso_block(state):
 
     return html.Div(className="ps", children=[
         html.Div([
-            html.Span("ENSO conditions"), _en_info("enso"),
+            html.Span(tr("ENSO conditions")), _en_info("enso"),
         ], className="ps-label"),
         html.Div(className="en-enso-head", children=[
-            html.Span(label, className="en-enso-state",
+            html.Span(tr(label), className="en-enso-state",
                       style={"color": tone}),
             html.Span(f"Niño 3.4  {oni:+.2f} °C", className="en-enso-val"),
-            html.Span(f"3-month mean to {state['asof']}",
+            html.Span(tr("3-month mean to {date}", date=state["asof"]),
                       className="en-enso-asof"),
         ]),
         _enso_chart(series),
-        html.Div(f"Monthly sea-surface temperature anomaly in the Niño 3.4 "
-                 f"region, {first} to {last}. Dashed lines mark the ±"
-                 f"{ENSO_EVENT_MIN} °C event thresholds. Observed from NOAA "
-                 f"OISST — independent of the rainfall forecast.",
+        html.Div(tr("Monthly sea-surface temperature anomaly in the Niño 3.4 "
+                    "region, {first} to {last}. Dashed lines mark the ±{thr} °C "
+                    "event thresholds. Observed from NOAA OISST — independent "
+                    "of the rainfall forecast.",
+                    first=first, last=last, thr=ENSO_EVENT_MIN),
                  className="ps-caption", style={"marginTop": "8px"}),
         html.Div([
-            html.Strong("This does not prove the forecast signal is caused "
-                        "by ENSO. "),
-            "For the empirical check, compare the map against the ",
-            html.Em("El Niño rainfall fingerprint"),
-            " layer — the model's own difference between its El Niño "
-            "and neutral hindcast seasons.",
+            html.Strong(tr("This does not prove the forecast signal is caused "
+                           "by ENSO.")),
+            " ",
+            *trc("For the empirical check, compare the map against the "
+                 "{layer} layer — the model's own difference between its "
+                 "El Niño and neutral hindcast seasons.",
+                 layer=html.Em(tr("El Niño rainfall fingerprint"))),
         ], className="ps-caption", style={"marginTop": "8px"}),
     ])
 
@@ -1347,33 +1358,36 @@ def _elnino_skill_note(skill, bss=None):
     assessed = skill.get("assessed_pct")
 
     if usable >= 60:
-        tone, verdict = "#3d9e56", "most of this signal sits where the model has a track record"
+        tone, verdict = "#3d9e56", tr("most of this signal sits where the model "
+                                      "has a track record")
     elif usable >= 30:
-        tone, verdict = "#e8b84b", "only part of this signal sits where the model has a track record"
+        tone, verdict = "#e8b84b", tr("only part of this signal sits where the "
+                                      "model has a track record")
     else:
-        tone, verdict = "#c94040", "little of this signal sits where the model has a track record"
+        tone, verdict = "#c94040", tr("little of this signal sits where the "
+                                      "model has a track record")
 
-    bits = [
-        html.Span(f"{usable:.0f}%", style={"fontWeight": "700",
-                                           "color": tone}),
-        html.Span(f" of the signal area has usable forecast skill "
-                  f"(r ≥ {SKILL_USABLE_MIN} against {SKILL_REFERENCE}, "
-                  f"{HINDCAST}) — {verdict}."),
-    ]
+    bits = trc("{share} of the signal area has usable forecast skill (r ≥ {r} "
+               "against {reference}, {hindcast}) — {verdict}.",
+               share=html.Span(fmt_pct(usable, 0),
+                               style={"fontWeight": "700", "color": tone}),
+               r=SKILL_USABLE_MIN, reference=SKILL_REFERENCE,
+               hindcast=HINDCAST, verdict=verdict)
     if assessed is not None and assessed < 95:
         bits.append(html.Span(
-            f" {100 - assessed:.0f}% of it is over ocean or outside the "
-            f"observation record and could not be scored.",
+            " " + tr("{share} of it is over ocean or outside the observation "
+                     "record and could not be scored.",
+                     share=fmt_pct(100 - assessed, 0)),
             style={"color": "var(--lo)"}))
     return html.Div(className="ps", children=[
         html.Div([
-            html.Span("Forecast skill here"), _en_info("skill"),
+            html.Span(tr("Forecast skill here")), _en_info("skill"),
         ], className="ps-label"),
         html.Div(bits, className="ps-caption"),
-        html.Div("Skill is reported, never applied — the count above is "
+        html.Div(tr("Skill is reported, never applied — the count above is "
                  "unfiltered. The correlation grades how well the forecast "
                  "ranked wet and dry years, which is a more forgiving test "
-                 "than whether its probabilities verify.",
+                 "than whether its probabilities verify."),
                  className="ps-caption",
                  style={"color": "var(--lo)", "fontStyle": "italic",
                         "marginTop": "6px"}),
@@ -1404,32 +1418,37 @@ def _elnino_history_block(history, area_share):
     rank = sum(1 for s in shares if s < area_share) + 1
     hi = max(max(shares), area_share, 1)
     bars = [html.Div(className="en-hist-bar",
-                     title=f"{h['year']}: {h['share']}% of area",
+                     title=tr("{year}: {share} of area", year=h["year"],
+                              share=fmt_pct(h["share"], 0)),
                      style={"height": f"{100 * h['share'] / hi:.1f}%"})
             for h in history]
     return html.Div(className="ps", children=[
         html.Div([
-            html.Span("Historical context"), _en_info("history"),
+            html.Span(tr("Historical context")), _en_info("history"),
         ], className="ps-label"),
         html.Div(className="en-hist", children=[
             html.Div(className="en-hist-bars", children=bars),
             html.Div(className="en-hist-now",
                      style={"bottom": f"{100 * area_share / hi:.1f}%"},
-                     title=f"This forecast: {area_share:.1f}% of area"),
+                     title=tr("This forecast: {share} of area",
+                              share=fmt_pct(area_share))),
         ]),
-        html.Div([
-            html.Strong(f"{area_share:.0f}% of this region's interpretable "
-                        f"area"),
-            f" falls under the signal in this forecast. Across the "
-            f"{len(history)} hindcast seasons the average was "
-            f"{mean_share:.0f}% (range {min(shares):.0f}–{max(shares):.0f}%), "
-            f"ranking this season {rank} of {len(history) + 1} — ",
-            html.Strong(f"{'more' if rank > len(history) / 2 else 'less'} "
-                        f"widespread than usual."),
-        ], className="ps-caption", style={"marginTop": "8px"}),
-        html.Div("Each bar is one hindcast season (1993–2016); the dashed "
+        html.Div(trc(
+            "{share} falls under the signal in this forecast. Across the {n} "
+            "hindcast seasons the average was {mean} (range {lo}–{hi}), ranking "
+            "this season {rank} of {total} — {verdict}",
+            share=html.Strong(tr("{share} of this region's interpretable area",
+                                 share=fmt_pct(area_share, 0))),
+            n=len(history), mean=fmt_pct(mean_share, 0),
+            lo=fmt_pct(min(shares), 0), hi=fmt_pct(max(shares), 0),
+            rank=rank, total=len(history) + 1,
+            verdict=html.Strong(tr("more widespread than usual.")
+                                if rank > len(history) / 2 else
+                                tr("less widespread than usual."))),
+            className="ps-caption", style={"marginTop": "8px"}),
+        html.Div(tr("Each bar is one hindcast season (1993–2016); the dashed "
                  "line is this forecast. Shares of AREA, not population — "
-                 "see the note above for why the two differ.",
+                 "see the note above for why the two differ."),
                  className="ps-caption", style={"marginTop": "6px"}),
     ])
 
@@ -1448,18 +1467,21 @@ def _elnino_empty_state(exposed, sens, threshold):
                   key=lambda kv: kv[0], reverse=True)
     if not hits:
         return html.Div(className="en-empty", children=[
-            "No children fall under this signal at any threshold tested — ",
-            "this region has no clear signal for the selected period, not a ",
-            "missing result.",
+            tr("No children fall under this signal at any threshold tested — "
+               "this region has no clear signal for the selected period, not a "
+               "missing result."),
         ])
     best_thr, best_val = hits[0]
     return html.Div(className="en-empty", children=[
-        html.Strong("Nothing clears this threshold."),
-        f" No children are in a {int(threshold)}% signal area here. Lowering "
-        f"it to ", html.Strong(f"{int(best_thr)}%"), " would return ",
-        html.Strong(_fmt(int(round(best_val)))),
-        " children — so this is a demanding cutoff, not an absence of signal. "
-        "The row below shows the full range.",
+        html.Strong(tr("Nothing clears this threshold.")),
+        " ",
+        *trc("No children are in a {threshold} signal area here. Lowering it "
+             "to {lower} would return {children} children — so this is a "
+             "demanding cutoff, not an absence of signal. The row below shows "
+             "the full range.",
+             threshold=fmt_pct(int(threshold), 0),
+             lower=html.Strong(fmt_pct(int(best_thr), 0)),
+             children=html.Strong(_fmt(int(round(best_val))))),
     ])
 
 
@@ -1477,15 +1499,15 @@ def _elnino_magnitude_block(meta):
     if mm is not None:
         txt = f"{mm:+,.0f} mm"
         if pc is not None:
-            txt += f"  ({pc:+.0f}% of normal)"
+            txt += "  " + tr("({pct} of normal)", pct=f"{pc:+.0f}%")
         rows.append(html.Div(className="info-row", children=[
-            html.Span("Rainfall vs normal", className="info-lbl"),
+            html.Span(tr("Rainfall vs normal"), className="info-lbl"),
             html.Span(txt, className="info-val"),
         ]))
     c = anoms.get("anom_c")
     if c is not None:
         rows.append(html.Div(className="info-row", children=[
-            html.Span("Temperature vs normal", className="info-lbl"),
+            html.Span(tr("Temperature vs normal"), className="info-lbl"),
             html.Span(f"{c:+.1f} °C", className="info-val"),
         ]))
     if not rows and not attrib:
@@ -1494,37 +1516,37 @@ def _elnino_magnitude_block(meta):
     kids = []
     if rows:
         kids.append(html.Div([
-            html.Span("How unusual is it?"), _en_info("anomaly"),
+            html.Span(tr("How unusual is it?")), _en_info("anomaly"),
         ], className="ps-label"))
         kids += rows
         kids.append(html.Div(
-            "Averaged over the signal area, against the model's own "
+            tr("Averaged over the signal area, against the model's own "
             "1993–2016 normal. This is the size of the departure; the "
             "probability above is only how consistently the ensemble "
-            "predicts it.",
+            "predicts it."),
             className="ps-caption", style={"marginTop": "6px"}))
 
     if attrib:
         kids.append(html.Div([
-            html.Span("Historically linked to El Niño"),
+            html.Span(tr("Historically linked to El Niño")),
             _en_info("enso_attrib"),
         ], className="ps-label", style={"marginTop": "12px"}))
         kids.append(html.Div(className="info-row", children=[
-            html.Span("Children in El Niño-consistent areas",
+            html.Span(tr("Children in El Niño-consistent areas"),
                       className="info-lbl"),
-            html.Span(f"{_fmt(attrib['children'])}  ({attrib['pct']:.0f}%)",
+            html.Span(f"{_fmt(attrib['children'])}  ({fmt_pct(attrib['pct'], 0)})",
                       className="en-attrib-val"),
         ]))
-        note = ("Where El Niño has historically pushed rainfall the same "
-                "direction this forecast points. The rest may be unusual "
-                "for other reasons.")
+        note = tr("Where El Niño has historically pushed rainfall the same "
+                  "direction this forecast points. The rest may be unusual "
+                  "for other reasons.")
         if attrib.get("rainfall_only"):
-            note += (" This mask covers rainfall only, so for a combined "
-                     "signal it says nothing about whether the heat is "
-                     "El Niño-related — treat it as the weaker claim.")
+            note += " " + tr("This mask covers rainfall only, so for a combined "
+                             "signal it says nothing about whether the heat is "
+                             "El Niño-related — treat it as the weaker claim.")
         if not is_window(meta.get("period")):
-            note += (" A single month is read against its forecast issue's "
-                     "seasonal mask, so this is approximate.")
+            note += " " + tr("A single month is read against its forecast "
+                             "issue's seasonal mask, so this is approximate.")
         kids.append(html.Div(note, className="ps-caption",
                              style={"marginTop": "6px"}))
 
@@ -1540,7 +1562,7 @@ def render_elnino_results(result, meta, history=None):
     headline number honest.
     """
     if not result:
-        return _elnino_error("No result.")
+        return _elnino_error(tr("No result."))
 
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
@@ -1569,20 +1591,20 @@ def render_elnino_results(result, meta, history=None):
             html.Div(className="metric", children=[
                 html.Div(_fmt(exposed), className="metric-val",
                          style={"color": colour}),
-                html.Div("Children in signal area", className="metric-lbl"),
+                html.Div(tr("Children in signal area"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
                 html.Div(_fmt(total), className="metric-val"),
-                html.Div("Total children", className="metric-lbl"),
+                html.Div(tr("Total children"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
-                html.Div(f"{pct:.1f}%", className="metric-val",
+                html.Div(fmt_pct(pct), className="metric-val",
                          style={"color": colour}),
-                html.Div("Share", className="metric-lbl"),
+                html.Div(tr("Share"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
-                html.Div(f"{int(meta['threshold'])}%", className="metric-val"),
-                html.Div("Threshold", className="metric-lbl"),
+                html.Div(fmt_pct(int(meta["threshold"]), 0), className="metric-val"),
+                html.Div(tr("Threshold"), className="metric-lbl"),
             ]),
         ]),
 
@@ -1593,7 +1615,7 @@ def render_elnino_results(result, meta, history=None):
         _elnino_magnitude_block(meta),
 
         html.Div(className="ps", children=[
-            html.Div(f"{sig.get('label', '')} — {period_label(meta['period'])}",
+            html.Div(f"{tr(sig.get('label', ''))} — {period_text(meta['period'])}",
                      className="ps-label"),
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
@@ -1602,8 +1624,8 @@ def render_elnino_results(result, meta, history=None):
                     (meta["region"] or "").upper(),
                 ]),
                 html.Span([
-                    html.Span(f"{exposed:,}", className="info-val"),
-                    html.Span(f" ({pct:.1f}%)", className="info-pct"),
+                    html.Span(fmt_int(exposed), className="info-val"),
+                    html.Span(f" ({fmt_pct(pct)})", className="info-pct"),
                 ]),
             ]),
             html.Div(className="bar-track", children=[
@@ -1612,22 +1634,24 @@ def render_elnino_results(result, meta, history=None):
                                 "background": colour}),
             ]),
             html.Div(className="info-row", children=[
-                html.Span("└ Boys", className="info-lbl",
+                html.Span("└ " + tr("Boys"), className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span([
-                    html.Span(f"{male:,}", className="info-val"),
-                    html.Span(f" ({_share(male, male_t):.1f}% of boys)",
+                    html.Span(fmt_int(male), className="info-val"),
+                    html.Span(" " + tr("({pct} of boys)",
+                                       pct=fmt_pct(_share(male, male_t))),
                               className="info-pct"),
                 ], style={"fontSize": "0.85em"}),
             ]),
             html.Div(className="info-row", children=[
-                html.Span("└ Girls", className="info-lbl",
+                html.Span("└ " + tr("Girls"), className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span([
-                    html.Span(f"{fema:,}", className="info-val"),
-                    html.Span(f" ({_share(fema, fema_t):.1f}% of girls)",
+                    html.Span(fmt_int(fema), className="info-val"),
+                    html.Span(" " + tr("({pct} of girls)",
+                                       pct=fmt_pct(_share(fema, fema_t))),
                               className="info-pct"),
                 ], style={"fontSize": "0.85em"}),
             ]),
@@ -1636,7 +1660,7 @@ def render_elnino_results(result, meta, history=None):
         # Sensitivity — the honest framing of a single number.
         html.Div(className="ps", children=[
             html.Div([
-                html.Span("How much does the probability threshold matter?"),
+                html.Span(tr("How much does the probability threshold matter?")),
                 _en_info("sensitivity"),
             ], className="ps-label"),
             html.Div(className="en-sens", children=[
@@ -1644,13 +1668,13 @@ def render_elnino_results(result, meta, history=None):
                                     if abs(float(k) - meta["threshold"]) < 1e-9
                                     else "en-sens-cell"),
                          children=[
-                    html.Div(f"{int(float(k))}%", className="en-sens-thr"),
+                    html.Div(fmt_pct(int(float(k)), 0), className="en-sens-thr"),
                     html.Div(_fmt(int(round(v))), className="en-sens-val"),
-                    html.Div(f"{(v / total * 100) if total else 0:.0f}%",
+                    html.Div(fmt_pct((v / total * 100) if total else 0, 0),
                              className="en-sens-pct"),
                 ]) for k, v in sorted(sens.items(), key=lambda kv: float(kv[0]))
             ]),
-            html.Div("Quote the range, not a single figure.",
+            html.Div(tr("Quote the range, not a single figure."),
                      className="ps-caption", style={"marginTop": "8px"}),
         ]),
 
@@ -1658,31 +1682,34 @@ def render_elnino_results(result, meta, history=None):
 
         # What was excluded, so a small total is never mistaken for no signal.
         (html.Div(className="ps", children=[
-            html.Div("Excluded from the count", className="ps-label"),
+            html.Div(tr("Excluded from the count"), className="ps-label"),
             html.Div([
-                html.Span(f"{masked:,}", className="info-val"),
-                html.Span(" children live in areas too dry for a tercile to "
-                          "mean anything, and are not counted above.",
+                html.Span(fmt_int(masked), className="info-val"),
+                html.Span(" " + tr("children live in areas too dry for a "
+                                   "tercile to mean anything, and are not "
+                                   "counted above."),
                           className="ps-caption"),
             ]),
         ]) if masked else None),
 
         html.Div(className="ps", children=[
             html.Div([
-                f"ECMWF SEAS5 system {ELNINO_SYSTEM}, initialised "
-                f"{period_issue_label(meta['period'])}, hindcast {HINDCAST}. ",
-                f"Population grid: {meta['pop_res']} m. ",
+                tr("ECMWF SEAS5 system {system}, initialised {issue}, hindcast "
+                   "{hindcast}.", system=ELNINO_SYSTEM, hindcast=HINDCAST,
+                   issue=issue_text(PERIOD_MAP.get(meta["period"], {}).get("init"))),
+                " ",
+                tr("Population grid: {n} m.", n=fmt_int(meta["pop_res"])),
                 html.Br(),
-                html.Strong("A tercile signal is relative to this model's own "
+                html.Strong(tr("A tercile signal is relative to this model's own "
                             "climatology — it is not a forecast of drought or "
-                            "flooding."),
+                            "flooding.")),
             ], className="ps-caption", style={"lineHeight": "1.7"}),
         ]),
 
         # These open the disclaimer; elnino_download builds the file.
         html.Div(className="ps", children=[
             html.Button(
-                "⬇  Download Excel workbook",
+                "⬇  " + tr("Download Excel workbook"),
                 id="elnino-dl-xlsx-btn", n_clicks=0,
                 className="ps-btn",
                 style={"display": "block", "width": "100%",
@@ -1691,7 +1718,7 @@ def render_elnino_results(result, meta, history=None):
             # JSON kept as the machine-readable form. Secondary styling: the
             # workbook is what a person wants, this is what a script wants.
             html.Button(
-                "⬇  JSON (for scripts)",
+                "⬇  " + tr("JSON (for scripts)"),
                 id="elnino-dl-json-btn", n_clicks=0,
                 className="ps-btn-ghost",
                 style={"display": "block", "width": "100%",

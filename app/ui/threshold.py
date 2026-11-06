@@ -5,6 +5,7 @@ from config.hazards import (
 from dash import ALL, dcc, html, Input, MATCH, Output, State
 
 from dash_app import app
+from i18n import tr
 from ui.components import _hazard_label
 
 
@@ -53,8 +54,8 @@ def _threshold_row(h_name, prefix="analysis"):
                 type="number", value=default, min=lo, max=hi, step=step,
                 debounce=True, className="athr-input", disabled=binary,
             ),
-            html.Span("presence/absence" if binary else units,
-                      className="athr-units", title=f"range {lo}–{hi}"),
+            html.Span(tr("presence/absence") if binary else tr(units),
+                      className="athr-units", title=tr("range {lo}–{hi}", lo=lo, hi=hi)),
         ]),
         dcc.Slider(
             id={"type": f"{prefix}-threshold-slider", "index": h_name},
@@ -71,7 +72,7 @@ def build_threshold_editor_for(prefix, topics):
     """Reusable threshold-editor body for any tab. `prefix` scopes the row ids
     (analysis | exposure | infra); `topics` is the selected topic list."""
     if not topics:
-        return html.Div("Select at least one hazard topic to adjust thresholds.",
+        return html.Div(tr("Select at least one hazard topic to adjust thresholds."),
                         className="ps-caption", style={"padding": "4px 0"})
     blocks = []
     for topic in HAZARD_TOPICS:            # stable, config order
@@ -82,7 +83,7 @@ def build_threshold_editor_for(prefix, topics):
             html.Div([
                 html.Span(className="topic-swatch",
                           style={"background": TOPIC_COLORS.get(topic, "#888")}),
-                html.Span(topic, className="athr-topic-name"),
+                html.Span(tr(topic), className="athr-topic-name"),
             ], className="athr-topic-head"),
             *rows,
         ]))
@@ -90,7 +91,7 @@ def build_threshold_editor_for(prefix, topics):
     # threshold). id is prefix-scoped so each tab's editor resets independently.
     blocks.append(html.Button(
         [html.I(className="bi bi-arrow-counterclockwise",
-                style={"marginRight": "5px"}), "Reset to defaults"],
+                style={"marginRight": "5px"}), tr("Reset to defaults")],
         id=f"{prefix}-thr-reset", n_clicks=0, className="athr-reset-btn",
     ))
     return blocks

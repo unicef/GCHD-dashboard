@@ -6,19 +6,56 @@ import re
 from dash import ctx, dcc, html, Input, no_update, Output, State
 from config.elnino import (
     CAVEATS, CHANCE_LEVEL, COMPOUND_CHANCE_LEVEL, download_disclaimer,
-    HINDCAST, is_compound, METHOD_STEPS, period_issue_label, period_label,
-    PERIOD_MAP, SIGNAL_MAP, SKILL_REFERENCE, SKILL_USABLE_MIN,
-    SYSTEM as ELNINO_SYSTEM,
+    HINDCAST, is_compound, lead_month, LEADS, METHOD_STEPS,
+    period_issue_label, period_label, PERIOD_MAP, SIGNAL_MAP, SKILL_REFERENCE,
+    SKILL_USABLE_MIN, SYSTEM as ELNINO_SYSTEM, TEXT_VARS,
 )
 
 from dash_app import app
+from i18n import current_lang, fmt_month, fmt_month_range, is_rtl, js_strings, N_, tr
+
+js_strings(N_("Copied"), N_("Press Ctrl+C"), N_("Copy"))
 from ui.xlsx import _XLSX_GRP, _XLSX_HDR
+
+
+def issue_text(tag):
+    """'202610' -> 'October 2026', month name in the visitor's language."""
+    if not tag:
+        return "—"
+    return fmt_month(dt.date(int(tag[:4]), int(tag[4:6]), 1))
+
+
+def period_text(period):
+    """Period label with month names in the visitor's language
+    (English: 'Oct–Dec 2026 (OND season)', 'November 2026')."""
+    p = PERIOD_MAP.get(period)
+    if not p:
+        return period or ""
+    if p.get("lead") == 0:
+        (y0, m0), (y1, m1) = (lead_month(p["init"], LEADS[0]),
+                              lead_month(p["init"], LEADS[-1]))
+        span = fmt_month_range(dt.date(y0, m0, 1), dt.date(y1, m1, 1))
+        return tr("{span} ({season} season)", span=span, season=p["short"])
+    y, m = p["month"]
+    return fmt_month(dt.date(y, m, 1))
+
+
+def _authoritative_note():
+    return tr("Translated for convenience; the English text of this notice "
+              "is authoritative.")
 
 
 # Pastel ramp for the sensitivity table, matching the one the offline
 # reliability workbook uses so a dashboard download and a script-produced
 # workbook look like the same family of document.
 _XLSX_PASTEL = ["#F4C7C3", "#FADBC8", "#FDF3C8", "#DDEFD5", "#CCE5D9"]
+
+
+def _sheet(wb, name):
+    ws = wb.add_worksheet(name[:31])
+    if is_rtl():
+        ws.right_to_left()
+    return ws
 
 
 def build_elnino_xlsx(meta, result, history, export):
@@ -81,12 +118,13 @@ def build_elnino_xlsx(meta, result, history, export):
             return None
         return part / whole * 100.0
 
-    sig_label = sig.get("label", meta["signal"])
-    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", meta["level"] or "")
-    pop_txt = (f"WorldPop 2025, children under 18, "
-               f"{meta.get('pop_res', 1000):,} m grid")
+    sig_label = tr(sig.get("label", meta["signal"]))
+    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", (tr(meta["level"]) if meta["level"] else ""))
+    pop_txt = tr("WorldPop 2025, children under 18, {n} m grid",
+                 n=f"{meta.get('pop_res', 1000):,}")
     generated = export.get("computed_utc", "")
-    issue = period_issue_label(meta["period"])
+    issue = issue_text(PERIOD_MAP.get(meta["period"], {}).get("init"))
+    english = current_lang() == "en"
 
     def _print_setup(ws, header_rows=None):
         ws.set_landscape()
@@ -97,163 +135,179 @@ def build_elnino_xlsx(meta, result, history, export):
             ws.freeze_panes(header_rows + 1, 0)
 
     # -- 1. Read me first --------------------------------------------------
-    ws = wb.add_worksheet("Read me first")
+    ws = _sheet(wb, tr("Read me first"))
     ws.set_column(0, 0, 112)
-    disclaimer = export.get("disclaimer") or download_disclaimer(
-        period_label(meta["period"]), period_issue_label(meta["period"]))
+    disclaimer = download_disclaimer(period_text(meta["period"]), issue,
+                                     translate=tr)
     ws.write(0, 0, disclaimer[0], f_title)
     r = 1
     for c in disclaimer[1:]:
         ws.write(r, 0, "• " + c, f_wrap)
         ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
         r += 1
+    if not english:
+        # The translated notice is a convenience; the English one binds.
+        ws.write(r, 0, _authoritative_note(), f_note)
+        r += 2
+        for i, c in enumerate(export.get("disclaimer") or []):
+            ws.write(r, 0, c if i == 0 else "• " + c, f_wrap)
+            ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
+            r += 1
     if export.get("disclaimer_accepted_utc"):
-        ws.write(r, 0, "Accepted by the person downloading this file on "
-                       f"{export['disclaimer_accepted_utc']}.", f_note)
+        ws.write(r, 0, tr("Accepted by the person downloading this file on "
+                          "{time}.", time=export["disclaimer_accepted_utc"]),
+                 f_note)
         r += 1
-    quote = export.get("suggested_citation")
+    quote = _elnino_quote(export, meta, translate=True)
     if quote:
         r += 1
-        ws.write(r, 0, "Suggested wording when quoting this figure", f_h2)
+        ws.write(r, 0, tr("Suggested wording when quoting this figure"), f_h2)
         ws.write(r + 1, 0, quote, f_quote)
         ws.set_row(r + 1, 15 * (len(quote) // 100 + 2))
         r += 2
     r += 1
-    ws.write(r, 0, "Read this before quoting any number in this file", f_title)
+    ws.write(r, 0, tr("Read this before quoting any number in this file"), f_title)
     r += 2
     for c in CAVEATS:
+        c = tr(c)
         ws.write(r, 0, "• " + c, f_wrap)
         ws.set_row(r, max(14, 13 * (len(c) // 95 + 1)))
         r += 1
     r += 1
-    ws.write(r, 0, f"Forecast: ECMWF SEAS5 system {ELNINO_SYSTEM}, issued "
-                   f"{issue}, compared against its own {HINDCAST} "
-                   f"hindcast. Population: {pop_txt}. "
-                   f"Generated {generated}.", f_note)
+    ws.write(r, 0, tr("Forecast: ECMWF SEAS5 system {system}, issued {issue}, "
+                      "compared against its own {hindcast} hindcast. "
+                      "Population: {population}. Generated {time}.",
+                      system=ELNINO_SYSTEM, issue=issue, hindcast=HINDCAST,
+                      population=pop_txt, time=generated), f_note)
     _print_setup(ws)
 
     # -- 2. Summary --------------------------------------------------------
-    ws = wb.add_worksheet("Summary")
+    ws = _sheet(wb, tr("Summary"))
     ws.set_column(0, 0, 40)
     ws.set_column(1, 1, 26)
     ws.set_column(2, 2, 70)
     ws.write(0, 0, f"{meta['region']} – {sig_label} – "
-                   f"{period_label(meta['period'])}", f_title)
-    ws.write(1, 0, "Children living where the seasonal forecast leans "
-                   "towards this outcome. A forecast, not a measured impact.",
+                   f"{period_text(meta['period'])}", f_title)
+    ws.write(1, 0, tr("Children living where the seasonal forecast leans "
+                      "towards this outcome. A forecast, not a measured impact."),
              f_note)
     chance = export.get("chance_level_pct")
+    vars_ = {"system": ELNINO_SYSTEM, "hindcast": HINDCAST,
+             "reference": SKILL_REFERENCE, "r": SKILL_USABLE_MIN}
     rows = [
-        ("WHAT WAS ASKED", None, None, None),
-        ("Region", meta["region"], f_txt, None),
-        ("Administrative level", level_txt, f_txt, None),
-        ("Period", period_label(meta["period"]), f_txt, None),
-        ("Signal", sig_label, f_txt, sig.get("blurb")),
-        ("Probability threshold", _frac(meta["threshold"]), f_pct,
-         "Share of the 51 forecast ensemble members that must agree "
-         "before an area counts."),
-        ("No-information baseline", _frac(chance), f_pct,
-         "What the probability would be by chance alone. The threshold "
-         "should sit well above it."),
-        ("Arid areas excluded", "yes" if meta["dry_mask"] else "no", f_txt,
-         "Areas too dry in a normal season for 'drier' or 'wetter' to mean "
-         "anything are left out of the count."),
-        ("Forecast issued", issue, f_txt,
-         f"ECMWF SEAS5 system {ELNINO_SYSTEM}; normal = its own {HINDCAST} "
-         f"hindcast."),
-        ("Population data", pop_txt, f_txt, None),
-        ("THE ANSWER", None, None, None),
-        ("Children in signal area", export.get("children_exposed"), f_int,
-         "Children (under 18) living in areas that meet the threshold."),
-        ("Total children in region", export.get("total_children"), f_int,
+        (N_("WHAT WAS ASKED"), None, None, None),
+        (N_("Region"), meta["region"], f_txt, None),
+        (N_("Administrative level"), level_txt, f_txt, None),
+        (N_("Period"), period_text(meta["period"]), f_txt, None),
+        (N_("Signal"), sig_label, f_txt, sig.get("blurb")),
+        (N_("Probability threshold"), _frac(meta["threshold"]), f_pct,
+         N_("Share of the 51 forecast ensemble members that must agree "
+            "before an area counts.")),
+        (N_("No-information baseline"), _frac(chance), f_pct,
+         N_("What the probability would be by chance alone. The threshold "
+            "should sit well above it.")),
+        (N_("Arid areas excluded"), tr("yes") if meta["dry_mask"] else tr("no"),
+         f_txt,
+         N_("Areas too dry in a normal season for 'drier' or 'wetter' to mean "
+            "anything are left out of the count.")),
+        (N_("Forecast issued"), issue, f_txt,
+         N_("ECMWF SEAS5 system {system}; normal = its own {hindcast} "
+            "hindcast.")),
+        (N_("Population data"), pop_txt, f_txt, None),
+        (N_("THE ANSWER"), None, None, None),
+        (N_("Children in signal area"), export.get("children_exposed"), f_int,
+         N_("Children (under 18) living in areas that meet the threshold.")),
+        (N_("Total children in region"), export.get("total_children"), f_int,
          None),
-        ("Share of children", _frac(export.get("pct_children_exposed")),
-         f_pct, "Children in signal area ÷ total children in region."),
-        ("   of which boys", export.get("boys_exposed"), f_int,
-         "Boys under 18 in the signal area."),
-        ("   of which girls", export.get("girls_exposed"), f_int,
-         "Girls under 18 in the signal area."),
-        ("Share of boys", _frac(_pct(export.get("boys_exposed"),
-                                     export.get("total_boys"))), f_pct,
-         "Boys in signal area ÷ all boys in region."),
-        ("Share of girls", _frac(_pct(export.get("girls_exposed"),
-                                      export.get("total_girls"))), f_pct,
-         "Girls in signal area ÷ all girls in region."),
-        ("Children in excluded arid areas",
+        (N_("Share of children"), _frac(export.get("pct_children_exposed")),
+         f_pct, N_("Children in signal area ÷ total children in region.")),
+        (N_("   of which boys"), export.get("boys_exposed"), f_int,
+         N_("Boys under 18 in the signal area.")),
+        (N_("   of which girls"), export.get("girls_exposed"), f_int,
+         N_("Girls under 18 in the signal area.")),
+        (N_("Share of boys"), _frac(_pct(export.get("boys_exposed"),
+                                         export.get("total_boys"))), f_pct,
+         N_("Boys in signal area ÷ all boys in region.")),
+        (N_("Share of girls"), _frac(_pct(export.get("girls_exposed"),
+                                          export.get("total_girls"))), f_pct,
+         N_("Girls in signal area ÷ all girls in region.")),
+        (N_("Children in excluded arid areas"),
          export.get("children_in_excluded_arid_areas"), f_int,
-         "Not counted above, and not evidence of 'no signal'."),
-        ("HOW UNUSUAL", None, None, None),
-        ("Rainfall anomaly (mm vs model normal)", anoms.get("anom_mm"),
-         f_sdec, "Forecast minus normal season rainfall, averaged over the "
-                 "signal area."),
-        ("Rainfall anomaly (% of normal)", _frac(anoms.get("anom_pct")),
+         N_("Not counted above, and not evidence of 'no signal'.")),
+        (N_("HOW UNUSUAL"), None, None, None),
+        (N_("Rainfall anomaly (mm vs model normal)"), anoms.get("anom_mm"),
+         f_sdec, N_("Forecast minus normal season rainfall, averaged over the "
+                    "signal area.")),
+        (N_("Rainfall anomaly (% of normal)"), _frac(anoms.get("anom_pct")),
          f_spct, None),
-        ("Temperature anomaly (°C vs model normal)", anoms.get("anom_c"),
-         f_sdec, "Forecast minus normal mean temperature, averaged over the "
-                 "signal area."),
-        ("ATTRIBUTION", None, None, None),
-        ("Children in El Niño-consistent areas", attrib.get("children"),
-         f_int, "Children in signal areas where El Niño has historically "
-                "pushed rainfall in the same direction."),
-        ("Share of signal attributable", _frac(attrib.get("pct")), f_pct,
-         "Of the children in the signal area. The rest may be unusual for "
-         "other reasons. Consistency with El Niño is not proof of cause."),
-        ("RELIABILITY", None, None, None),
-        ("Signal area with usable skill", _frac(skill.get("usable_pct")),
-         f_pct, f"Share of the signal area where the model's past forecasts "
-                f"correlated with {SKILL_REFERENCE} observations at "
-                f"r ≥ {SKILL_USABLE_MIN} ({HINDCAST}). A generous measure."),
-        ("Signal area that could be scored",
+        (N_("Temperature anomaly (°C vs model normal)"), anoms.get("anom_c"),
+         f_sdec, N_("Forecast minus normal mean temperature, averaged over the "
+                    "signal area.")),
+        (N_("ATTRIBUTION"), None, None, None),
+        (N_("Children in El Niño-consistent areas"), attrib.get("children"),
+         f_int, N_("Children in signal areas where El Niño has historically "
+                   "pushed rainfall in the same direction.")),
+        (N_("Share of signal attributable"), _frac(attrib.get("pct")), f_pct,
+         N_("Of the children in the signal area. The rest may be unusual for "
+            "other reasons. Consistency with El Niño is not proof of cause.")),
+        (N_("RELIABILITY"), None, None, None),
+        (N_("Signal area with usable skill"), _frac(skill.get("usable_pct")),
+         f_pct, N_("Share of the signal area where the model's past forecasts "
+                   "correlated with {reference} observations at r ≥ {r} "
+                   "({hindcast}). A generous measure.")),
+        (N_("Signal area that could be scored"),
          _frac(skill.get("assessed_pct")), f_pct,
-         f"{SKILL_REFERENCE} covers land between 50°N and 50°S only."),
+         N_("{reference} covers land between 50°N and 50°S only.")),
     ]
-    ws.write(2, 2, "What it means", f_h2)
+    ws.write(2, 2, tr("What it means"), f_h2)
     r = 2
     for label, val, fmt, note in rows:
+        label = tr(label)
         if val is None and fmt is None:          # section heading
             ws.write(r, 0, label, f_h2)
             r += 1
             continue
         ws.write(r, 0, label, f_lbl)
         if val is None:
-            ws.write(r, 1, "not available", f_txt)
+            ws.write(r, 1, tr("not available"), f_txt)
         else:
             ws.write(r, 1, val, fmt)
         if note:
+            note = tr(note, **vars_)
             ws.write(r, 2, note, f_txt)
             ws.set_row(r, max(15, 15 * (len(note) // 80 + 1)))
         r += 1
     if attrib.get("rainfall_only"):
         r += 1
         ws.merge_range(r, 0, r, 2,
-                       "Attribution note: the El Niño mask covers rainfall "
-                       "only. For a combined rainfall + temperature signal it "
-                       "says nothing about whether the heat component is "
-                       "El Niño-related, so read it as the weaker claim.",
+                       tr("Attribution note: the El Niño mask covers rainfall "
+                          "only. For a combined rainfall + temperature signal "
+                          "it says nothing about whether the heat component is "
+                          "El Niño-related, so read it as the weaker claim."),
                        f_note)
         ws.set_row(r, 30)
         r += 1
-    if export.get("suggested_citation"):
+    if quote:
         r += 1
-        ws.write(r, 0, "HOW TO QUOTE THIS", f_h2)
-        ws.merge_range(r + 1, 0, r + 1, 2, export["suggested_citation"],
-                       f_quote)
-        ws.set_row(r + 1, 15 * (len(export["suggested_citation"]) // 120 + 2))
+        ws.write(r, 0, tr("HOW TO QUOTE THIS"), f_h2)
+        ws.merge_range(r + 1, 0, r + 1, 2, quote, f_quote)
+        ws.set_row(r + 1, 15 * (len(quote) // 120 + 2))
     _print_setup(ws)
 
     # -- 3. Sensitivity ----------------------------------------------------
-    ws = wb.add_worksheet("Sensitivity")
+    ws = _sheet(wb, tr("Sensitivity"))
     ws.set_column(0, 0, 22)
     ws.set_column(1, 2, 22)
-    ws.write(0, 0, "How much does the probability threshold matter?", f_title)
+    ws.write(0, 0, tr("How much does the probability threshold matter?"), f_title)
     ws.merge_range(1, 0, 1, 2,
-                   "With 51 ensemble members probability can only move in "
-                   "steps of about 2 points, so cells near any cutoff qualify "
-                   "on essentially arbitrary grounds. Quote the range.",
+                   tr("With 51 ensemble members probability can only move in "
+                      "steps of about 2 points, so cells near any cutoff "
+                      "qualify on essentially arbitrary grounds. Quote the "
+                      "range."),
                    f_note)
     ws.set_row(1, 30)
-    for i, h in enumerate(("Threshold", "Children in signal area",
-                           "Share of children")):
+    for i, h in enumerate((tr("Threshold"), tr("Children in signal area"),
+                           tr("Share of children"))):
         ws.write(3, i, h, f_hdr)
     sens = (result or {}).get("_sensitivity") or {}
     total = export.get("total_children") or 0
@@ -270,26 +324,28 @@ def build_elnino_xlsx(meta, result, history, export):
         ws.write(4 + i, 1, int(round(v)), f_v)
         ws.write(4 + i, 2, (v / total) if total else 0, f_p)
     ws.write(4 + len(ordered) + 1, 0,
-             f"{meta['region']}, {sig_label.lower()}, "
-             f"{period_label(meta['period'])}. Bold row = the "
-             f"{int(meta['threshold'])}% threshold used on the Summary sheet.",
+             tr("{region}, {signal}, {period}. Bold row = the {threshold}% "
+                "threshold used on the Summary sheet.",
+                region=meta["region"], signal=sig_label.lower(),
+                period=period_text(meta["period"]),
+                threshold=int(meta["threshold"])),
              f_note)
     _print_setup(ws, header_rows=3)
 
     # -- 4. Historical context ---------------------------------------------
-    ws = wb.add_worksheet("Historical")
+    ws = _sheet(wb, tr("Historical"))
     ws.set_column(0, 0, 22)
     ws.set_column(1, 1, 28)
-    ws.write(0, 0, "This forecast against the model's own hindcast", f_title)
+    ws.write(0, 0, tr("This forecast against the model's own hindcast"), f_title)
     ws.merge_range(1, 0, 1, 1,
-                   "Shares of interpretable AREA, not population: the child "
-                   "population grid is 2025 and applying it to 1993 would "
-                   "imply a precision that does not exist. This is why these "
-                   "percentages differ from the Summary sheet's share of "
-                   "children.", f_note)
+                   tr("Shares of interpretable AREA, not population: the child "
+                      "population grid is 2025 and applying it to 1993 would "
+                      "imply a precision that does not exist. This is why "
+                      "these percentages differ from the Summary sheet's share "
+                      "of children."), f_note)
     ws.set_row(1, 44)
-    ws.write(3, 0, "Hindcast season (year)", f_hdr)
-    ws.write(3, 1, "Share of area under signal", f_hdr)
+    ws.write(3, 0, tr("Hindcast season (year)"), f_hdr)
+    ws.write(3, 1, tr("Share of area under signal"), f_hdr)
     r = 4
     for h in (history or []):
         ws.write(r, 0, h.get("year"), f_year)
@@ -301,18 +357,19 @@ def build_elnino_xlsx(meta, result, history, export):
                                "bg_color": "#FDF3C8"})
         f_nowp = wb.add_format({"border": 1, "bold": True,
                                 "num_format": PCT, "bg_color": "#FDF3C8"})
-        ws.write(r, 0, f"This forecast ({issue})", f_now)
+        ws.write(r, 0, tr("This forecast ({issue})", issue=issue), f_now)
         ws.write(r, 1, _frac(area), f_nowp)
     _print_setup(ws, header_rows=3)
 
     # -- 5. Method ---------------------------------------------------------
-    ws = wb.add_worksheet("Method")
+    ws = _sheet(wb, tr("Method"))
     ws.set_column(0, 0, 28)
     ws.set_column(1, 1, 96)
-    ws.write(0, 0, "How this figure was produced", f_title)
+    ws.write(0, 0, tr("How this figure was produced"), f_title)
     r = 2
     for i, (title, body) in enumerate(METHOD_STEPS, start=1):
-        ws.write(r, 0, f"{i}. {title}", f_lbl)
+        body = tr(body, **TEXT_VARS)
+        ws.write(r, 0, f"{i}. {tr(title)}", f_lbl)
         ws.write(r, 1, body, f_txt)
         ws.set_row(r, max(14, 13 * (len(body) // 90 + 1)))
         r += 1
@@ -395,49 +452,68 @@ def _elnino_export_payload(result, meta):
     return export
 
 
-def _round_people(n):
+def _round_people(n, t=None):
     """At most 3 significant figures: 538,628 -> "539,000"."""
+    t = t or _english
     n = int(round(n or 0))
     if n == 0:
         return "0"
     if n >= 1_000_000:
-        return f"{n / 1e6:.3g} million"
+        return t(N_("{n} million"), n=f"{n / 1e6:.3g}")
     if n < 1000:
         return f"{n:,}"
     digits = len(str(n)) - 3
     return f"{round(n, -digits):,}"
 
 
-def _elnino_quote(export):
-    """Suggested sentence for quoting the result, caveats included."""
+def _english(text, **kw):
+    return text.format(**kw) if kw else text
+
+
+def _elnino_quote(export, meta=None, translate=False):
+    """Suggested sentence for quoting the result, caveats included. English
+    for the JSON record; in the visitor's language (`translate`) for the
+    dialog and workbook, since that is the sentence they will quote."""
+    t = tr if translate else _english
     sig = SIGNAL_MAP.get(export["signal"], {})
-    phrase = ("an area forecast to be either drier or wetter than normal"
-              if sig.get("union_of") else sig.get("area_phrase", "a signal area"))
+    phrase = t(N_("an area forecast to be either drier or wetter than normal")
+               if sig.get("union_of") else sig.get("area_phrase") or N_("a signal area"))
+    if translate and meta:
+        issue = issue_text(PERIOD_MAP.get(meta["period"], {}).get("init"))
+        period = period_text(meta["period"])
+    else:
+        issue, period = export["init"], export["period_label"]
     thr = int(round(export["probability_threshold"]))
     n = export["children_exposed"]
     when = (export.get("computed_utc") or "")[:10]
-    head = (f"According to the ECMWF SEAS5 seasonal forecast issued "
-            f"{export['init']}, ")
     if n:
-        head += (f"about {_round_people(n)} children "
-                 f"({export['pct_children_exposed']:.1f}% of all children) in "
-                 f"{export['region']} live in {phrase} for "
-                 f"{export['period_label']}, forecast with at least {thr}% "
-                 f"probability.")
+        head = t(N_("According to the ECMWF SEAS5 seasonal forecast issued "
+                 "{issue}, about {n} children ({pct} of all children) in "
+                 "{region} live in {phrase} for {period}, forecast with at "
+                 "least {threshold}% probability."),
+                 issue=issue, n=_round_people(n, t),
+                 pct=f"{export['pct_children_exposed']:.1f}%",
+                 region=export["region"], phrase=phrase, period=period,
+                 threshold=thr)
     else:
-        head += (f"no children in {export['region']} live in {phrase} for "
-                 f"{export['period_label']} at a forecast probability of "
-                 f"{thr}% or more.")
+        head = t(N_("According to the ECMWF SEAS5 seasonal forecast issued "
+                 "{issue}, no children in {region} live in {phrase} for "
+                 "{period} at a forecast probability of {threshold}% or more."),
+                 issue=issue, region=export["region"], phrase=phrase,
+                 period=period, threshold=thr)
     sens = export.get("sensitivity_children_exposed_by_threshold_pct") or {}
-    rng = ""
+    parts = [head]
     if len(sens) > 1:
         lo_t, hi_t = min(sens, key=float), max(sens, key=float)
-        rng = (f" Depending on the probability required, the figure ranges "
-               f"from {_round_people(sens[hi_t])} (at {int(float(hi_t))}%) to "
-               f"{_round_people(sens[lo_t])} (at {int(float(lo_t))}%).")
-    return (head + rng + " This is a forecast, not a measured impact. "
-            f"Source: UNICEF Global Child Hazard Database (GCHD), computed "
-            f"{when}.")
+        parts.append(t(N_("Depending on the probability required, the figure "
+                       "ranges from {high} (at {high_t}%) to {low} (at "
+                       "{low_t}%)."),
+                       high=_round_people(sens[hi_t], t), high_t=int(float(hi_t)),
+                       low=_round_people(sens[lo_t], t), low_t=int(float(lo_t))))
+    parts.append(t(N_("This is a forecast, not a measured impact. Source: UNICEF "
+                   "Global Child Hazard Database (GCHD), computed {date}."),
+                   date=when))
+    return " ".join(parts)
 
 
 def _elnino_filename(meta, ext):
@@ -467,24 +543,41 @@ def elnino_dl_gate(_x, _j, _c, _ok, payload):
     if trig in ("elnino-dl-xlsx-btn", "elnino-dl-json-btn"):
         if not payload:
             raise dash.exceptions.PreventUpdate
-        exp = payload["export"]
-        lines = exp["disclaimer"]
+        exp, meta = payload["export"], payload["meta"]
+        english = exp["disclaimer"]
+        lines = download_disclaimer(
+            period_text(meta["period"]),
+            issue_text(PERIOD_MAP.get(meta["period"], {}).get("init")),
+            translate=tr)
+        quote = _elnino_quote(exp, meta, translate=True)
         body = [
             html.P(html.Strong(lines[0])),
             html.Ul([html.Li(t) for t in lines[1:]]),
-            html.Div("Suggested wording when quoting this figure",
+        ]
+        if current_lang() != "en":
+            # The translated notice is a convenience; the English one binds.
+            body += [
+                html.P(_authoritative_note(), className="ps-caption"),
+                html.Details([
+                    html.Summary(tr("Show the English text")),
+                    html.P(html.Strong(english[0]), lang="en", dir="ltr"),
+                    html.Ul([html.Li(t) for t in english[1:]],
+                            lang="en", dir="ltr"),
+                ], className="en-dl-english"),
+            ]
+        body += [
+            html.Div(tr("Suggested wording when quoting this figure"),
                      className="en-dl-quote-head"),
             # Clamped to 2 lines in CSS; copy and title use the full text.
             html.Div(className="en-dl-quote", children=[
-                html.Span(exp["suggested_citation"], id="elnino-dl-quote",
-                          className="en-dl-quote-text",
-                          title=exp["suggested_citation"]),
+                html.Span(quote, id="elnino-dl-quote",
+                          className="en-dl-quote-text", title=quote),
                 # Not dcc.Clipboard: it renders nothing on non-HTTPS origins.
                 html.Button(id="elnino-dl-copy", n_clicks=0,
                             className="en-dl-copy",
-                            title="Copy the full sentence",
+                            title=tr("Copy the full sentence"),
                             children=[html.Span(className="en-dl-copy-ico"),
-                                      html.Span("Copy",
+                                      html.Span(tr("Copy"),
                                                 className="en-dl-copy-lbl")]),
             ]),
         ]
@@ -496,8 +589,9 @@ def elnino_dl_gate(_x, _j, _c, _ok, payload):
 # Copy the suggested wording; execCommand fallback for non-HTTPS origins.
 app.clientside_callback(
     """
-    function(n) {
+    function(n, i18n) {
         if (!n) { return window.dash_clientside.no_update; }
+        function T(k) { return window.gchdT(i18n, k); }
         var el  = document.getElementById("elnino-dl-quote");
         var btn = document.getElementById("elnino-dl-copy");
         if (!el || !btn) { return window.dash_clientside.no_update; }
@@ -509,11 +603,11 @@ app.clientside_callback(
             var lbl = btn.querySelector(".en-dl-copy-lbl");
             btn.classList.toggle("copied", ok);
             btn.classList.toggle("failed", !ok);
-            if (lbl) { lbl.textContent = ok ? "Copied" : "Press Ctrl+C"; }
+            if (lbl) { lbl.textContent = ok ? T("Copied") : T("Press Ctrl+C"); }
             clearTimeout(btn._t);
             btn._t = setTimeout(function () {
                 btn.classList.remove("copied", "failed");
-                if (lbl) { lbl.textContent = "Copy"; }
+                if (lbl) { lbl.textContent = T("Copy"); }
             }, 2000);
         }
         function legacy() {
@@ -532,6 +626,7 @@ app.clientside_callback(
     """,
     Output("elnino-dl-copy", "title"),
     Input("elnino-dl-copy",  "n_clicks"),
+    State("store-i18n",      "data"),
     prevent_initial_call=True,
 )
 

@@ -1,6 +1,7 @@
 """Styled xlsx builder shared by the analysis exports."""
 from config.hazards import HAZARD_INFO, HAZARD_MAP, HAZARD_TOPICS
 
+from i18n import is_rtl, tr
 from ui.components import _hazard_label
 
 
@@ -27,8 +28,8 @@ def _thresholds_banner(topics, overrides):
             if default is None:
                 continue
             thr    = (overrides or {}).get(h, default)
-            units  = (HAZARD_INFO.get(h) or {}).get("units", "")
-            tag    = "custom" if h in (overrides or {}) else "default"
+            units  = tr((HAZARD_INFO.get(h) or {}).get("units", ""))
+            tag    = tr("custom") if h in (overrides or {}) else tr("default")
             unit_s = f" {units}" if units else ""
             op     = "<" if thr < 0 else ">"
             lines.append(f"{_hazard_label(h)} {op} {thr:g}{unit_s} ({tag})")
@@ -52,6 +53,8 @@ def build_xlsx(sheet_name, groups, rows, banner_lines=None):
     buf = io.BytesIO()
     wb  = xlsxwriter.Workbook(buf, {"in_memory": True})
     ws  = wb.add_worksheet(sheet_name[:31] or "Sheet1")
+    if is_rtl():
+        ws.right_to_left()
 
     f_banner   = wb.add_format({"bold": True, "font_size": 11, "align": "left",
                                 "valign": "vcenter", "text_wrap": False})
@@ -151,6 +154,8 @@ def build_report_xlsx(sheet_name, title, subtitle, blocks):
     buf = io.BytesIO()
     wb  = xlsxwriter.Workbook(buf, {"in_memory": True})
     ws  = wb.add_worksheet(sheet_name[:31] or "Sheet1")
+    if is_rtl():
+        ws.right_to_left()
     for i, w in enumerate(_REPORT_WIDTHS):
         ws.set_column(i, i, w)
     ws.hide_gridlines(2)

@@ -20,6 +20,7 @@ from core.gee import (
 )
 
 from dash_app import app
+from i18n import current_lang, fmt_day, fmt_int, fmt_pct, N_, ntr, tr, trc
 from bootstrap import COUNTRY_NAMES
 from ui.components import _fmt, POP_BASIS
 from ui.registry import CATALOG_TABS, FORECAST_TABS
@@ -36,13 +37,13 @@ def _forecast_row(d, selected=None):
     CSS, and the two lists stay visually consistent.
     """
     active = " active" if d["name"] == selected else ""
-    meta   = " · ".join(x for x in (d.get("topic"), d.get("units")) if x)
+    meta   = " · ".join(tr(x) for x in (d.get("topic"), d.get("units")) if x)
     return html.Div([
         html.Div(
             [
                 html.Div(className="layer-radio"),
                 html.Div([
-                    html.Div(d["label"], className="layer-name"),
+                    html.Div(tr(d["label"]), className="layer-name"),
                     html.Div(meta, className="layer-meta"),
                 ], className="layer-text"),
             ],
@@ -54,7 +55,7 @@ def _forecast_row(d, selected=None):
             html.I(className="bi bi-info-circle"),
             id={"type": "hazard-info-btn", "index": FC_INFO_PREFIX + d["name"]},
             className="hazard-info-btn", n_clicks=0,
-            title=d["label"],
+            title=tr(d["label"]),
         ),
     ], className="layer-item-row")
 
@@ -71,7 +72,7 @@ def _forecast_rows_for(kind, selected=None, expanded=None):
     # toggled in the GEE config table appears/disappears without a redeploy.
     rows = [d for d in active_datasets_live() if d["kind"] == kind]
     if not rows:
-        return [html.Div("No datasets available in this category.",
+        return [html.Div(tr("No datasets available in this category."),
                          className="ps-caption",
                          style={"padding": "12px 16px"})]
 
@@ -93,8 +94,8 @@ def _forecast_rows_for(kind, selected=None, expanded=None):
                                  "height": "8px", "borderRadius": "2px",
                                  "background": TOPIC_COLORS.get(topic, "#9ca3af"),
                                  "marginRight": "7px", "flexShrink": "0"}),
-                html.Span(topic, style={"flex": "1"}),
-                html.Span(f"{len(group)}",
+                html.Span(tr(topic), style={"flex": "1"}),
+                html.Span(fmt_int(len(group)),
                           style={"fontSize": "0.6rem", "color": "var(--lo)",
                                  "marginRight": "8px"}),
                 html.I(className="bi bi-chevron-down",
@@ -125,10 +126,10 @@ def _forecast_kind_badge(cfg):
         return None
     kind = cfg.get("kind", "nrt")
     cls  = "fc-badge fc-badge-forecast" if kind == "forecast" else "fc-badge fc-badge-obs"
-    return html.Span(KIND_LABELS.get(kind, kind).upper(), className=cls)
+    return html.Span(tr(KIND_LABELS.get(kind, kind)).upper(), className=cls)
 
 
-_FC_CAVEAT = (
+_FC_CAVEAT = N_(
     "Both describe a specific time window, so these numbers are not comparable "
     "with the Pop Analysis tab, whose hazards are fixed 100-year return periods."
 )
@@ -141,9 +142,10 @@ def tab_observed():
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
-                html.Strong("Observation"), " layers report what recently "
-                "happened, from near-real-time satellite and reanalysis data. ",
-                _FC_CAVEAT,
+                *trc("{kind} layers report what recently happened, from "
+                     "near-real-time satellite and reanalysis data.",
+                     kind=html.Strong(tr("Observation"))),
+                " ", tr(_FC_CAVEAT),
             ], className="exposure-method-p", style={"marginBottom": "0"}),
         ]),
         html.Div(id="observed-list-wrap", children=[
@@ -157,16 +159,17 @@ def tab_forecast():
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"},
                  children=[
             html.P([
-                html.Strong("Forecast"), " layers predict conditions ahead. ",
-                _FC_CAVEAT,
+                *trc("{kind} layers predict conditions ahead.",
+                     kind=html.Strong(tr("Forecast"))),
+                " ", tr(_FC_CAVEAT),
             ], className="exposure-method-p", style={"marginBottom": "0"}),
         ]),
 
         html.Div(className="analysis-sub-tabs", children=[
-            html.Button("Catalog", id="fc-seg-forecast",
+            html.Button(tr("Catalog"), id="fc-seg-forecast",
                         className="analysis-sub-tab active", n_clicks=0,
                         style={"display": "block"}),
-            html.Button("Custom", id="fc-seg-custom",
+            html.Button(tr("Custom"), id="fc-seg-custom",
                         className="analysis-sub-tab", n_clicks=0),
         ]),
         html.Div(id="fc-seg-blurb", className="ps-caption",
@@ -179,19 +182,19 @@ def tab_forecast():
         # Custom asset segment
         html.Div(id="forecast-custom-wrap", style={"display": "none"}, children=[
             html.Div(className="ps", children=[
-                html.Div("Use any GEE Image / ImageCollection",
+                html.Div(tr("Use any GEE Image / ImageCollection"),
                          className="ps-label"),
                 html.Div(style={"display":"flex","gap":"6px"}, children=[
                     dcc.Input(
                         id="forecast-asset-input",
-                        placeholder="e.g. COPERNICUS/S5P/NRTI/L3_HCHO",
+                        placeholder=tr("e.g. COPERNICUS/S5P/NRTI/L3_HCHO"),
                         debounce=False,
                         style={"flex":"1","padding":"7px 9px","fontSize":"0.75rem",
                                "border":"1px solid var(--border2)","borderRadius":"6px",
                                "fontFamily":"Source Sans Pro, sans-serif",
                                "background":"var(--panel-h)","color":"var(--hi)"},
                     ),
-                    html.Button("Load", id="forecast-asset-load-btn",
+                    html.Button(tr("Load"), id="forecast-asset-load-btn",
                                 className="ps-btn", n_clicks=0,
                                 style={"width":"auto","padding":"7px 14px",
                                        "flexShrink":"0"}),
@@ -201,7 +204,7 @@ def tab_forecast():
                                 "color":"var(--mid)"}),
                 html.Div(id="forecast-asset-band-wrap", style={"display": "none"},
                          children=[
-                    html.Div("Band", className="ps-label",
+                    html.Div(tr("Band"), className="ps-label",
                              style={"marginTop": "8px"}),
                     dcc.Dropdown(id="forecast-asset-band", className="ps-select",
                                  clearable=False, searchable=True),
@@ -221,14 +224,14 @@ def ew_hazard_card():
     """
     return html.Div(id="ew-hazard-card", className="ewh ewh-mode-vis",
                     style={"display": "none"}, children=[
-        html.Div("Hazard", className="ewh-title"),
+        html.Div(tr("Hazard"), className="ewh-title"),
         html.Div(id="ewh-pick", children=[
             dcc.Dropdown(id="forecast-dataset-select", className="ps-select",
                          options=[], value=None, clearable=False,
                          searchable=True,
-                         placeholder="Choose an observed or forecast layer…"),
+                         placeholder=tr("Choose an observed or forecast layer…")),
         ]),
-        html.Div("Pick a layer below to preview it.", id="ewh-empty",
+        html.Div(tr("Pick a layer below to preview it."), id="ewh-empty",
                  className="ps-caption"),
         html.Div(id="forecast-selected-wrap", style={"display": "none"},
                  children=[
@@ -240,17 +243,20 @@ def ew_hazard_card():
 
         # Changing the window or aggregation re-renders the global preview.
         html.Div(id="forecast-params-section", style={"display": "none"}, children=[
-            html.Div("Time window", className="ewh-label"),
+            html.Div(tr("Time window"), className="ewh-label"),
             dcc.DatePickerRange(
                 id="forecast-dates",
-                display_format="DD MMM YYYY",
+                # The picker's month names are English-only, so other
+                # languages get an all-numeric date.
+                display_format=("DD MMM YYYY" if current_lang() == "en"
+                                else "YYYY-MM-DD"),
                 className="forecast-datepicker",
                 minimum_nights=0,
                 clearable=False,
                 updatemode="bothdates",
             ),
             html.Div(id="forecast-dates-note", className="ps-caption"),
-            html.Div("Aggregation over the window", className="ewh-label"),
+            html.Div(tr("Aggregation over the window"), className="ewh-label"),
             dcc.Dropdown(
                 id="forecast-reducer", className="ps-select",
                 clearable=False, searchable=False,
@@ -259,10 +265,10 @@ def ew_hazard_card():
                      style={"marginTop": "8px"}),
 
             html.Div(id="ewh-threshold", children=[
-                html.Div("Exposure threshold", className="ewh-label"),
+                html.Div(tr("Exposure threshold"), className="ewh-label"),
                 html.Div(className="analysis-threshold-row", children=[
                     html.Div(className="athr-row-head", children=[
-                        html.Span("Exposed where value >", className="athr-label"),
+                        html.Span(tr("Exposed where value >"), className="athr-label"),
                         dcc.Input(id="forecast-threshold", type="number",
                                   debounce=True, className="athr-input"),
                         html.Span(id="forecast-threshold-units",
@@ -280,11 +286,11 @@ def ew_hazard_card():
 
             html.Div(id="fc-goto-wrap", className="ewh-goto", children=[
                 html.Button([html.I(className="bi bi-people"),
-                             "  Analyse children exposed  →"],
+                             "  " + tr("Analyse children exposed") + "  →"],
                             id="fc-goto-analysis", className="ps-btn",
                             n_clicks=0),
                 html.Button([html.I(className="bi bi-buildings"),
-                             "  Analyse facilities exposed  →"],
+                             "  " + tr("Analyse facilities exposed") + "  →"],
                             id="fc-goto-infra", className="ps-btn",
                             n_clicks=0),
             ]),
@@ -297,25 +303,25 @@ def fc_controls():
     EW panes share. The hazard itself lives in ew_hazard_card()."""
     return html.Div(id="fc-controls", style={"display": "none"}, children=[
         html.Div(className="ps", children=[
-            html.Div("1. Select country / territory", className="ps-label"),
+            html.Div(tr("1. Select country / territory"), className="ps-label"),
             dcc.Dropdown(
                 id="forecast-country-select", className="ps-select",
                 options=[{"label": c, "value": c} for c in COUNTRY_NAMES],
-                value=None, placeholder="Search country / territory…",
+                value=None, placeholder=tr("Search country / territory…"),
                 clearable=False, searchable=True,
             ),
         ]),
         html.Div(id="forecast-level-section", style={"display": "none"},
                  children=[
             html.Div(className="ps", children=[
-                html.Div("2. Analysis level", className="ps-label"),
+                html.Div(tr("2. Analysis level"), className="ps-label"),
                 dcc.Dropdown(
                     id="forecast-level-select", className="ps-select",
-                    options=[{"label": l, "value": l} for l in ADMIN_DATA.keys()],
-                    value=None, placeholder="— select level —",
+                    options=[{"label": tr(l), "value": l} for l in ADMIN_DATA.keys()],
+                    value=None, placeholder=tr("— select level —"),
                     clearable=False, searchable=False,
                 ),
-                html.Div("For ADM1/ADM2, click the region on the map.",
+                html.Div(tr("For ADM1/ADM2, click the region on the map."),
                          className="ps-caption"),
             ]),
         ]),
@@ -323,9 +329,9 @@ def fc_controls():
         html.Div(id="forecast-badge-wrap"),
         html.Div(id="forecast-compute-wrap", style={"display": "none"}, children=[
             html.Div(className="ps", children=[
-                html.Button("▶  Compute exposure", id="forecast-compute-btn",
+                html.Button("▶  " + tr("Compute exposure"), id="forecast-compute-btn",
                             className="ps-btn", n_clicks=0, disabled=True),
-                html.Div("Select a region and dataset, then Compute.",
+                html.Div(tr("Select a region and dataset, then Compute."),
                          id="forecast-compute-hint", className="ps-caption",
                          style={"marginTop": "6px"}),
             ]),
@@ -371,8 +377,8 @@ def ew_hazard_stale(dataset, asset, start, end, reducer, threshold,
                                       threshold):
         return None
     return [html.I(className="bi bi-exclamation-triangle"),
-            " Hazard changed since the result below was computed. "
-            "Compute again to update it."]
+            " " + tr("Hazard changed since the result below was computed. "
+                     "Compute again to update it.")]
 
 
 # ── Region selection (own dropdowns writing the shared region stores) ─────────
@@ -422,7 +428,7 @@ def forecast_badge(name, tab):
     if tab not in FORECAST_TABS or not name:
         return None
     return html.Div(className="selected-badge", children=[
-        html.Div("Selected region", className="selected-badge-tag"),
+        html.Div(tr("Selected region"), className="selected-badge-tag"),
         html.Div(name, className="selected-badge-name"),
     ])
 
@@ -466,15 +472,17 @@ def forecast_load_asset(_n, asset_id):
     except ForecastError as e:
         return None, str(e), err_style, hidden, [], None, no_update
     except Exception as e:                       # unexpected — still no traceback
-        return None, f"Error: {str(e)[:160]}", err_style, hidden, [], None, no_update
+        return (None, tr("Error: {e}", e=str(e)[:160]), err_style, hidden, [],
+                None, no_update)
 
     bands = info.get("bands") or []
     if not bands:
-        return (None, "Asset has no readable bands.", err_style, hidden, [], None,
+        return (None, tr("Asset has no readable bands."), err_style, hidden, [], None,
                 no_update)
     span = (f" · {info['start']} → {info['end']}"
             if info.get("start") and info.get("end") else "")
-    status = f"✓  {info['kind']} · {info['n_images']:,} image(s){span}"
+    status = (f"✓  {info['kind']} · "
+              + ntr("{n} image", "{n} images", info["n_images"]) + span)
     store  = {"asset_id": (asset_id or "").strip(), "kind": info["kind"],
               "bands": bands, "band": bands[0],
               "start": info.get("start"), "end": info.get("end")}
@@ -566,14 +574,14 @@ def forecast_dataset_params(dataset, asset):
     first = (cfg.get("reducers") or ["mean"])[0]
     default_thr = threshold_for(cfg, first)[0]
     step, marks = _thr_step_marks(lo, hi)
-    reducers = [{"label": REDUCERS.get(r, r), "value": r}
+    reducers = [{"label": tr(REDUCERS.get(r, r)), "value": r}
                 for r in cfg.get("reducers") or ["mean"]]
-    note = cfg.get("note", "")
+    note = tr(cfg.get("note", ""))
 
     return ({"display": "block"}, note, start, end, min_d, max_d,
             reducers, first,
             default_thr, lo, hi, step, lo, hi, default_thr, step, marks,
-            cfg.get("units", ""))
+            tr(cfg.get("units", "")))
 
 
 @app.callback(
@@ -609,8 +617,9 @@ def forecast_threshold_source(reducer, dataset, asset):
     value, source = threshold_for(cfg, reducer)
     if not source:
         return ""
-    units = cfg.get("units", "")
-    return f"Default {value:g}{' ' + units if units else ''}: {source}"
+    units = tr(cfg.get("units", ""))
+    return tr("Default {value}: {source}",
+              value=f"{value:g}{' ' + units if units else ''}", source=tr(source))
 
 
 # ── Observed / Forecast: one control block, reset per tab ────────────────────
@@ -658,10 +667,10 @@ def forecast_switch_segment(_catalog, _custom, tab):
     custom = ctx.triggered_id == "fc-seg-custom"
     cls = lambda is_custom: ("analysis-sub-tab active" if custom == is_custom
                              else "analysis-sub-tab")
-    blurb = ("Paste any GEE Image or ImageCollection id to run the same "
-             "exposure analysis." if custom
-             else KIND_BLURBS.get(_fc_kind_for_tab(tab), "")
-                  + " — pick a layer to preview it.")
+    blurb = (tr("Paste any GEE Image or ImageCollection id to run the same "
+                "exposure analysis.") if custom
+             else tr("{blurb} — pick a layer to preview it.",
+                     blurb=tr(KIND_BLURBS.get(_fc_kind_for_tab(tab), ""))))
     return (cls(False), cls(True),
             hide if custom else show,
             show if custom else hide,
@@ -691,13 +700,14 @@ def forecast_render_list(selected, expanded, tab, asset):
         raise dash.exceptions.PreventUpdate
     active = active_datasets_live()
     options = []
-    for kind, head in (("nrt", "OBSERVED"), ("forecast", "FORECAST")):
-        options.append({"label": head, "value": f"__{kind}", "disabled": True})
-        options += [{"label": d["label"], "value": d["name"]}
+    for kind, head in (("nrt", N_("Observed")), ("forecast", N_("Forecast"))):
+        options.append({"label": tr(head).upper(), "value": f"__{kind}",
+                        "disabled": True})
+        options += [{"label": tr(d["label"]), "value": d["name"]}
                     for d in active if d["kind"] == kind]
-    placeholder = (f"Custom layer: {asset['asset_id']}"
+    placeholder = (tr("Custom layer: {id}", id=asset["asset_id"])
                    if asset and asset.get("asset_id")
-                   else "Choose an observed or forecast layer…")
+                   else tr("Choose an observed or forecast layer…"))
     # The lists are large and only visible on the catalogue panes; rebuilding
     # them behind EW Pop/Infra re-mounts every row for nothing.
     if tab not in CATALOG_TABS:
@@ -771,7 +781,7 @@ def forecast_kind_badge(dataset, asset):
         return None, None, {"display": "none"}, {"display": "block"}
     badge = _forecast_kind_badge(cfg)
     url   = FORECAST_MAP.get(cfg["name"], {}).get("source_url")
-    link  = html.A("View in Earth Engine catalog ↗", href=url, target="_blank",
+    link  = html.A(tr("View in Earth Engine catalog ↗"), href=url, target="_blank",
                    className="hi-link",
                    style={"fontSize": "0.68rem"}) if url else None
     return badge, link, {"display": "block"}, {"display": "none"}
@@ -827,14 +837,17 @@ def forecast_preview(dataset, start, end, reducer, tab, view, asset, viz):
     except ForecastError as ex:
         return "", 0, str(ex), err, None
     except Exception as ex:
-        return "", 0, f"Preview failed: {str(ex)[:160]}", err, None
+        return "", 0, tr("Preview failed: {e}", e=str(ex)[:160]), err, None
 
     units = cfg.get("units", "")
     run = forecast_run_label(cfg["name"], s)
-    msg = (f"Previewing {n:,} image(s)"
-           + (f" from the {run} run" if run else "")
-           + f" · {vis['min']:g}–{vis['max']:g} {units}".rstrip()
-           + " — select a region below to compute exposure.")
+    images = ntr("{n} image", "{n} images", n)
+    vrange = f"{vis['min']:g}–{vis['max']:g} {tr(units)}".rstrip()
+    msg = (tr("Previewing {images} from the {run} run · {range} — select a "
+              "region below to compute exposure.",
+              images=images, run=run, range=vrange) if run else
+           tr("Previewing {images} · {range} — select a region below to "
+              "compute exposure.", images=images, range=vrange))
     # Drives the map legend so the preview is readable rather than an
     # unlabelled colour wash.
     preview = {"vis": vis, "units": units, "label": cfg["label"],
@@ -893,12 +906,13 @@ def forecast_clamp_dates(start, end, dataset, asset):
     if cfg["is_custom"]:
         s, e = dt.date.fromisoformat(start[:10]), dt.date.fromisoformat(end[:10])
         days = (e - s).days + 1
-        return no_update, no_update, f"{days} day window."
+        return no_update, no_update, ntr("{n} day window.", "{n} day window.", days)
     s2, e2, msg = clamp_window(cfg["name"], start[:10], end[:10])
     days = (dt.date.fromisoformat(e2) - dt.date.fromisoformat(s2)).days + 1
     latest = latest_complete_day(cfg["name"])
-    note = msg or (f"{days} day window."
-                   + (f" Data is complete through {latest:%d %b %Y} (UTC)."
+    note = msg or (ntr("{n} day window.", "{n} day window.", days)
+                   + (" " + tr("Data is complete through {day} (UTC).",
+                               day=fmt_day(latest))
                       if latest else ""))
     return ((s2 if s2 != start[:10] else no_update),
             (e2 if e2 != end[:10] else no_update), note)
@@ -926,8 +940,8 @@ def forecast_toggle_compute(level, ucode, clicked, dataset, asset, tab):
         return {"display": "none"}, True, "", {"display": "none"}
     region_ready = bool(ucode) if level == "adm0 (Country)" else bool(clicked)
     hint = ("" if region_ready else
-            ("Select a country." if not ucode else
-             "Click a region on the map to select it."))
+            (tr("Select a country.") if not ucode else
+             tr("Click a region on the map to select it.")))
     return ({"display": "block"}, (not region_ready), hint,
             {"marginTop": "6px", "display": "none" if region_ready else "block"})
 
@@ -976,7 +990,7 @@ def forecast_compute(_n, dataset, asset, start, end, reducer, threshold,
     except ForecastError as ex:
         return None, _forecast_error(str(ex)), None
     except Exception as ex:
-        return None, _forecast_error(f"Computation failed: {str(ex)[:200]}"), None
+        return None, _forecast_error(tr("Computation failed: {e}", e=str(ex)[:200])), None
 
     meta = {"label": cfg["label"], "units": cfg.get("units", ""),
             "start": s, "end": e, "reducer": reducer, "threshold": thr,
@@ -1043,63 +1057,70 @@ def _forecast_error(msg):
 def _ew_pop_report_xlsx(meta, ex, thr_txt):
     """EW Pop analysis workbook: the results panel, as a printable sheet."""
     share = lambda n, d: (n / d) if d else None
-    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", meta["level"] or "")
+    level_txt = re.sub(r"^adm\d\s*\((.*)\)$", r"\1", (tr(meta["level"]) if meta["level"] else ""))
     if meta.get("asset_id"):
-        source = meta["asset_id"] + (f" (band {meta['band']})" if meta.get("band") else "")
+        source = meta["asset_id"] + (" " + tr("(band {band})", band=meta["band"])
+                                     if meta.get("band") else "")
     else:
         source = (FORECAST_MAP.get(meta.get("dataset")) or {}).get("id") or meta.get("dataset", "")
+    label = tr(meta["label"])
     items = [
-        ("Hazard layer", meta["label"]),
-        ("Data source", source),
-        ("Window", f"{meta['start']} to {meta['end']} "
-                   f"({meta['n_images']:,} images)"),
+        (tr("Hazard layer"), label),
+        (tr("Data source"), source),
+        (tr("Window"), tr("{start} to {end} ({images})", start=meta["start"],
+                          end=meta["end"],
+                          images=ntr("{n} image", "{n} images", meta["n_images"]))),
     ]
     if meta.get("run"):
-        items.append(("Model run", f"{meta['run']} (one run, by valid time)"))
+        items.append((tr("Model run"), tr("{run} (one run, by valid time)",
+                                          run=meta["run"])))
+    pop = (tr("{basis}, aggregated to {n} m. Children under 18.",
+              basis=tr(POP_BASIS), n=fmt_int(meta["pop_res"]))
+           if meta["pop_res"] != 100 else
+           tr("{basis}. Children under 18.", basis=tr(POP_BASIS)))
     items += [
-        ("Aggregation", REDUCERS.get(meta["reducer"], meta["reducer"])),
-        ("Exposed where", f"aggregated value > {thr_txt}"),
-        ("Region", f"{meta['region']} ({level_txt})"),
-        ("Population", POP_BASIS + (f", aggregated to {meta['pop_res']:,} m"
-                                    if meta["pop_res"] != 100 else "")
-                       + ". Children under 18."),
-        ("Live data", "Near-real-time and forecast data change as new images "
-                      "and model runs arrive; the figures are for the window "
-                      "and run above, as available when computed."),
-        ("Produced by", "UNICEF Global Child Hazard Database (GCHD)"),
+        (tr("Aggregation"), tr(REDUCERS.get(meta["reducer"], meta["reducer"]))),
+        (tr("Exposed where"), tr("aggregated value > {threshold}", threshold=thr_txt)),
+        (tr("Region"), f"{meta['region']} ({level_txt})"),
+        (tr("Population"), pop),
+        (tr("Live data"), tr("Near-real-time and forecast data change as new "
+                             "images and model runs arrive; the figures are for "
+                             "the window and run above, as available when "
+                             "computed.")),
+        (tr("Produced by"), "UNICEF Global Child Hazard Database (GCHD)"),
     ]
     blocks = [
         {"kind": "metrics", "items": [
-            {"label": "Children exposed", "value": ex["children_exposed"],
+            {"label": tr("Children exposed"), "value": ex["children_exposed"],
              "color": "#e31a1c"},
-            {"label": "Total children", "value": ex["total_children"]},
-            {"label": "Share exposed", "fmt": "pct", "color": "#e31a1c",
+            {"label": tr("Total children"), "value": ex["total_children"]},
+            {"label": tr("Share exposed"), "fmt": "pct", "color": "#e31a1c",
              "value": share(ex["children_exposed"], ex["total_children"])},
-            {"label": "Images used", "value": meta["n_images"]},
+            {"label": tr("Images used"), "value": meta["n_images"]},
         ]},
-        {"kind": "table", "title": f"Children exposed — {meta['label']}",
-         "label_header": "Group",
-         "columns": [{"label": "Exposed", "fmt": "int"},
-                     {"label": "In region", "fmt": "int"},
-                     {"label": "Share exposed", "fmt": "pct"}],
+        {"kind": "table", "title": tr("Children exposed — {label}", label=label),
+         "label_header": tr("Group"),
+         "columns": [{"label": tr("Exposed"), "fmt": "int"},
+                     {"label": tr("In region"), "fmt": "int"},
+                     {"label": tr("Share exposed"), "fmt": "pct"}],
          "rows": [
-             {"label": "All children", "swatch": "#e31a1c",
+             {"label": tr("All children"), "swatch": "#e31a1c",
               "values": [ex["children_exposed"], ex["total_children"],
                          share(ex["children_exposed"], ex["total_children"])]},
-             {"label": "Boys", "indent": True,
+             {"label": tr("Boys"), "indent": True,
               "values": [ex["boys_exposed"], ex["total_boys"],
                          share(ex["boys_exposed"], ex["total_boys"])]},
-             {"label": "Girls", "indent": True,
+             {"label": tr("Girls"), "indent": True,
               "values": [ex["girls_exposed"], ex["total_girls"],
                          share(ex["girls_exposed"], ex["total_girls"])]},
          ]},
-        {"kind": "list", "title": "How this was computed", "items": items},
+        {"kind": "list", "title": tr("How this was computed"), "items": items},
     ]
     computed = ex["computed_utc"][:16].replace("T", " ") + " UTC"
     return build_report_xlsx(
-        "Exposure", f"Children exposed — {meta['region']}",
-        f"Early Warning · Population analysis · {meta['label']} · "
-        f"computed {computed}", blocks)
+        tr("Exposure"), tr("Children exposed — {region}", region=meta["region"]),
+        tr("Early Warning · Population analysis · {label} · computed {time}",
+           label=label, time=computed), blocks)
 
 
 def render_forecast_results(result, meta):
@@ -1110,7 +1131,7 @@ def render_forecast_results(result, meta):
     image count is what distinguishes "no children exposed" from "no data".
     """
     if not result:
-        return _forecast_error("No result.")
+        return _forecast_error(tr("No result."))
 
     exposed = int(round(result.get("exposed", 0) or 0))
     total   = int(round(result.get("total_population", 0) or 0))
@@ -1120,7 +1141,7 @@ def render_forecast_results(result, meta):
     male_t  = int(round(result.get("total_population_male", 0) or 0))
     fema_t  = int(round(result.get("total_population_female", 0) or 0))
     pct     = (exposed / total * 100) if total else 0
-    units   = meta.get("units", "")
+    units   = tr(meta.get("units", ""))
 
     def _share(part, whole):
         return (part / whole * 100) if whole else 0
@@ -1148,34 +1169,34 @@ def render_forecast_results(result, meta):
             html.Div(className="metric", children=[
                 html.Div(_fmt(exposed), className="metric-val",
                          style={"color": "#e31a1c"}),
-                html.Div("Children exposed", className="metric-lbl"),
+                html.Div(tr("Children exposed"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
                 html.Div(_fmt(total), className="metric-val"),
-                html.Div("Total children", className="metric-lbl"),
+                html.Div(tr("Total children"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
-                html.Div(f"{pct:.1f}%", className="metric-val",
+                html.Div(fmt_pct(pct), className="metric-val",
                          style={"color": "#e31a1c"}),
-                html.Div("Share exposed", className="metric-lbl"),
+                html.Div(tr("Share exposed"), className="metric-lbl"),
             ]),
             html.Div(className="metric", children=[
-                html.Div(f"{meta['n_images']:,}", className="metric-val"),
-                html.Div("Images used", className="metric-lbl"),
+                html.Div(fmt_int(meta["n_images"]), className="metric-val"),
+                html.Div(tr("Images used"), className="metric-lbl"),
             ]),
         ]),
         html.Div(className="ps", children=[
-            html.Div("Exposed children", className="ps-label"),
+            html.Div(tr("Exposed children"), className="ps-label"),
             html.Div(className="info-row", children=[
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch",
                               style={"background": "#e31a1c"}),
-                    (meta["label"] or "").upper(),
+                    (tr(meta["label"]) if meta["label"] else "").upper(),
                     html.Span(f" · > {thr_txt}", className="info-thr"),
                 ]),
                 html.Span([
-                    html.Span(f"{exposed:,}", className="info-val"),
-                    html.Span(f" ({pct:.1f}%)", className="info-pct"),
+                    html.Span(fmt_int(exposed), className="info-val"),
+                    html.Span(f" ({fmt_pct(pct)})", className="info-pct"),
                 ]),
             ]),
             html.Div(className="bar-track", children=[
@@ -1184,50 +1205,57 @@ def render_forecast_results(result, meta):
                                 "background": "#e31a1c"}),
             ]),
             html.Div(className="info-row", children=[
-                html.Span("└ Boys", className="info-lbl",
+                html.Span("└ " + tr("Boys"), className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span([
-                    html.Span(f"{male:,}", className="info-val",
+                    html.Span(fmt_int(male), className="info-val",
                               style={"color": "var(--mid)", "fontWeight": "500"}),
-                    html.Span(f" ({_share(male, male_t):.1f}% of boys)",
+                    html.Span(" " + tr("({pct} of boys)",
+                                       pct=fmt_pct(_share(male, male_t))),
                               className="info-pct"),
                 ]),
             ]),
             html.Div(className="info-row", children=[
-                html.Span("└ Girls", className="info-lbl",
+                html.Span("└ " + tr("Girls"), className="info-lbl",
                           style={"paddingLeft": "22px", "color": "var(--lo)",
                                  "fontWeight": "400", "fontSize": "0.85em"}),
                 html.Span([
-                    html.Span(f"{fema:,}", className="info-val",
+                    html.Span(fmt_int(fema), className="info-val",
                               style={"color": "var(--mid)", "fontWeight": "500"}),
-                    html.Span(f" ({_share(fema, fema_t):.1f}% of girls)",
+                    html.Span(" " + tr("({pct} of girls)",
+                                       pct=fmt_pct(_share(fema, fema_t))),
                               className="info-pct"),
                 ]),
             ]),
         ]),
         # Provenance — the window and image count travel with the number.
         html.Div(className="ps", children=[
-            html.Div("Methodology", className="hi-label",
+            html.Div(tr("Methodology"), className="hi-label",
                      style={"marginBottom": "6px"}),
             html.Div([
-                html.Div(f"Dataset: {meta['label']}"),
-                html.Div(f"Window: {meta['start']} → {meta['end']} "
-                         f"({meta['n_images']:,} images)"),
-                (html.Div(f"Model run: {meta['run']} (one run, by valid time)")
+                html.Div(tr("Dataset: {label}", label=tr(meta["label"]))),
+                html.Div(tr("Window: {start} → {end} ({images})",
+                            start=meta["start"], end=meta["end"],
+                            images=ntr("{n} image", "{n} images",
+                                       meta["n_images"]))),
+                (html.Div(tr("Model run: {run} (one run, by valid time)",
+                             run=meta["run"]))
                  if meta.get("run") else None),
-                html.Div(f"Aggregation: {REDUCERS.get(meta['reducer'], meta['reducer'])}"),
-                html.Div(f"Exposed where value > {thr_txt}"),
-                html.Div(f"Region: {meta['region']} · {meta['level']}"),
-                html.Div(f"Population: {POP_BASIS}, aggregated to "
-                         f"{meta['pop_res']:,} m"
+                html.Div(tr("Aggregation: {name}",
+                            name=tr(REDUCERS.get(meta["reducer"], meta["reducer"])))),
+                html.Div(tr("Exposed where value > {threshold}", threshold=thr_txt)),
+                html.Div(tr("Region: {region}", region=meta["region"])
+                         + f" · {tr(meta['level'])}"),
+                html.Div(tr("Population: {basis}, aggregated to {n} m",
+                            basis=tr(POP_BASIS), n=fmt_int(meta["pop_res"]))
                          if meta["pop_res"] != 100
-                         else f"Population: {POP_BASIS}"),
+                         else tr("Population: {basis}", basis=tr(POP_BASIS))),
             ], className="ps-caption", style={"lineHeight": "1.7"}),
             (html.Div(
-                "Forecast layers are 11–44 km, so exposure is computed on a "
+                tr("Forecast layers are 11–44 km, so exposure is computed on a "
                 "1 km population grid rather than 100 m. Totals differ from the "
-                "Pop Analysis tab by well under 1%.",
+                "Pop Analysis tab by well under 1%."),
                 className="ps-caption",
                 style={"marginTop": "6px", "marginBottom": "0",
                        "color": "var(--lo)", "fontStyle": "italic"})

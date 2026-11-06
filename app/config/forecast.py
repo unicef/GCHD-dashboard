@@ -16,15 +16,16 @@
 # =============================================================================
 
 # Reducers offered in the UI. Keys match ee.ImageCollection method names.
+from i18n.markers import N_
 REDUCERS = {
-    "sum":    "Total over period",
-    "mean":   "Average over period",
-    "max":    "Peak over period",
-    "min":    "Minimum over period",
-    "median": "Median over period",
+    "sum":    N_("Total over period"),
+    "mean":   N_("Average over period"),
+    "max":    N_("Peak over period"),
+    "min":    N_("Minimum over period"),
+    "median": N_("Median over period"),
     # Daily totals (UTC days) — needs `steps_per_day`; see core.forecast._daily.
-    "daily_mean": "Average daily total",
-    "daily_max":  "Wettest day (highest daily total)",
+    "daily_mean": N_("Average daily total"),
+    "daily_max":  N_("Wettest day (highest daily total)"),
 }
 DAILY_REDUCERS = ("daily_mean", "daily_max")
 
@@ -74,25 +75,25 @@ DAILY_REDUCERS = ("daily_mean", "daily_max")
 # are read on the same scale and threshold.
 
 RAINFALL = {
-    "min": 0, "max": 200, "units": "mm/day",
+    "min": 0, "max": 200, "units": N_("mm/day"),
     "range_source": "Wettest-day p99.9 162 mm/day (IMERG, Jan), rounded up",
     "thresholds": {
-        "daily_max":  (50, "WMO Severe Weather Information Centre, heavy rain "
-                           "(≥50 mm in 24 h)"),
-        "daily_mean": (20, "ETCCDI R20mm (WMO), very heavy precipitation day "
-                           "(≥20 mm), applied to the average day"),
+        "daily_max":  (50, N_("WMO Severe Weather Information Centre, heavy rain "
+                           "(≥50 mm in 24 h)")),
+        "daily_mean": (20, N_("ETCCDI R20mm (WMO), very heavy precipitation day "
+                           "(≥20 mm), applied to the average day")),
     },
 }
 
 AIR_TEMPERATURE = {
-    "min": -50, "max": 55, "units": "°C",
+    "min": -50, "max": 55, "units": N_("°C"),
     "range_source": "p0.1 −46 °C (GFS, Jan) to p99.9 49 °C (ERA5-Land, Jul), "
                     "rounded outward",
     "thresholds": {
-        "max":  (35, "ET-SCI TXge35, day with maximum ≥35 °C — also the hot-day "
-                     "definition of the static Extreme heat layer"),
-        "mean": (30, "No standard for a multi-day mean; dashboard choice"),
-        "min":  (20, "ETCCDI TR, tropical night (minimum >20 °C)"),
+        "max":  (35, N_("ET-SCI TXge35, day with maximum ≥35 °C — also the hot-day "
+                     "definition of the static Extreme heat layer")),
+        "mean": (30, N_("No standard for a multi-day mean; dashboard choice")),
+        "min":  (20, N_("ETCCDI TR, tropical night (minimum >20 °C)")),
     },
 }
 
@@ -100,7 +101,7 @@ FORECAST_DATASETS = [
     # ── Rainfall / flood ────────────────────────────────────────────────────
     {
         "id": "NOAA/GFS0P25", "name": "gfs_precip",
-        "label": "Rainfall forecast (NOAA GFS)", "topic": "Rainfall",
+        "label": N_("Rainfall forecast (NOAA GFS)"), "topic": N_("Rainfall"),
         "kind": "forecast", "band": "total_precipitation_surface",
         "reducers": ["daily_max", "daily_mean"], "max_span_days": 10,
         "default_span_days": 3, "lag_days": 0,
@@ -115,13 +116,13 @@ FORECAST_DATASETS = [
         "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
         "accumulated": True,
         "steps_per_day": 4,
-        "note": "GFS runs 4x daily out to 16 days. Rainfall is totalled per UTC "
-                "day from the latest run.",
+        "note": N_("GFS runs 4x daily out to 16 days. Rainfall is totalled per UTC "
+                "day from the latest run."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
     },
     {
         "id": "NASA/GPM_L3/IMERG_V07", "name": "imerg_precip",
-        "label": "Observed rainfall (GPM IMERG)", "topic": "Rainfall",
+        "label": N_("Observed rainfall (GPM IMERG)"), "topic": N_("Rainfall"),
         "kind": "nrt", "band": "precipitation",
         "reducers": ["daily_max", "daily_mean"], "max_span_days": 30,
         "default_span_days": 7, "lag_days": 3,
@@ -131,25 +132,25 @@ FORECAST_DATASETS = [
         # Band is mm/hr on half-hourly images -> x0.5 per image to reach mm.
         "transform": "imerg_mm",
         "steps_per_day": 48,
-        "note": "Half-hourly satellite rainfall, ~2 day latency. Totalled per "
-                "UTC day; missing half-hours are filled with the day's mean rate.",
+        "note": N_("Half-hourly satellite rainfall, ~2 day latency. Totalled per "
+                "UTC day; missing half-hours are filled with the day's mean rate."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NASA_GPM_L3_IMERG_V07",
     },
 
     # ── Wind / storm ────────────────────────────────────────────────────────
     {
         "id": "NOAA/GFS0P25", "name": "gfs_wind",
-        "label": "Wind speed forecast (NOAA GFS)", "topic": "Tropical Storm",
+        "label": N_("Wind speed forecast (NOAA GFS)"), "topic": N_("Tropical Storm"),
         "kind": "forecast", "band": None,
         "reducers": ["max", "mean"], "max_span_days": 10, "default_span_days": 3,
         "lag_days": 0,
-        "min": 0, "max": 50, "units": "m/s",
+        "min": 0, "max": 50, "units": N_("m/s"),
         "range_source": "p99.9 21 m/s, sample max 38 m/s; extended past Beaufort "
                         "12 (hurricane force, ≥32.7 m/s, WMO)",
         "thresholds": {
-            "max":  (17.5, "WMO tropical storm, 34 kt (10-min sustained; GFS gives "
-                           "hourly instantaneous wind)"),
-            "mean": (10.8, "Beaufort 6, strong breeze (≥10.8 m/s)"),
+            "max":  (17.5, N_("WMO tropical storm, 34 kt (10-min sustained; GFS gives "
+                           "hourly instantaneous wind)")),
+            "mean": (10.8, N_("Beaufort 6, strong breeze (≥10.8 m/s)")),
         },
         "palette": ["#e4eff2", "#c3dce7", "#9ebdd2", "#7e8ab0", "#6d6c91"],
         "scale": 27830,
@@ -158,15 +159,15 @@ FORECAST_DATASETS = [
         "transform": "wind_speed",
         "filters": [{"prop": "forecast_hours", "op": "gt", "value": 0}],
         "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
-        "note": "10 m wind speed derived from U/V components. 17.5 m/s is the "
-                "WMO tropical-storm threshold, as in the static catalog.",
+        "note": N_("10 m wind speed derived from U/V components. 17.5 m/s is the "
+                "WMO tropical-storm threshold, as in the static catalog."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
     },
 
     # ── Heat ────────────────────────────────────────────────────────────────
     {
         "id": "NOAA/GFS0P25", "name": "gfs_temp",
-        "label": "Air temperature forecast (NOAA GFS)", "topic": "Extreme Heat",
+        "label": N_("Air temperature forecast (NOAA GFS)"), "topic": N_("Extreme Heat"),
         "kind": "forecast", "band": "temperature_2m_above_ground",
         "reducers": ["max", "mean", "min"], "max_span_days": 10,
         "default_span_days": 3, "lag_days": 0,
@@ -177,34 +178,34 @@ FORECAST_DATASETS = [
         # Kelvin conversion, unlike MODIS LST below.
         "filters": [{"prop": "forecast_hours", "op": "gt", "value": 0}],
         "run": {"init": "creation_time", "valid": "forecast_time", "init_ms": True},
-        "note": "2 m air temperature, already in °C. Same scale and thresholds "
-                "as the observed ERA5-Land layer.",
+        "note": N_("2 m air temperature, already in °C. Same scale and thresholds "
+                "as the observed ERA5-Land layer."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25",
     },
     {
         "id": "MODIS/061/MOD11A1", "name": "modis_lst",
-        "label": "Land surface temperature (MODIS)", "topic": "Extreme Heat",
+        "label": N_("Land surface temperature (MODIS)"), "topic": N_("Extreme Heat"),
         "kind": "nrt", "band": "LST_Day_1km",
         "reducers": ["max", "mean"], "max_span_days": 30, "default_span_days": 8,
         "lag_days": 3,
-        "min": -45, "max": 60, "units": "°C",
+        "min": -45, "max": 60, "units": N_("°C"),
         "range_source": "p0.1 −41 °C (Jan) to p99.9 56 °C (Jul), rounded outward",
-        "thresholds": {"*": (40, "No health standard for land-surface temperature; "
+        "thresholds": {"*": (40, N_("No health standard for land-surface temperature; "
                                  "dashboard choice, above the 35 °C air level as "
-                                 "LST runs hotter in sun")},
+                                 "LST runs hotter in sun"))},
         "palette": ["#f8e593", "#f8cc14", "#F89800", "#F86800", "#F83000"],
         "scale": 1000,
         # Stored as scaled uint16: raw x0.02 - 273.15 -> °C (raw 13932-16112
         # over Kenya = 5.5-48.1 °C). Without this the threshold is meaningless.
         "transform": "modis_lst_c",
-        "note": "Daytime land-surface temperature (not air temperature) — runs "
+        "note": N_("Daytime land-surface temperature (not air temperature) — runs "
                 "hotter than a 2 m reading. Clear-sky pixels only. For a "
-                "2 m air temperature, use the ERA5-Land layer instead.",
+                "2 m air temperature, use the ERA5-Land layer instead."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD11A1",
     },
     {
         "id": "ECMWF/ERA5_LAND/HOURLY", "name": "era5_air_temp",
-        "label": "Observed air temperature (ERA5-Land)", "topic": "Extreme Heat",
+        "label": N_("Observed air temperature (ERA5-Land)"), "topic": N_("Extreme Heat"),
         "kind": "nrt", "band": "temperature_2m",
         "reducers": ["max", "mean"], "max_span_days": 30, "default_span_days": 8,
         # Latency measured at ~6 days; a shorter lag returns an empty window.
@@ -214,47 +215,47 @@ FORECAST_DATASETS = [
         "scale": 11132,
         # Plain Kelvin — no scale factor, unlike MODIS LST.
         "transform": "kelvin_to_c",
-        "note": "Reanalysis 2 m air temperature, the basis health heat "
+        "note": N_("Reanalysis 2 m air temperature, the basis health heat "
                 "thresholds are defined on — unlike MODIS land-surface "
-                "temperature, and unaffected by cloud cover. ~6 day latency.",
+                "temperature, and unaffected by cloud cover. ~6 day latency."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_HOURLY",
     },
 
     # ── Fire ────────────────────────────────────────────────────────────────
     {
         "id": "FIRMS", "name": "firms_brightness",
-        "label": "Active fire brightness (FIRMS)", "topic": "Fire",
+        "label": N_("Active fire brightness (FIRMS)"), "topic": N_("Fire"),
         "kind": "nrt", "band": "T21",
         "reducers": ["max", "mean"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 3,
-        "min": 300, "max": 500, "units": "K",
+        "min": 300, "max": 500, "units": N_("K"),
         "range_source": "Product floor 300 K to MODIS band 21 saturation ~500 K "
                         "(both reached in the sample)",
-        "thresholds": {"*": (330, "No standard; every FIRMS pixel is a detected "
+        "thresholds": {"*": (330, N_("No standard; every FIRMS pixel is a detected "
                                   "fire, and 330 K keeps those above the typical "
-                                  "~320 K median")},
+                                  "~320 K median"))},
         "palette": ["#F0F0DC", "#FFD282", "#FF8C3C", "#DC3C1E", "#5A0000"],
         "scale": 1000,
-        "note": "Fire-pixel brightness temperature. FIRMS carries no FRP or "
-                "detection-count band, so brightness is the intensity measure.",
+        "note": N_("Fire-pixel brightness temperature. FIRMS carries no FRP or "
+                "detection-count band, so brightness is the intensity measure."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/FIRMS",
     },
     {
         "id": "FIRMS", "name": "firms_fire_days",
-        "label": "Active fire days (FIRMS)", "topic": "Fire",
+        "label": N_("Active fire days (FIRMS)"), "topic": N_("Fire"),
         "kind": "nrt", "band": "T21",
         "reducers": ["sum"], "max_span_days": 60, "default_span_days": 30,
         "lag_days": 3,
-        "min": 0, "max": 60, "units": "days",
+        "min": 0, "max": 60, "units": N_("days"),
         "range_source": "0 to the 60-day window cap (definitional)",
-        "thresholds": {"*": (1, "Definitional: more than one day with a detection, "
-                                "i.e. not a single flare-up")},
+        "thresholds": {"*": (1, N_("Definitional: more than one day with a detection, "
+                                "i.e. not a single flare-up"))},
         "palette": ["#F0F0DC", "#FFD282", "#FF8C3C", "#DC3C1E", "#5A0000"],
         "scale": 1000,
         # Counts images where a fire pixel was detected, since there is no
         # native count band: each image -> 1 where T21 is present, else 0.
         "transform": "fire_day_count",
-        "note": "Number of days with a detected fire pixel in the window.",
+        "note": N_("Number of days with a detected fire pixel in the window."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/FIRMS",
     },
 
@@ -266,147 +267,147 @@ FORECAST_DATASETS = [
     # inactive — see the note on each.
     {
         "id": "ECMWF/CAMS/NRT", "name": "cams_pm25",
-        "label": "PM2.5 forecast (CAMS)", "topic": "Air Pollution",
+        "label": N_("PM2.5 forecast (CAMS)"), "topic": N_("Air Pollution"),
         "kind": "forecast", "band": "particulate_matter_d_less_than_25_um_surface",
         "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
-        "min": 0, "max": 400, "units": "µg/m³",
+        "min": 0, "max": 400, "units": N_("µg/m³"),
         "range_source": "p99.9 375 µg/m³ (3-day peak, Oct), rounded up",
         "thresholds": {
-            "max":  (15, "WHO AQG 2021, 24-hour guideline; it is defined on a "
-                         "24-hour mean, which a 3-hourly peak exceeds more easily"),
-            "mean": (15, "WHO AQG 2021, 24-hour guideline"),
+            "max":  (15, N_("WHO AQG 2021, 24-hour guideline; it is defined on a "
+                         "24-hour mean, which a 3-hourly peak exceeds more easily")),
+            "mean": (15, N_("WHO AQG 2021, 24-hour guideline")),
         },
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 44453,
         # Native kg/m³ (~1e-8) is unreadable on a slider; x1e9 -> µg/m³, the
         # unit every air-quality guideline is expressed in.
         "transform": "kgm3_to_ugm3",
-        "note": "Surface PM2.5, directly comparable to the WHO guideline of "
-                "15 µg/m³ (24-hour mean). Two 5-day forecasts per day.",
+        "note": N_("Surface PM2.5, directly comparable to the WHO guideline of "
+                "15 µg/m³ (24-hour mean). Two 5-day forecasts per day."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_CAMS_NRT",
     },
     {
         "id": "ECMWF/CAMS/NRT", "name": "cams_pm10",
-        "label": "PM10 forecast (CAMS)", "topic": "Air Pollution",
+        "label": N_("PM10 forecast (CAMS)"), "topic": N_("Air Pollution"),
         "kind": "forecast", "band": "particulate_matter_d_less_than_10_um_surface",
         "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
-        "min": 0, "max": 3000, "units": "µg/m³",
+        "min": 0, "max": 3000, "units": N_("µg/m³"),
         "range_source": "p99.9 2,890 µg/m³ (3-day peak, Apr, dust), rounded up",
         "thresholds": {
-            "max":  (45, "WHO AQG 2021, 24-hour guideline; it is defined on a "
-                         "24-hour mean, which a 3-hourly peak exceeds more easily"),
-            "mean": (45, "WHO AQG 2021, 24-hour guideline"),
+            "max":  (45, N_("WHO AQG 2021, 24-hour guideline; it is defined on a "
+                         "24-hour mean, which a 3-hourly peak exceeds more easily")),
+            "mean": (45, N_("WHO AQG 2021, 24-hour guideline")),
         },
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 44453,
         "transform": "kgm3_to_ugm3",
-        "note": "Surface PM10, comparable to the WHO guideline of 45 µg/m³ "
+        "note": N_("Surface PM10, comparable to the WHO guideline of 45 µg/m³ "
                 "(24-hour mean). Includes coarse dust, so it spikes far above "
-                "PM2.5 during dust events.",
+                "PM2.5 during dust events."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_CAMS_NRT",
     },
     {
         "id": "ECMWF/CAMS/NRT", "name": "cams_dust_aod",
-        "label": "Dust forecast (CAMS)", "topic": "Sand and Dust Storm",
+        "label": N_("Dust forecast (CAMS)"), "topic": N_("Sand and Dust Storm"),
         "kind": "forecast", "band": "dust_aerosol_optical_depth_at_550nm_surface",
         "run": {"init": "model_initialization_datetime", "valid": "system:time_start", "init_ms": False},
         "reducers": ["max", "mean"], "max_span_days": 5, "default_span_days": 3,
         "lag_days": 0,
-        "min": 0, "max": 1.5, "units": "AOD",
+        "min": 0, "max": 1.5, "units": N_("AOD"),
         "range_source": "p99.9 1.4 (3-day peak, Apr), rounded up",
-        "thresholds": {"*": (0.5, "No standard; dashboard choice near the top 1% "
-                                  "of populated land (p99 0.5–0.8)")},
+        "thresholds": {"*": (0.5, N_("No standard; dashboard choice near the top 1% "
+                                  "of populated land (p99 0.5–0.8)"))},
         "palette": ["#faf0dc", "#e6d2b4", "#c8aa82", "#a0785a", "#261f28"],
         "scale": 44453,
-        "note": "Dust-specific aerosol optical depth — unlike the Sentinel-5P "
+        "note": N_("Dust-specific aerosol optical depth — unlike the Sentinel-5P "
                 "aerosol index it separates dust from smoke, and it forecasts "
-                "ahead rather than reporting the last overpass.",
+                "ahead rather than reporting the last overpass."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/ECMWF_CAMS_NRT",
     },
 
     # ── Air quality (Sentinel-5P NRTI — total column, superseded by CAMS) ─────
     {
         "id": "COPERNICUS/S5P/NRTI/L3_NO2", "name": "s5p_no2",
-        "label": "Nitrogen dioxide (Sentinel-5P)", "topic": "Air Pollution",
+        "label": N_("Nitrogen dioxide (Sentinel-5P)"), "topic": N_("Air Pollution"),
         "kind": "nrt", "band": "NO2_column_number_density",
         "reducers": ["mean", "max"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 1,
-        "threshold": 60, "min": 0, "max": 400, "units": "µmol/m²",
+        "threshold": 60, "min": 0, "max": 400, "units": N_("µmol/m²"),
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 1113,
         # Native mol/m² is ~5e-5 — unusable on a slider. x1e6 -> µmol/m².
         "transform": "mol_to_umol",
-        "note": "Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+        "note": N_("Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
                 "Tropospheric NO₂ column, a traffic and combustion marker. "
-                "Cloud-free retrievals only.",
+                "Cloud-free retrievals only."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_NO2",
     },
     {
         "id": "COPERNICUS/S5P/NRTI/L3_SO2", "name": "s5p_so2",
-        "label": "Sulphur dioxide (Sentinel-5P)", "topic": "Air Pollution",
+        "label": N_("Sulphur dioxide (Sentinel-5P)"), "topic": N_("Air Pollution"),
         "kind": "nrt", "band": "SO2_column_number_density",
         "reducers": ["mean", "max"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 1,
-        "threshold": 200, "min": -500, "max": 2000, "units": "µmol/m²",
+        "threshold": 200, "min": -500, "max": 2000, "units": N_("µmol/m²"),
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 1113,
         "transform": "mol_to_umol",
         # Retrieval noise makes low values genuinely negative (verified
         # -8.8e-4 mol/m² over Kenya), hence the negative slider minimum.
-        "note": "Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+        "note": N_("Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
                 "Volcanic and industrial SO₂. Low values can be negative — this "
-                "is retrieval noise, not absence of gas.",
+                "is retrieval noise, not absence of gas."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_SO2",
     },
     {
         "id": "COPERNICUS/S5P/NRTI/L3_CO", "name": "s5p_co",
-        "label": "Carbon monoxide (Sentinel-5P)", "topic": "Air Pollution",
+        "label": N_("Carbon monoxide (Sentinel-5P)"), "topic": N_("Air Pollution"),
         "kind": "nrt", "band": "CO_column_number_density",
         "reducers": ["mean", "max"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 1,
-        "threshold": 40, "min": 0, "max": 200, "units": "mmol/m²",
+        "threshold": 40, "min": 0, "max": 200, "units": N_("mmol/m²"),
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 1113,
         # ~0.03 mol/m² -> x1000 for mmol/m² (µmol would be unwieldy here).
         "transform": "mol_to_mmol",
-        "note": "Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
-                "CO column — a biomass-burning and combustion tracer.",
+        "note": N_("Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+                "CO column — a biomass-burning and combustion tracer."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_CO",
     },
     {
         "id": "COPERNICUS/S5P/NRTI/L3_O3", "name": "s5p_o3",
-        "label": "Ozone column (Sentinel-5P)", "topic": "Air Pollution",
+        "label": N_("Ozone column (Sentinel-5P)"), "topic": N_("Air Pollution"),
         "kind": "nrt", "band": "O3_column_number_density",
         "reducers": ["mean", "max"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 1,
-        "threshold": 130, "min": 80, "max": 200, "units": "mmol/m²",
+        "threshold": 130, "min": 80, "max": 200, "units": N_("mmol/m²"),
         "palette": ["#d0dde5", "#99a1b4", "#7c6e87", "#5a4b5e", "#261f27"],
         "scale": 1113,
         "transform": "mol_to_mmol",
-        "note": "Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+        "note": N_("Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
                 "Total ozone column — dominated by stratospheric ozone, so it "
-                "is not a surface air-quality measure on its own.",
+                "is not a surface air-quality measure on its own."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_O3",
     },
     {
         "id": "COPERNICUS/S5P/NRTI/L3_AER_AI", "name": "s5p_aer_ai",
-        "label": "Absorbing aerosol index (Sentinel-5P)",
-        "topic": "Sand and Dust Storm",
+        "label": N_("Absorbing aerosol index (Sentinel-5P)"),
+        "topic": N_("Sand and Dust Storm"),
         "kind": "nrt", "band": "absorbing_aerosol_index",
         "reducers": ["max", "mean"], "max_span_days": 30, "default_span_days": 14,
         "lag_days": 1,
-        "min": -1, "max": 10, "units": "index",
+        "min": -1, "max": 10, "units": N_("index"),
         "range_source": "p0.1 −1.0 to p99.9 9.2 (Jul, smoke), rounded outward",
-        "thresholds": {"*": (1.0, "Convention in UV aerosol-index studies: above ~1 "
-                                  "indicates absorbing aerosol; not health-based")},
+        "thresholds": {"*": (1.0, N_("Convention in UV aerosol-index studies: above ~1 "
+                                  "indicates absorbing aerosol; not health-based"))},
         "palette": ["#faf0dc", "#e6d2b4", "#c8aa82", "#a0785a", "#261f28"],
         "scale": 1113,
-        "note": "Positive values indicate UV-absorbing aerosols — desert dust "
-                "and smoke. Values above ~1 suggest an active dust episode.",
+        "note": N_("Positive values indicate UV-absorbing aerosols — desert dust "
+                "and smoke. Values above ~1 suggest an active dust episode."),
         "source_url": "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_NRTI_L3_AER_AI",
     },
 ]
@@ -424,104 +425,104 @@ FORECAST_DATASETS = [
 # =============================================================================
 
 _META = {
-    "gfs_precip": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
-        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
-        description="Total accumulated precipitation predicted by the NOAA Global Forecast "
+    "gfs_precip": dict(active=True, provider="NOAA NCEP", temporal=N_("4 runs a day, to 16 days ahead"),
+        resolution=N_("0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly"),
+        description=N_("Total accumulated precipitation predicted by the NOAA Global Forecast "
                     "System, a physics-based numerical weather model run four times a day out "
-                    "to 16 days. Values are totalled per UTC day."),
+                    "to 16 days. Values are totalled per UTC day.")),
     "imerg_precip": dict(active=True, provider="NASA / JAXA", temporal="",
-        resolution="0.1° (~11 km) · 30-minute",
-        description="Satellite-estimated rainfall that has already fallen, from the GPM "
+        resolution=N_("0.1° (~11 km) · 30-minute"),
+        description=N_("Satellite-estimated rainfall that has already fallen, from the GPM "
                     "constellation. Use it to see what actually happened; it is not a forecast "
-                    "and lags roughly two days."),
-    "gfs_wind": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
-        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
-        description="Sustained 10 m wind speed predicted by NOAA GFS, derived from the U and V "
+                    "and lags roughly two days.")),
+    "gfs_wind": dict(active=True, provider="NOAA NCEP", temporal=N_("4 runs a day, to 16 days ahead"),
+        resolution=N_("0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly"),
+        description=N_("Sustained 10 m wind speed predicted by NOAA GFS, derived from the U and V "
                     "wind components. The 17.5 m/s default matches the WMO tropical-storm "
-                    "threshold and the static hazard catalog."),
-    "gfs_temp": dict(active=True, provider="NOAA NCEP", temporal="4 runs a day, to 16 days ahead",
-        resolution="0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly",
-        description="Predicted air temperature 2 m above ground from NOAA GFS — the standard "
+                    "threshold and the static hazard catalog.")),
+    "gfs_temp": dict(active=True, provider="NOAA NCEP", temporal=N_("4 runs a day, to 16 days ahead"),
+        resolution=N_("0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly"),
+        description=N_("Predicted air temperature 2 m above ground from NOAA GFS — the standard "
                     "height for weather observations, so this is comparable to a thermometer "
-                    "reading rather than a surface temperature."),
+                    "reading rather than a surface temperature.")),
     "modis_lst": dict(active=True, provider="NASA LP DAAC", temporal="",
-        resolution="1 km · daily (one daytime overpass)",
-        description="Daytime temperature of the ground surface measured by MODIS. This runs "
-                    "considerably hotter than air temperature and is observed, not forecast."),
+        resolution=N_("1 km · daily (one daytime overpass)"),
+        description=N_("Daytime temperature of the ground surface measured by MODIS. This runs "
+                    "considerably hotter than air temperature and is observed, not forecast.")),
     "era5_air_temp": dict(active=True, provider="ECMWF / Copernicus", temporal="",
-        resolution="0.1° (~11 km; native ~9 km) · hourly",
-        description="Observed air temperature 2 m above ground, from the ERA5-Land reanalysis. "
+        resolution=N_("0.1° (~11 km; native ~9 km) · hourly"),
+        description=N_("Observed air temperature 2 m above ground, from the ERA5-Land reanalysis. "
                     "Health heat thresholds are defined on 2 m air temperature, so this is the "
                     "comparable measure — MODIS land-surface temperature runs considerably "
                     "hotter. Reanalysis fills cloudy days that satellite retrievals miss, at "
-                    "the cost of roughly six days' latency."),
+                    "the cost of roughly six days' latency.")),
     "firms_brightness": dict(active=True, provider="NASA FIRMS", temporal="",
-        resolution="1 km · daily",
-        description="Brightness temperature of pixels where a fire has already been detected. "
+        resolution=N_("1 km · daily"),
+        description=N_("Brightness temperature of pixels where a fire has already been detected. "
                     "FIRMS pixels are algorithm-confirmed detections, so this grades how intense "
-                    "confirmed fires are — it does not detect whether fire is present."),
+                    "confirmed fires are — it does not detect whether fire is present.")),
     "firms_fire_days": dict(active=True, provider="NASA FIRMS", temporal="",
-        resolution="1 km · daily",
-        description="Count of days within the window on which a fire was detected at each pixel. "
+        resolution=N_("1 km · daily"),
+        description=N_("Count of days within the window on which a fire was detected at each pixel. "
                     "Distinguishes a single flare-up from a sustained burn. Cloud cover and "
-                    "overpass timing cause missed days, so this under-counts."),
+                    "overpass timing cause missed days, so this under-counts.")),
     # CAMS — surface concentrations, and forward-looking.
     "cams_pm25": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="2 runs a day, to 5 days ahead",
-        resolution="0.4° (~44 km) · 3-hourly",
-        description="Fine particulate matter at the surface, forecast up to 5 days ahead by the "
+        temporal=N_("2 runs a day, to 5 days ahead"),
+        resolution=N_("0.4° (~44 km) · 3-hourly"),
+        description=N_("Fine particulate matter at the surface, forecast up to 5 days ahead by the "
                     "Copernicus Atmosphere Monitoring Service. PM2.5 penetrates deep into the "
                     "lungs and is the pollutant most strongly linked to child respiratory harm. "
                     "Unlike satellite column measurements this is a ground-level concentration, "
-                    "so it can be read directly against health guidelines."),
+                    "so it can be read directly against health guidelines.")),
     "cams_pm10": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="2 runs a day, to 5 days ahead",
-        resolution="0.4° (~44 km) · 3-hourly",
-        description="Coarse particulate matter at the surface, forecast up to 5 days ahead. "
+        temporal=N_("2 runs a day, to 5 days ahead"),
+        resolution=N_("0.4° (~44 km) · 3-hourly"),
+        description=N_("Coarse particulate matter at the surface, forecast up to 5 days ahead. "
                     "PM10 includes wind-blown dust and so rises sharply during dust events, "
-                    "often reaching many times the PM2.5 level."),
+                    "often reaching many times the PM2.5 level.")),
     "cams_dust_aod": dict(active=True, provider="ECMWF / Copernicus (CAMS)",
-        temporal="2 runs a day, to 5 days ahead",
-        resolution="0.4° (~44 km) · 3-hourly",
-        description="Forecast optical thickness of airborne desert dust. Because CAMS models "
+        temporal=N_("2 runs a day, to 5 days ahead"),
+        resolution=N_("0.4° (~44 km) · 3-hourly"),
+        description=N_("Forecast optical thickness of airborne desert dust. Because CAMS models "
                     "dust as its own species, this isolates dust from smoke and other aerosols — "
-                    "and it looks days ahead rather than reporting a past satellite overpass."),
+                    "and it looks days ahead rather than reporting a past satellite overpass.")),
 
     # Sentinel-5P — retained but inactive; CAMS supersedes them (see notes).
     "s5p_no2": dict(active=False, provider="ESA / Copernicus", temporal="",
-        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
-        description="Nitrogen dioxide measured as a TOTAL COLUMN through the atmosphere — a "
+        resolution=N_("~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"),
+        description=N_("Nitrogen dioxide measured as a TOTAL COLUMN through the atmosphere — a "
                     "traffic and combustion marker. This is not a surface concentration and is "
-                    "not directly comparable to WHO air quality guidelines."),
+                    "not directly comparable to WHO air quality guidelines.")),
     "s5p_so2": dict(active=False, provider="ESA / Copernicus", temporal="",
-        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
-        description="Sulphur dioxide total column, strongest near volcanic plumes and heavy "
+        resolution=N_("~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"),
+        description=N_("Sulphur dioxide total column, strongest near volcanic plumes and heavy "
                     "industry. Low values are genuinely negative because of retrieval noise. "
-                    "Not a surface concentration."),
+                    "Not a surface concentration.")),
     "s5p_co": dict(active=False, provider="ESA / Copernicus", temporal="",
-        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
-        description="Carbon monoxide total column, a good biomass-burning tracer. Plumes travel "
+        resolution=N_("~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"),
+        description=N_("Carbon monoxide total column, a good biomass-burning tracer. Plumes travel "
                     "far, so a high value need not indicate a local source. Not a surface "
-                    "concentration."),
+                    "concentration.")),
     "s5p_o3": dict(active=False, provider="ESA / Copernicus", temporal="",
-        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
-        description="TOTAL ozone column, which is roughly 90% stratospheric. This is not a "
-                    "ground-level air quality measure and should not be read as ozone exposure."),
+        resolution=N_("~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"),
+        description=N_("TOTAL ozone column, which is roughly 90% stratospheric. This is not a "
+                    "ground-level air quality measure and should not be read as ozone exposure.")),
     "s5p_aer_ai": dict(active=True, provider="ESA / Copernicus", temporal="",
-        resolution="~5.5 × 3.5 km (gridded at 0.01°) · daily overpass",
-        description="Index of UV-absorbing aerosols — desert dust and smoke. Values above about "
+        resolution=N_("~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"),
+        description=N_("Index of UV-absorbing aerosols — desert dust and smoke. Values above about "
                     "1 suggest an active dust episode. It does not separate dust from smoke, and "
-                    "measures the column rather than ground-level concentration."),
+                    "measures the column rather than ground-level concentration.")),
 }
 
 # User-facing word for each `kind`. `kind` stays the functional field (it drives
 # whether the date picker allows future dates); this is presentation only, so
 # the two can never be conflated.
-KIND_LABELS = {"forecast": "Forecast", "nrt": "Observation"}
+KIND_LABELS = {"forecast": N_("Forecast"), "nrt": N_("Observation")}
 
 KIND_BLURBS = {
-    "forecast": "Predicted conditions — looks ahead",
-    "nrt":      "Recently observed — not a forecast",
+    "forecast": N_("Predicted conditions — looks ahead"),
+    "nrt":      N_("Recently observed — not a forecast"),
 }
 
 for _d in FORECAST_DATASETS:

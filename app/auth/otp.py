@@ -1,3 +1,4 @@
+from i18n.markers import N_
 import os, secrets, smtplib, sqlite3, time
 from email.mime.text import MIMEText
 
@@ -31,7 +32,7 @@ def _smtp_creds():
 def request_otp(email):
     email = email.strip().lower()
     if not email.endswith(f"@{ALLOWED_DOMAIN}"):
-        return False, "Only @unicef.org addresses are allowed."
+        return False, N_("Only @unicef.org addresses are allowed.")
     code       = str(secrets.randbelow(900000) + 100000)
     expires_at = time.time() + OTP_EXPIRY_SECS
     with _get_db() as conn:

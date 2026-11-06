@@ -43,6 +43,7 @@ hazard_database_app/
 │   │   ├── elnino.py       #   El Niño outlook layers and exposure
 │   │   └── ai.py           #   Google Gemini integration
 │   ├── auth/               # Email OTP logic (otp.py) and the Flask login routes (routes.py)
+│   ├── i18n/               # Translations: tr()/ntr() API, language registry, .po catalogs, checker
 │   ├── ui/                 # Shared UI: navigation registry, components, map, legend,
 │   │                       #   threshold editors, info popover, xlsx builder, page layout
 │   ├── sections/           # One module per section: layout + its callbacks
@@ -152,6 +153,35 @@ Access is restricted to `@unicef.org` email addresses via a one-time passcode (O
 2. A 6-digit code is sent via SMTP
 3. User enters the code to access the app
 4. Session persists for the duration configured in `auth/otp.py`
+
+---
+
+## Translations
+
+The UI is available in the six official UN languages (EN, FR, ES, ZH, RU, AR), chosen from the language button beside the panel title. Everything translation-related lives in `app/i18n/`:
+
+| File | Role |
+|---|---|
+| `languages.py` | Language registry: code, name, right-to-left flag, `draft`/`reviewed` status |
+| `__init__.py` | `tr()`, `ntr()` (plurals), `trc()` (text with components), `fmt_int` / `fmt_pct` / `fmt_date` |
+| `markers.py` | `N_()` — marks display text held as data (config, registries) for extraction |
+| `locales/<code>/LC_MESSAGES/messages.po` | The catalogs: plain text, editable in any editor or Poedit |
+| `check.py` | Extracts every marked string and reports what each catalog is missing |
+| `GLOSSARY.md` | Fixed terminology and words that are never translated |
+
+The visitor's language is a cookie; no callback takes a language argument. Catalogs are read from the `.po` files at startup, so there is no compile step.
+
+**Adding or changing UI text:** wrap it in `tr("...")` where it is drawn (`N_("...")` where it is defined as data), use `{name}` placeholders instead of joining fragments, then run:
+
+```bash
+cd app && python -m i18n.check
+```
+
+This adds new keys to every catalog (empty — shown in English until translated), marks keys whose English changed as fuzzy, and exits non-zero on missing entries or placeholder mismatches.
+
+**Review:** machine-assisted entries carry the translator comment `Draft (machine-assisted) - needs native review`; delete it once a native speaker has checked the entry. When a language is fully reviewed, set its `status` to `"reviewed"` in `languages.py` to drop the "draft" tag from the menu.
+
+**Adding a language:** one entry in `languages.py`, an empty `locales/<code>/LC_MESSAGES/messages.po`, then `python -m i18n.check`.
 
 ---
 

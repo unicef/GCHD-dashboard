@@ -5,6 +5,7 @@ from config.elnino import EN_INFO, EXPLORE_MAP
 from config.forecast import FORECAST_MAP
 
 from dash_app import app
+from i18n import tr
 from ui.components import _hazard_info_body, _layer_label
 from sections.elnino import EN_INFO_TITLES
 
@@ -79,7 +80,7 @@ def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name,
         if scope == "en":
             info = EN_INFO.get(name)
             if info:
-                return ({"display": "flex"}, EN_INFO_TITLES.get(name, name),
+                return ({"display": "flex"}, tr(EN_INFO_TITLES.get(name, name)),
                         _hazard_info_body(info), f"en:{name}")
             return no_update, no_update, no_update, no_update
         if scope == "enl":
@@ -88,12 +89,12 @@ def toggle_hazard_info(info_clicks, _prov_clicks, _close, layer_name,
                 body = {"description": cfg.get("desc", "")}
                 if cfg.get("units"):
                     body["units"] = cfg["units"]
-                return ({"display": "flex"}, cfg.get("label", name),
+                return ({"display": "flex"}, tr(cfg.get("label", name)),
                         _hazard_info_body(body), f"enl:{name}")
             return no_update, no_update, no_update, no_update
         if name.startswith(FC_INFO_PREFIX):
             fc_name = name[len(FC_INFO_PREFIX):]
-            title   = FORECAST_MAP.get(fc_name, {}).get("label", fc_name)
+            title   = tr(FORECAST_MAP.get(fc_name, {}).get("label", fc_name))
         else:
             title = _layer_label(name)
         return ({"display": "flex"}, title,

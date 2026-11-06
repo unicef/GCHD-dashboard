@@ -23,6 +23,7 @@ from config.forecast import (
     FORECAST_DATASETS, FORECAST_MAP, CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS,
 )
 from core.gee import build_core_images, _admin_region
+from i18n import fmt_day, tr
 
 # Same TTL rationale as core.gee: GEE map tokens expire, so tiles are refreshed
 # well before then. Reduction results are cached more briefly because live
@@ -336,13 +337,13 @@ def clamp_window(name, start, end):
     cap = int(cfg.get("max_span_days", 30))
     if (e - s).days > cap:
         e = s + dt.timedelta(days=cap)
-        msgs.append(f"Window capped at {cap} days for this dataset.")
+        msgs.append(tr("Window capped at {n} days for this dataset.", n=cap))
     latest = latest_complete_day(name)
     if latest and e > latest:
         e = latest
         s = min(s, e)
-        msgs.append(f"Data is complete through {latest:%d %b %Y} (UTC); "
-                    "the window now ends there.")
+        msgs.append(tr("Data is complete through {day} (UTC); the window now "
+                       "ends there.", day=fmt_day(latest)))
     return s.isoformat(), e.isoformat(), " ".join(msgs) or None
 
 
@@ -408,10 +409,10 @@ def _resolve_cfg(name, custom_id=None, custom_band=None):
     if name and name != CUSTOM_NAME:
         cfg = FORECAST_MAP.get(name)
         if not cfg:
-            raise ForecastError(f"Unknown dataset '{name}'.")
+            raise ForecastError(tr("Unknown dataset '{name}'.", name=name))
         return cfg
     if not custom_id:
-        raise ForecastError("No dataset selected.")
+        raise ForecastError(tr("No dataset selected."))
     return {
         "id": custom_id, "name": CUSTOM_NAME, "label": custom_id.split("/")[-1],
         "topic": None, "kind": "nrt", "band": custom_band,
@@ -471,9 +472,10 @@ def build_forecast_image(name, start, end, reducer,
         # One run, selected by VALID time (see _select_run).
         run = _select_run(cfg["name"], s.isoformat())
         if run is None:
-            raise ForecastError(
-                f"No {cfg['label']} run found covering {s}. Runs publish a "
-                f"few hours after their start time — try a later start date.")
+            raise ForecastError(tr(
+                "No {label} run found covering {date}. Runs publish a few hours "
+                "after their start time — try a later start date.",
+                label=tr(cfg["label"]), date=s))
         coll = ee.ImageCollection(cfg["id"])
         if r["valid"] == "system:time_start":
             coll = (coll.filterDate(s.isoformat(), e1.isoformat())
@@ -500,11 +502,12 @@ def build_forecast_image(name, start, end, reducer,
     n = coll.size().getInfo()
     if not n:
         raise ForecastError(
-            f"No images for {cfg['label']} between {s} and {e}. "
-            + ("Forecast runs publish a few times a day — try a wider window."
+            tr("No images for {label} between {start} and {end}.",
+               label=tr(cfg["label"]), start=s, end=e) + " "
+            + (tr("Forecast runs publish a few times a day — try a wider window.")
                if cfg.get("kind") == "forecast" else
-               f"This dataset lags about {cfg.get('lag_days', 0)} day(s); "
-               "try an earlier end date."))
+               tr("This dataset lags about {n} day(s); try an earlier end date.",
+                  n=cfg.get("lag_days", 0))))
 
     # Select the configured band first so a transform sees a single-band image;
     # wind_speed is the exception — it derives speed from two bands and is
@@ -520,7 +523,7 @@ def build_forecast_image(name, start, end, reducer,
     else:
         fn = _REDUCER_FNS.get(reducer)
         if fn is None:
-            raise ForecastError(f"Unsupported reducer '{reducer}'.")
+            raise ForecastError(tr("Unsupported reducer '{name}'.", name=reducer))
         img = fn(coll)
 
     post = _POST_TRANSFORMS.get(cfg.get("transform"))
@@ -726,13 +729,13 @@ def probe_custom_asset(asset_id):
     """
     asset_id = (asset_id or "").strip()
     if not asset_id:
-        raise ForecastError("Enter a GEE asset id.")
+        raise ForecastError(tr("Enter a GEE asset id."))
     try:
         meta = ee.data.getAsset(asset_id)
     except Exception as e:
-        raise ForecastError(
-            f"Cannot read '{asset_id}'. Check the id and that the asset is "
-            f"shared publicly. ({str(e)[:120]})")
+        raise ForecastError(tr(
+            "Cannot read '{asset}'. Check the id and that the asset is shared "
+            "publicly. ({error})", asset=asset_id, error=str(e)[:120]))
 
     a_type = (meta.get("type") or "").upper()
     try:
@@ -753,8 +756,10 @@ def probe_custom_asset(asset_id):
                     "bands": ee.Image(asset_id).bandNames().getInfo(),
                     "n_images": 1, "start": None, "end": None}
     except Exception as e:
-        raise ForecastError(f"Could not inspect '{asset_id}': {str(e)[:140]}")
+        raise ForecastError(tr("Could not inspect '{asset}': {error}",
+                               asset=asset_id, error=str(e)[:140]))
 
-    raise ForecastError(
-        f"'{asset_id}' is a {a_type or 'unknown'} asset. This tab needs an "
-        "Image or ImageCollection (use the Analysis tab for boundary tables).")
+    raise ForecastError(tr(
+        "'{asset}' is a {type} asset. This tab needs an Image or "
+        "ImageCollection (use the Analysis tab for boundary tables).",
+        asset=asset_id, type=a_type or "unknown"))

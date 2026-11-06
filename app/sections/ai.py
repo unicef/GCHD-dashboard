@@ -10,38 +10,41 @@ from core.gee import (
 )
 
 from dash_app import app
+from i18n import fmt_pct, js_strings, N_, tr, trc
+
+js_strings(N_("Thinking ···"))
 from bootstrap import GEE_ATTR
-from ui.components import _fmt
+from ui.components import _fmt, _layer_label
 
 
 def tab_ai():
     return html.Div(id="tab-ai", style={"display": "none"}, children=[
         html.Div(className="exposure-method-note", style={"margin": "12px 10px 0"}, children=[
-            html.Div("Under Development", className="hi-label", style={"marginBottom": "6px"}),
-            html.P([
+            html.Div(tr("Under Development"), className="hi-label", style={"marginBottom": "6px"}),
+            html.P(trc(
                 "The AI application on GCHD is currently under development. "
-                "To test the initial version, please contact ",
-                html.A("dokim@unicef.org", href="mailto:dokim@unicef.org", className="hi-link"),
-                ".",
-            ], className="exposure-method-p"),
+                "To test the initial version, please contact {email}.",
+                email=html.A("dokim@unicef.org", href="mailto:dokim@unicef.org",
+                             className="hi-link"),
+            ), className="exposure-method-p"),
         ]),
         dcc.Store(id="store-ai-auth",    data=False),
         dcc.Store(id="store-ai-pending", data=None),
         # ── Auth gate ──
         html.Div(id="ai-auth-gate", children=[
             html.Div(className="ai-auth-card", children=[
-                html.Div("AI Assistant Access",
+                html.Div(tr("AI Assistant Access"),
                          style={"fontSize":"0.72rem","fontWeight":"700","color":"var(--hi)",
                                 "textTransform":"uppercase","letterSpacing":"0.08em",
                                 "marginBottom":"16px"}),
-                dcc.Input(id="ai-auth-id",  placeholder="User ID",
+                dcc.Input(id="ai-auth-id",  placeholder=tr("User ID"),
                           type="text",     className="ai-auth-input", n_submit=0),
-                dcc.Input(id="ai-auth-pwd", placeholder="Password",
+                dcc.Input(id="ai-auth-pwd", placeholder=tr("Password"),
                           type="password", className="ai-auth-input", n_submit=0),
                 html.Div(id="ai-auth-error",
                          style={"fontSize":"0.7rem","color":"var(--red)",
                                 "marginBottom":"8px","minHeight":"16px"}),
-                html.Button("Sign In", id="ai-auth-btn", className="ps-btn", n_clicks=0),
+                html.Button(tr("Sign In"), id="ai-auth-btn", className="ps-btn", n_clicks=0),
             ]),
         ]),
         # ── Main AI interface (hidden until authenticated) ──
@@ -49,8 +52,8 @@ def tab_ai():
             html.Div(className="ps", children=[
                 dcc.Textarea(
                     id="ai-query-input",
-                    placeholder="e.g. Show river flood layer in Bangladesh, or "
-                                "How many children are exposed to heatwaves in India?",
+                    placeholder=tr("e.g. Show river flood layer in Bangladesh, or "
+                                "How many children are exposed to heatwaves in India?"),
                     maxLength=400,
                     style={"width":"100%","height":"90px","resize":"none",
                            "fontSize":"0.78rem","padding":"8px 10px",
@@ -61,7 +64,7 @@ def tab_ai():
                 html.Div(id="ai-char-count",
                          style={"fontSize":"0.6rem","color":"var(--lo)",
                                 "textAlign":"right","marginTop":"3px"}),
-                html.Button("Ask", id="ai-submit-btn", className="ps-btn",
+                html.Button(tr("Ask"), id="ai-submit-btn", className="ps-btn",
                             n_clicks=0, style={"marginTop":"8px"}),
             ]),
             html.Div(id="ai-confirm-line",
@@ -97,18 +100,17 @@ def _country_viewport(country_name):
 def _format_exposure_summary(stats, country_name):
     total = stats.get("total_population", 0)
     lines = [
-        html.Strong(f"Child exposure — {country_name}",
+        html.Strong(tr("Child exposure — {country}", country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)",
                         "marginTop": "6px", "marginBottom": "6px"}),
     ]
     for topic in HAZARD_TOPICS:
         exposed = stats.get(topic, 0)
         if exposed and total:
-            pct = exposed / total * 100
             lines.append(html.Div(
-                f"• {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+                f"• {tr(topic)}: {_fmt(exposed)} ({fmt_pct(exposed / total * 100)})",
                 style={"fontSize": "0.78rem", "color": "var(--mid)"},
             ))
     return html.Div(className="ps", children=lines)
@@ -119,11 +121,13 @@ def _format_single_hazard_exposure(stats, topic, country_name):
     exposed = stats.get(topic, 0)
     pct     = (exposed / total * 100) if total else 0
     lines   = [
-        html.Strong(f"{topic} exposure — {country_name}",
+        html.Strong(tr("{topic} exposure — {country}", topic=tr(topic),
+                       country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)", "marginTop": "6px"}),
-        html.Div(f"Exposed to {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+        html.Div(tr("Exposed to {topic}: {n}", topic=tr(topic), n=_fmt(exposed))
+                 + f" ({fmt_pct(pct)})",
                  style={"fontSize": "0.78rem", "color": "var(--cyan)",
                         "marginTop": "4px", "fontWeight": "600"}),
     ]
@@ -132,8 +136,10 @@ def _format_single_hazard_exposure(stats, topic, country_name):
             sub = stats.get(h_name, 0)
             if sub and total:
                 lines.append(html.Div(
-                    f"  ↳ {h_name}: {_fmt(sub)} ({sub/total*100:.1f}%)",
-                    style={"fontSize": "0.74rem", "color": "var(--lo)", "paddingLeft": "12px"},
+                    f"  ↳ {_layer_label(h_name)}: {_fmt(sub)} "
+                    f"({fmt_pct(sub / total * 100)})",
+                    style={"fontSize": "0.74rem", "color": "var(--lo)",
+                           "paddingInlineStart": "12px"},
                 ))
     return html.Div(className="ps", children=lines)
 
@@ -141,9 +147,9 @@ def _format_single_hazard_exposure(stats, topic, country_name):
 def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
     total = stats.get("total_population", 0)
     lines = [
-        html.Strong(f"Multi-hazard exposure — {country_name}",
+        html.Strong(tr("Multi-hazard exposure — {country}", country=country_name),
                     style={"fontSize": "0.82rem", "color": "var(--hi)"}),
-        html.Div(f"Total children under 18: {_fmt(total)}",
+        html.Div(tr("Total children under 18: {n}", n=_fmt(total)),
                  style={"fontSize": "0.78rem", "color": "var(--mid)",
                         "marginTop": "6px", "marginBottom": "4px"}),
     ]
@@ -151,13 +157,14 @@ def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
         exposed = stats.get(topic, 0)
         pct = (exposed / total * 100) if total else 0
         lines.append(html.Div(
-            f"• {topic}: {_fmt(exposed)} ({pct:.1f}%)",
+            f"• {tr(topic)}: {_fmt(exposed)} ({fmt_pct(pct)})",
             style={"fontSize": "0.78rem", "color": "var(--mid)"},
         ))
     if overlap is not None and total:
-        ov_pct = overlap / total * 100
         lines.append(html.Div(
-            f"Exposed to ALL ({' & '.join(topics)}): {_fmt(overlap)} ({ov_pct:.1f}%)",
+            tr("Exposed to ALL ({topics}): {n}",
+               topics=" & ".join(tr(t) for t in topics), n=_fmt(overlap))
+            + f" ({fmt_pct(overlap / total * 100)})",
             style={"fontSize": "0.78rem", "color": "var(--cyan)",
                    "marginTop": "6px", "fontWeight": "600"},
         ))
@@ -165,42 +172,45 @@ def _format_multi_hazard_exposure(stats, topics, overlap, country_name):
 
 
 def _ai_processing():
-    return html.Div("Computing ···", className="ai-processing")
+    return html.Div(tr("Computing ···"), className="ai-processing")
 
 
 def _confirm_sentence(action, params):
+    # Whole-sentence templates (not concatenated fragments) so each language
+    # can order the bold parts its own way.
     B = lambda t: html.Strong(str(t), style={"color": "var(--hi)"})
+    country = B(params.get("country_name", ""))
+    adm     = B(tr(params.get("admin_level") or "adm0 (Country)"))
     if action == "show_hazard_layer":
-        parts = ["Showing hazard layer ", B(params.get("hazard_name", ""))]
-        if params.get("country_name"):
-            parts += [" in ", B(params["country_name"])]
+        layer = B(_layer_label(params.get("hazard_name", "")))
+        parts = (trc("Showing hazard layer {layer} in {country}",
+                     layer=layer, country=country)
+                 if params.get("country_name") else
+                 trc("Showing hazard layer {layer}", layer=layer))
     elif action == "show_topic_layer":
-        parts = ["Showing ", B(params.get("topic_name", "")), " exposure layer"]
-        if params.get("country_name"):
-            parts += [" in ", B(params["country_name"])]
+        topic = B(tr(params.get("topic_name", "")))
+        parts = (trc("Showing {topic} exposure layer in {country}",
+                     topic=topic, country=country)
+                 if params.get("country_name") else
+                 trc("Showing {topic} exposure layer", topic=topic))
     elif action == "exposure_summary":
-        adm = params.get("admin_level") or "adm0 (Country)"
-        parts = ["Full hazard exposure summary for ", B(params.get("country_name", "")),
-                 " at ", B(adm), " level"]
+        parts = trc("Full hazard exposure summary for {country} at {level} level",
+                    country=country, level=adm)
     elif action == "hazard_exposure":
-        adm = params.get("admin_level") or "adm0 (Country)"
-        parts = ["Child exposure to ", B(params.get("topic_name", "")),
-                 " in ", B(params.get("country_name", "")),
-                 " at ", B(adm), " level"]
+        parts = trc("Child exposure to {topic} in {country} at {level} level",
+                    topic=B(tr(params.get("topic_name", ""))),
+                    country=country, level=adm)
     elif action == "multi_hazard_exposure":
-        adm    = params.get("admin_level") or "adm0 (Country)"
-        topics = params.get("topic_names", [])
         topic_parts = []
-        for i, t in enumerate(topics):
+        for i, t in enumerate(params.get("topic_names", [])):
             if i > 0:
                 topic_parts.append(" & ")
-            topic_parts.append(B(t))
-        parts = ["Children exposed to "] + topic_parts + [
-            " simultaneously in ", B(params.get("country_name", "")),
-            " at ", B(adm), " level",
-        ]
+            topic_parts.append(B(tr(t)))
+        parts = trc("Children exposed to {topics} simultaneously in {country} "
+                    "at {level} level",
+                    topics=html.Span(topic_parts), country=country, level=adm)
     elif action == "zoom_to_country":
-        parts = ["Zooming map to ", B(params.get("country_name", ""))]
+        parts = trc("Zooming map to {country}", country=country)
     else:
         return None
     return html.Div(parts, style={"fontSize": "0.76rem", "color": "var(--lo)",
@@ -214,10 +224,14 @@ app.clientside_callback(
 )
 
 app.clientside_callback(
-    "function(n){ return n ? ['Thinking ···', null] : [window.dash_clientside.no_update, window.dash_clientside.no_update]; }",
+    """function(n, i18n){
+        return n ? [window.gchdT(i18n, 'Thinking ···'), null]
+                 : [window.dash_clientside.no_update, window.dash_clientside.no_update];
+    }""",
     Output("ai-confirm-line",   "children", allow_duplicate=True),
     Output("ai-response-panel", "children", allow_duplicate=True),
     Input("ai-submit-btn",      "n_clicks"),
+    State("store-i18n",         "data"),
     prevent_initial_call=True,
 )
 
@@ -237,7 +251,7 @@ def ai_authenticate(_n, user_id, password):
     _AI_PWD = "unicef2026"
     if (user_id or "").strip() == _AI_ID and (password or "") == _AI_PWD:
         return True, {"display": "none"}, {"display": "block"}, ""
-    return False, no_update, no_update, "Incorrect credentials."
+    return False, no_update, no_update, tr("Incorrect credentials.")
 
 
 @app.callback(
@@ -256,9 +270,10 @@ def ai_classify(_n, query):
     try:
         result = ask_gemini(query.strip())
     except _json_mod.JSONDecodeError:
-        return None, "", _ai_error("AI returned an unexpected response. Please try rephrasing.")
+        return None, "", _ai_error(tr("AI returned an unexpected response. "
+                                      "Please try rephrasing."))
     except Exception as e:
-        return None, "", _ai_error(f"AI error: {e}")
+        return None, "", _ai_error(tr("AI error: {e}", e=e))
 
     action  = result.get("action")
     params  = result.get("params", {})
@@ -294,14 +309,14 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception:
-            return _ai_error(f"Country not found: {country}"), no_update, no_update
+            return _ai_error(tr("Country not found: {country}", country=country)), no_update, no_update
         return _ai_msg(message), no_update, viewport
 
     if action == "show_hazard_layer":
         hazard   = params.get("hazard_name", "")
         url, _   = get_hazard_tile_url(hazard)
         if not url:
-            return _ai_error(f"Unknown hazard: {hazard}"), no_update, no_update
+            return _ai_error(tr("Unknown hazard: {hazard}", hazard=hazard)), no_update, no_update
         layer    = [dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75)]
         viewport = _country_viewport(params.get("country_name"))
         return _ai_msg(message), layer, viewport
@@ -326,7 +341,7 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, no_update, viewport
 
     if action == "hazard_exposure":
@@ -336,7 +351,7 @@ def ai_execute(pending):
         if admin_level not in ADMIN_DATA:
             admin_level = "adm0 (Country)"
         if topic not in HAZARD_TOPICS:
-            return _ai_error(f"Unknown hazard topic: {topic}"), no_update, no_update
+            return _ai_error(tr("Unknown hazard topic: {topic}", topic=topic)), no_update, no_update
         try:
             ucode    = get_country_ucode(country_name)
             stats    = compute_exposure(ucode, admin_level)
@@ -347,7 +362,7 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, layer, viewport
 
     if action == "multi_hazard_exposure":
@@ -358,9 +373,9 @@ def ai_execute(pending):
             admin_level = "adm0 (Country)"
         invalid = [t for t in topics if t not in HAZARD_TOPICS]
         if invalid:
-            return _ai_error(f"Unknown topics: {', '.join(invalid)}"), no_update, no_update
+            return _ai_error(tr("Unknown topics: {topics}", topics=", ".join(invalid))), no_update, no_update
         if not topics:
-            return _ai_error("No topics specified."), no_update, no_update
+            return _ai_error(tr("No topics specified.")), no_update, no_update
         try:
             ucode    = get_country_ucode(country_name)
             stats    = compute_exposure(ucode, admin_level)
@@ -372,7 +387,7 @@ def ai_execute(pending):
             bounds   = get_country_bounds(ucode)
             viewport = {"bounds": bounds, "transition": "fitBounds"}
         except Exception as e:
-            return _ai_error(f"Could not compute exposure: {e}"), no_update, no_update
+            return _ai_error(tr("Could not compute exposure: {e}", e=e)), no_update, no_update
         return summary, no_update, viewport
 
-    return _ai_error("Unrecognised action from AI."), no_update, no_update
+    return _ai_error(tr("Unrecognised action from AI.")), no_update, no_update
