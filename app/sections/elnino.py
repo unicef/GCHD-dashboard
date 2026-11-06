@@ -634,7 +634,7 @@ def elnino_layer_panel(tab, current, extra_on):
     half-finished deployment shows only what exists.
     """
     if tab != "elnino":
-        return {"display": "none"}, [], no_update
+        return {"display": "none"}, no_update, no_update
     extra_on = bool(extra_on)
 
     have = {}
@@ -837,6 +837,10 @@ def elnino_resolve_signal(rain, heat_on, heat, tab, wrap_style):
     forecasts that verify separately — so the toggle is disabled and says why
     rather than silently producing a number that means neither.
     """
+    # Leaving for another section must not rewrite the signal: that would
+    # re-run the whole El Niño layer chain behind a pane nobody is looking at.
+    if ctx.triggered_id == "store-tab" and tab != "elnino":
+        raise dash.exceptions.PreventUpdate
     rain = rain or DEFAULT_SIGNAL
     style = dict(wrap_style or {})
 

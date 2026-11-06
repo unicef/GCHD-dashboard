@@ -293,50 +293,64 @@ _DEFAULT_ANALYSIS_TOPICS = [t for t in HAZARD_TOPICS
                             if t not in EXPOSURE_ONLY_TOPICS]
 
 
-@app.callback(
+# Dash re-runs every listener on each write, even of an unchanged value, so a
+# reset that rewrites already-empty stores cascades through the whole app.
+# Both reset callbacks below write only what actually changes.
+def _only_changed(desired, current):
+    return [no_update if d is no_update or d == c else d
+            for d, c in zip(desired, current)]
+
+
+_RESET_FORMS = [
     # Prep Pop analysis
-    Output("country-select",          "value",    allow_duplicate=True),
-    Output("level-select",            "value",    allow_duplicate=True),
-    Output("analysis-topic-select",   "value",    allow_duplicate=True),
+    ("country-select",          "value"),
+    ("level-select",            "value"),
+    ("analysis-topic-select",   "value"),
     # Infra analysis (Prep and EW share the pane)
-    Output("infra-country-select",    "value",    allow_duplicate=True),
-    Output("infra-layer-select",      "value",    allow_duplicate=True),
-    Output("infra-asset-input",       "value",    allow_duplicate=True),
-    Output("infra-asset-status",      "children", allow_duplicate=True),
-    Output("infra-topic-select",      "value",    allow_duplicate=True),
-    Output("store-infra-asset",       "data",     allow_duplicate=True),
-    Output("infra-results-panel",     "children", allow_duplicate=True),
-    Output("infra-download-wrap",     "children", allow_duplicate=True),
-    Output("store-infra-viz",         "data",     allow_duplicate=True),
-    Output("store-infra-pending",     "data",     allow_duplicate=True),
-    Output("infra-pop-tile",          "url",      allow_duplicate=True),
-    Output("infra-points-tile",       "url",      allow_duplicate=True),
-    Output("infra-selection-tile",    "url",      allow_duplicate=True),
-    Output("infra-voronoi-geojson",   "data",     allow_duplicate=True),
+    ("infra-country-select",    "value"),
+    ("infra-layer-select",      "value"),
+    ("infra-asset-input",       "value"),
+    ("infra-asset-status",      "children"),
+    ("infra-topic-select",      "value"),
+    ("store-infra-asset",       "data"),
+    ("infra-results-panel",     "children"),
+    ("infra-download-wrap",     "children"),
+    ("store-infra-viz",         "data"),
+    ("store-infra-pending",     "data"),
+    ("infra-pop-tile",          "url"),
+    ("infra-points-tile",       "url"),
+    ("infra-selection-tile",    "url"),
+    ("infra-voronoi-geojson",   "data"),
     # EW Pop analysis
-    Output("forecast-country-select", "value",    allow_duplicate=True),
-    Output("forecast-level-select",   "value",    allow_duplicate=True),
-    Output("store-forecast-viz",      "data",     allow_duplicate=True),
-    Output("store-forecast-result",   "data",     allow_duplicate=True),
-    Output("forecast-results-panel",  "children", allow_duplicate=True),
-    Output("forecast-exposed-tile",   "url",      allow_duplicate=True),
-    Output("forecast-selection-tile", "url",      allow_duplicate=True),
+    ("forecast-country-select", "value"),
+    ("forecast-level-select",   "value"),
+    ("store-forecast-viz",      "data"),
+    ("store-forecast-result",   "data"),
+    ("forecast-results-panel",  "children"),
+    ("forecast-exposed-tile",   "url"),
+    ("forecast-selection-tile", "url"),
     # El Niño
-    Output("elnino-country",          "value",    allow_duplicate=True),
+    ("elnino-country",          "value"),
     # Live preview: EW views only (forecast_preview redraws it there)
-    Output("forecast-intensity-tile", "url",      allow_duplicate=True),
-    Output("store-forecast-preview",  "data",     allow_duplicate=True),
+    ("forecast-intensity-tile", "url"),
+    ("store-forecast-preview",  "data"),
     # Shared region
-    Output("store-country",           "data",     allow_duplicate=True),
-    Output("store-ucode",             "data",     allow_duplicate=True),
-    Output("store-bounds",            "data",     allow_duplicate=True),
-    Output("store-clicked-ucode",     "data",     allow_duplicate=True),
-    Output("store-clicked-name",      "data",     allow_duplicate=True),
-    Output("main-map",                "viewport", allow_duplicate=True),
-    Input("store-view",               "data"),
+    ("store-country",           "data"),
+    ("store-ucode",             "data"),
+    ("store-bounds",            "data"),
+    ("store-clicked-ucode",     "data"),
+    ("store-clicked-name",      "data"),
+    ("main-map",                "viewport"),
+]
+
+
+@app.callback(
+    *[Output(i, p, allow_duplicate=True) for i, p in _RESET_FORMS],
+    Input("store-view", "data"),
+    *[State(i, p) for i, p in _RESET_FORMS],
     prevent_initial_call=True,
 )
-def reset_forms_on_view(view):
+def reset_forms_on_view(view, *current):
     """Every view change starts each analysis form from scratch: country,
     level, facility layer, topics, results and their map layers. Rebuilding a
     half-kept form on re-entry is what left dropdowns out of step with the
@@ -344,7 +358,7 @@ def reset_forms_on_view(view):
     (reset_hazard_card_on_phase)."""
     preview = ((no_update, no_update) if view in EW_HAZARD_VIEWS
                else ("", None))
-    return (
+    desired = (
         None, None, list(_DEFAULT_ANALYSIS_TOPICS),
         None, None, "", "", [], None, None, None, None, None,
         "", "", "", None,
@@ -353,6 +367,7 @@ def reset_forms_on_view(view):
         *preview,
         None, None, None, None, None, GLOBAL_VIEWPORT,
     )
+    return _only_changed(desired, current)
 
 
 @app.callback(
@@ -371,42 +386,48 @@ def reset_hazard_card_on_phase(phase):
     return None, None, "", "", {"display": "none"}
 
 
-@app.callback(
-    Output("elnino-layer-tile",       "url", allow_duplicate=True),
-    Output("elnino-pop-tile",         "url", allow_duplicate=True),
-    Output("elnino-exposed-tile",     "url", allow_duplicate=True),
-    Output("forecast-intensity-tile", "url", allow_duplicate=True),
-    Output("forecast-exposed-tile",   "url", allow_duplicate=True),
-    Output("infra-pop-tile",          "url", allow_duplicate=True),
-    Output("infra-selection-tile",    "url", allow_duplicate=True),
-    Output("analysis-exposed-tile",   "url", allow_duplicate=True),
-    Output("store-elnino-viz",        "data", allow_duplicate=True),
-    Output("store-elnino-preview",    "data", allow_duplicate=True),
-    Output("store-forecast-viz",      "data", allow_duplicate=True),
-    Output("store-forecast-preview",  "data", allow_duplicate=True),
-    Output("store-infra-viz",         "data", allow_duplicate=True),
-    Output("store-analysis-viz",      "data", allow_duplicate=True),
+_CLEAR_ON_LEAVE = [
+    ("elnino-layer-tile",       "url"),
+    ("elnino-pop-tile",         "url"),
+    ("elnino-exposed-tile",     "url"),
+    ("forecast-intensity-tile", "url"),
+    ("forecast-exposed-tile",   "url"),
+    ("infra-pop-tile",          "url"),
+    ("infra-selection-tile",    "url"),
+    ("analysis-exposed-tile",   "url"),
+    ("store-elnino-viz",        "data"),
+    ("store-elnino-preview",    "data"),
+    ("store-forecast-viz",      "data"),
+    ("store-forecast-preview",  "data"),
+    ("store-infra-viz",         "data"),
+    ("store-analysis-viz",      "data"),
     # Region state. Clearing these removes the admin boundary and the yellow
     # selection highlight, which are both derived from them rather than being
     # set directly — see update_map_view / update_selection_layer.
-    Output("store-ucode",             "data", allow_duplicate=True),
-    Output("store-bounds",            "data", allow_duplicate=True),
-    Output("store-country",           "data", allow_duplicate=True),
-    Output("store-clicked-ucode",     "data", allow_duplicate=True),
-    Output("store-clicked-name",      "data", allow_duplicate=True),
-    Output("infra-selection-tile",    "url", allow_duplicate=True),
-    Output("analysis-selection-tile", "url", allow_duplicate=True),
-    Output("forecast-selection-tile", "url", allow_duplicate=True),
-    Output("main-map",                "viewport", allow_duplicate=True),
+    ("store-ucode",             "data"),
+    ("store-bounds",            "data"),
+    ("store-country",           "data"),
+    ("store-clicked-ucode",     "data"),
+    ("store-clicked-name",      "data"),
+    ("infra-selection-tile",    "url"),
+    ("analysis-selection-tile", "url"),
+    ("forecast-selection-tile", "url"),
+    ("main-map",                "viewport"),
     # The per-section country pickers, so a cleared region does not leave a
     # country name sitting in a dropdown with no boundary drawn for it.
-    Output("elnino-country",          "value", allow_duplicate=True),
-    Output("forecast-country-select", "value", allow_duplicate=True),
-    Input("store-tab",                "data"),
-    State("store-view",               "data"),
+    ("elnino-country",          "value"),
+    ("forecast-country-select", "value"),
+]
+
+
+@app.callback(
+    *[Output(i, p, allow_duplicate=True) for i, p in _CLEAR_ON_LEAVE],
+    Input("store-tab",  "data"),
+    State("store-view", "data"),
+    *[State(i, p) for i, p in _CLEAR_ON_LEAVE],
     prevent_initial_call=True,
 )
-def clear_on_leave(tab, view):
+def clear_on_leave(tab, view, *current):
     """Blank the OTHER sections' map layers and result stores on a tab change.
 
     Never touches the section being entered. Both this and that section's own
@@ -431,7 +452,7 @@ def clear_on_leave(tab, view):
     keep_analysis = tab == "analysis"
     blank = lambda keep: no_update if keep else ""
     none_ = lambda keep: no_update if keep else None
-    return (
+    desired = (
         blank(keep_elnino), blank(keep_elnino), blank(keep_elnino),
         blank(keep_preview), blank(keep_forecast),
         blank(keep_infra), blank(keep_infra),
@@ -446,3 +467,4 @@ def clear_on_leave(tab, view):
         GLOBAL_VIEWPORT,
         None, None,
     )
+    return _only_changed(desired, current)

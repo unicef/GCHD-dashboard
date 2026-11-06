@@ -22,7 +22,7 @@ from core.gee import (
 from dash_app import app
 from bootstrap import COUNTRY_NAMES
 from ui.components import _fmt, POP_BASIS
-from ui.registry import FORECAST_TABS
+from ui.registry import CATALOG_TABS, FORECAST_TABS
 from ui.threshold import _thr_step_marks
 from sections.ew_shared import _forecast_cfg, _live_spec
 
@@ -684,6 +684,9 @@ def forecast_render_list(selected, expanded, tab, asset):
     One callback so a single read of active_datasets_live() serves all three,
     and the selection can never disagree between them.
     """
+    if ctx.triggered_id == "store-tab" and tab not in (*FORECAST_TABS,
+                                                       "infrastructure"):
+        raise dash.exceptions.PreventUpdate
     active = active_datasets_live()
     options = []
     for kind, head in (("nrt", "OBSERVED"), ("forecast", "FORECAST")):
@@ -693,6 +696,10 @@ def forecast_render_list(selected, expanded, tab, asset):
     placeholder = (f"Custom layer: {asset['asset_id']}"
                    if asset and asset.get("asset_id")
                    else "Choose an observed or forecast layer…")
+    # The lists are large and only visible on the catalogue panes; rebuilding
+    # them behind EW Pop/Infra re-mounts every row for nothing.
+    if tab not in CATALOG_TABS:
+        return no_update, no_update, options, placeholder
     return (_forecast_rows_for("forecast", selected, expanded),
             _forecast_rows_for("nrt", selected, expanded),
             options, placeholder)
