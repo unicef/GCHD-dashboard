@@ -14,6 +14,7 @@ from core.gee import (
 )
 
 from dash_app import app
+from i18n import fmt_int, fmt_pct, tr
 from bootstrap import ANALYSIS_TOPIC_SLOTS, GEE_ATTR
 from ui.components import _fmt, _layer_label
 from ui.registry import FORECAST_TABS
@@ -37,22 +38,24 @@ def _layer_legend_specs(sel):
 
     if is_pop_layer(sel):
         meta = POP_LAYER_MAP.get(pop_class_of(sel), {})
-        return [vis_gradient_spec(f"{meta.get('label', 'Population')} (per 100 m)",
+        return [vis_gradient_spec(tr("{label} (per 100 m)",
+                                     label=tr(meta.get("label") or "Population")),
                                   POP_VIS, unit="+")]
 
     if sel == "Multi Hazard Count":
         n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
-        return [gradient_spec("Hazard topics (count)", MHC_PALETTE, 1, n)]
+        return [gradient_spec(tr("Hazard topics (count)"), MHC_PALETTE, 1, n)]
 
     if sel == "Multi Hazard Intensity":
-        return [gradient_spec("Hazard score", MHI_PALETTE, 0, 10)]
+        return [gradient_spec(tr("Hazard score"), MHI_PALETTE, 0, 10)]
 
     if sel not in HAZARD_MAP:
         return []
     pal   = HAZARD_VIS_PALETTES.get(
         sel, ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"])
     units = (HAZARD_INFO.get(sel) or {}).get("units", "")
-    return [gradient_spec(_layer_label(sel), pal, "Low", "High", unit=units)]
+    return [gradient_spec(_layer_label(sel), pal, tr("Low"), tr("High"),
+                          unit=tr(units))]
 
 
 def _infra_legend_specs(viz):
@@ -68,21 +71,22 @@ def _infra_legend_specs(viz):
         return []
     pt_color = "#" + (viz.get("color") or "e67e22")
     specs = [
-        vis_gradient_spec("Children (per 100 m)", INFRA_POP_VIS,
+        vis_gradient_spec(tr("Children (per 100 m)"), INFRA_POP_VIS,
                           layer_id="infra-pop", unit="+", toggleable=True),
-        swatch_spec("Facilities", pt_color,
+        swatch_spec(tr("Facilities"), pt_color,
                     layer_id="infra-points", toggleable=True),
-        swatch_spec("Facility catchments", "#1CABE2", shape="line",
+        swatch_spec(tr("Facility catchments"), "#1CABE2", shape="line",
                     layer_id="infra-catchments", toggleable=True),
     ]
     for i, topic in enumerate(viz.get("topics") or []):
         if i >= ANALYSIS_TOPIC_SLOTS:
             break
         specs.append(swatch_spec(
-            f"{topic} — hazard area", TOPIC_COLORS.get(topic, LIVE_HAZARD_COLOR),
+            tr("{topic} — hazard area", topic=tr(topic)),
+            TOPIC_COLORS.get(topic, LIVE_HAZARD_COLOR),
             layer_id=f"infra-topic-{i}", toggleable=True,
             visible=bool(viz.get("live"))))
-    specs.append(swatch_spec("Selected subregion", "#f1c40f", shape="line",
+    specs.append(swatch_spec(tr("Selected subregion"), "#f1c40f", shape="line",
                              layer_id="infra-selection", toggleable=True))
     return specs
 
@@ -94,10 +98,10 @@ def _analysis_legend_specs(viz):
     if not viz:
         return []
     if viz.get("no_data"):
-        return [swatch_spec("Selected region", "#FFD700", shape="line",
+        return [swatch_spec(tr("Selected region"), "#FFD700", shape="line",
                             layer_id="analysis-selection", toggleable=True)]
     specs = [
-        vis_gradient_spec("Children exposed (per 100 m)", POP_VIS,
+        vis_gradient_spec(tr("Children exposed (per 100 m)"), POP_VIS,
                           layer_id="analysis-exposed", unit="+",
                           toggleable=True),
     ]
@@ -105,9 +109,10 @@ def _analysis_legend_specs(viz):
         if i >= ANALYSIS_TOPIC_SLOTS:
             break
         specs.append(swatch_spec(
-            f"{topic} — hazard area", TOPIC_COLORS.get(topic, "#888"),
+            tr("{topic} — hazard area", topic=tr(topic)),
+            TOPIC_COLORS.get(topic, "#888"),
             layer_id=f"analysis-topic-{i}", toggleable=True, visible=False))
-    specs.append(swatch_spec("Selected region", "#FFD700", shape="line",
+    specs.append(swatch_spec(tr("Selected region"), "#FFD700", shape="line",
                              layer_id="analysis-selection", toggleable=True))
     return specs
 
@@ -123,14 +128,14 @@ def _elnino_outlook_specs(layer_name, vis, visible=True):
     controls the whole layer rather than offering three switches for one tile.
     """
     cfg = EXPLORE_MAP.get(layer_name) or {}
-    label = cfg.get("label", "Outlook")
-    units = cfg.get("units")
+    label = tr(cfg.get("label") or "Outlook")
+    units = tr(cfg.get("units"))
 
     if cfg.get("classified") and cfg.get("classes"):
         rows = []
         for i, c in enumerate(cfg["classes"]):
             rows.append(swatch_spec(
-                f"{label} — {c['label']}" if i == 0 else c["label"],
+                f"{label} — {tr(c['label'])}" if i == 0 else tr(c["label"]),
                 c["color"],
                 layer_id=("elnino-layer" if i == 0 else None),
                 toggleable=(i == 0), visible=visible))
@@ -165,13 +170,14 @@ def _elnino_legend_specs(viz, preview, extra=None):
         sig_layer = ("cat" if sig.get("union_of") else SIGNAL_LAYER)
         specs = _elnino_outlook_specs(sig_layer, vis)
         exposed, total = viz.get("exposed"), viz.get("total")
-        tot_lbl = "All children (per 1 km)"
-        exp_lbl = f"Children in {sig.get('area_phrase', 'a signal area')}"
+        tot_lbl = tr("All children (per 1 km)")
+        exp_lbl = tr("Children in {area}",
+                     area=tr(sig.get("area_phrase") or "a signal area"))
         if total:
             tot_lbl += f" — {_fmt(total)}"
         if exposed is not None and total:
             exp_lbl += (f" — {_fmt(exposed)}"
-                        f" ({100.0 * exposed / total:.0f}%)")
+                        f" ({fmt_pct(100.0 * exposed / total, 0)})")
         specs += _elnino_extra_specs(extra)
         specs += [
             vis_gradient_spec(tot_lbl, POP_VIS,
@@ -201,16 +207,16 @@ def _elnino_extra_specs(extra):
     if not extra or not extra.get("layer"):
         return []
     cfg = EXPLORE_MAP.get(extra["layer"]) or {}
-    label = f"{cfg.get('label', extra['layer'])} (extra layer)"
+    label = tr("{label} (extra layer)", label=tr(cfg.get("label") or extra["layer"]))
     if cfg.get("classified") and cfg.get("classes"):
-        return [swatch_spec(f"{label} — {c['label']}" if i == 0
-                            else c["label"], c["color"],
+        return [swatch_spec(f"{label} — {tr(c['label'])}" if i == 0
+                            else tr(c["label"]), c["color"],
                             layer_id=("elnino-extra" if i == 0 else None),
                             toggleable=(i == 0))
                 for i, c in enumerate(cfg["classes"])]
     if not extra.get("vis"):
         return []
-    units = cfg.get("units")
+    units = tr(cfg.get("units"))
     return [vis_gradient_spec(label + (f" ({units})" if units else ""),
                               extra["vis"], layer_id="elnino-extra",
                               toggleable=True)]
@@ -295,19 +301,20 @@ def update_data_layers(sel_layer, exp_topic, mhc, mhi, tab, thresholds,
         # default tile when this topic has no override).
         url, _ = get_topic_tile_url_thr(exp_topic, color, thresholds or None)
         layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
-        specs = [swatch_spec(f"{exp_topic} — children exposed", color)]
+        specs = [swatch_spec(tr("{topic} — children exposed", topic=tr(exp_topic)),
+                             color)]
 
     elif tab == "mh":
         n = len(HAZARD_TOPICS) - len(MHC_EXCLUDED_TOPICS)
         if mhc:
             url, _ = get_topic_count_tile_url(int(mhc))
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.75))
-            specs.append(gradient_spec(f"Hazard count (≥ {mhc})",
+            specs.append(gradient_spec(tr("Hazard count (≥ {n})", n=mhc),
                                        MHC_PALETTE, int(mhc), n))
         if mhi:
             url, _ = get_pixel_score_percentile_tile_url(mhi)
             layers.append(dl.TileLayer(url=url, attribution=GEE_ATTR, opacity=0.65))
-            specs.append(gradient_spec(f"Hazard score (> P{mhi})",
+            specs.append(gradient_spec(tr("Hazard score (> P{p})", p=mhi),
                                        MHI_PALETTE, 0, 10))
 
     return layers, specs
@@ -488,8 +495,8 @@ app.clientside_callback(
 def _preview_specs(preview, visible=True):
     if not (preview and preview.get("vis")):
         return []
-    units = preview.get("units", "")
-    label = preview.get("label", "Preview")
+    units = tr(preview.get("units", ""))
+    label = tr(preview.get("label") or "Preview")
     return [vis_gradient_spec(
         f"{label} ({units})".strip() if units else label,
         preview["vis"], layer_id="forecast-intensity", unit=units,
@@ -510,15 +517,15 @@ def _forecast_legend_specs(viz, preview=None):
     vis = viz.get("intensity_vis")
     if vis:
         specs.append(vis_gradient_spec(
-            f"{viz.get('label','Forecast')} ({viz.get('units','')})".strip(),
-            vis, layer_id="forecast-intensity", unit=viz.get("units", ""),
+            f"{tr(viz.get('label') or 'Forecast')} ({tr(viz.get('units', ''))})".strip(),
+            vis, layer_id="forecast-intensity", unit=tr(viz.get("units", "")),
             toggleable=True, visible=False))
     # Forecast exposure runs on the 1 km population grid, so the legend must
     # not claim "per 100 m" — that is the Analysis tab's unit.
-    pop_unit = f"per {viz.get('pop_res', 100):,} m"
+    pop_unit = tr("per {n} m", n=fmt_int(viz.get("pop_res", 100)))
     specs.append(gradient_spec(
-        "Children exposed", POP_VIS["palette"], POP_VIS["min"], POP_VIS["max"],
+        tr("Children exposed"), POP_VIS["palette"], POP_VIS["min"], POP_VIS["max"],
         layer_id="forecast-exposed", unit=pop_unit, toggleable=True))
-    specs.append(swatch_spec("Selected region", "#FFD700", shape="line",
+    specs.append(swatch_spec(tr("Selected region"), "#FFD700", shape="line",
                              layer_id="forecast-selection", toggleable=True))
     return specs

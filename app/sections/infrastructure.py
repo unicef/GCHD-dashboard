@@ -1,8 +1,8 @@
 """Infra analysis (Preparedness and Early Warning)."""
 import dash
 from config.hazards import (
-    EXPOSURE_ONLY_TOPICS, HAZARD_INFO, HAZARD_TOPICS, infra_layer_style,
-    is_no_data_ucode, SUB_TOPIC_DETAIL, TOPIC_COLORS,
+    _infra_type_of, EXPOSURE_ONLY_TOPICS, HAZARD_INFO, HAZARD_TOPICS,
+    infra_layer_style, is_no_data_ucode, SUB_TOPIC_DETAIL, TOPIC_COLORS,
 )
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
 from core.forecast import ForecastError, get_live_hazard_area_tile
@@ -14,6 +14,7 @@ from core.gee import (
 )
 
 from dash_app import app
+from i18n import fmt_int, fmt_pct, N_, tr
 from bootstrap import ANALYSIS_TOPIC_SLOTS
 from ui.components import (
     _eff_threshold, _fmt, _hazard_label, _info_icon, _no_data_panel,
@@ -47,8 +48,14 @@ def _infra_layer_options(country=None):
     source-qualified layers (e.g. 'Schools (Giga)'). Empty until a country with
     assets is picked. Discovered from GEE, so a newly uploaded layer appears
     without a code change."""
-    return [{"label": name, "value": name}
+    return [{"label": _infra_layer_label(name), "value": name}
             for name in infra_layers_for(country)]
+
+
+def _infra_layer_label(name):
+    """'Schools (Giga)' -> translated facility type + untranslated source."""
+    base = _infra_type_of(name)
+    return tr(base) + name[len(base):] if name.startswith(base) else name
 
 
 def tab_infrastructure():
@@ -59,49 +66,49 @@ def tab_infrastructure():
         # Analyses are adm2-only, so selecting a country hard-sets adm2 and
         # enables map district selection immediately (no level dropdown).
         html.Div(className="ps", children=[
-            html.Div("1. Select country / territory", className="ps-label"),
+            html.Div(tr("1. Select country / territory"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-country-select", className="ps-select",
                 # Populated by infra_populate_countries on tab entry, not here:
                 # tab_infrastructure() runs once at import, so baking the list
                 # in would freeze it at server start and defeat discovery.
                 options=[],
-                value=None, placeholder="Search country / territory…",
+                value=None, placeholder=tr("Search country / territory…"),
                 clearable=False, searchable=True,
             ),
         ]),
         html.Div(id="infra-level-section", style={"display": "none"}, children=[
             html.Div(id="infra-selected-badge-wrap"),
-            html.Div("Click a district on the map to analyze.",
+            html.Div(tr("Click a district on the map to analyze."),
                      className="info-box", id="infra-region-hint"),
         ]),
 
         # 2. Facility layer — options depend on the selected country (only its
         # uploaded, source-qualified layers). Populated on country select.
         html.Div(className="ps", children=[
-            html.Div("2. Facility layer", className="ps-label"),
+            html.Div(tr("2. Facility layer"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-layer-select", className="ps-select",
                 options=[], value=None,
-                placeholder="— select a country first —",
+                placeholder=tr("— select a country first —"),
                 clearable=True, searchable=False,
             ),
             html.Button(
                 [html.I(className="bi bi-plus-circle"),
-                 html.Span("Add your own facility data")],
+                 html.Span(tr("Add your own facility data"))],
                 id="infra-add-layer-btn", className="link-btn", n_clicks=0,
             ),
             html.Div(style={"display": "flex", "gap": "6px", "marginTop": "8px"}, children=[
                 dcc.Input(
                     id="infra-asset-input",
-                    placeholder="…or paste a GEE asset path",
+                    placeholder=tr("…or paste a GEE asset path"),
                     debounce=False,
                     style={"flex": "1", "padding": "7px 9px", "fontSize": "0.75rem",
                            "border": "1px solid var(--border2)", "borderRadius": "6px",
                            "fontFamily": "Source Sans Pro, sans-serif",
                            "background": "var(--panel-h)", "color": "var(--hi)"},
                 ),
-                html.Button("Load", id="infra-asset-load-btn", className="ps-btn",
+                html.Button(tr("Load"), id="infra-asset-load-btn", className="ps-btn",
                             n_clicks=0,
                             style={"width": "auto", "padding": "7px 14px", "flexShrink": "0"}),
             ]),
@@ -112,22 +119,22 @@ def tab_infrastructure():
         # 3. Hazard topics — Preparedness only; in EW the Hazard card above
         # the pane holds the hazard (#tab-infrastructure.infra-mode-ew).
         html.Div(id="infra-hazard-prep", className="ps", children=[
-            html.Div("3. Hazard topics", className="ps-label"),
+            html.Div(tr("3. Hazard topics"), className="ps-label"),
             dcc.Dropdown(
                 id="infra-topic-select", className="ps-select",
-                options=[{"label": t, "value": t} for t in HAZARD_TOPICS
+                options=[{"label": tr(t), "value": t} for t in HAZARD_TOPICS
                          if t not in EXPOSURE_ONLY_TOPICS],
-                value=[], multi=True, placeholder="All hazards (default)",
+                value=[], multi=True, placeholder=tr("All hazards (default)"),
                 clearable=True, searchable=False,
             ),
-            html.Div("Exposed population is attributed to each facility's "
-                     "nearest-neighbour (Voronoi) catchment across the district.",
+            html.Div(tr("Exposed population is attributed to each facility's "
+                     "nearest-neighbour (Voronoi) catchment across the district."),
                      className="ps-caption"),
             # Collapsible threshold editor (mirrors the Analysis tab).
             html.Div(id="infra-thr-toggle", className="athr-toggle", n_clicks=0,
                      children=[
                 html.I(className="bi bi-chevron-right", id="infra-thr-chevron"),
-                html.Span("Adjust thresholds", className="athr-toggle-label"),
+                html.Span(tr("Adjust thresholds"), className="athr-toggle-label"),
                 html.Span("", id="infra-thr-badge", className="athr-badge"),
             ]),
             html.Div(id="infra-thr-body", style={"display": "none"}, children=[
@@ -143,17 +150,17 @@ def tab_infrastructure():
                        style={"color": "var(--cyan)", "marginTop": "2px",
                               "flexShrink": "0"}),
                 html.Div(className="ps-caption", style={"color": "var(--mid)"}, children=[
-                    html.Div([html.Strong("How to run: "),
-                              "click a district (ADM2) on the map, then press Compute. "
+                    html.Div([html.Strong(tr("How to run:") + " "),
+                              tr("click a district (ADM2) on the map, then press Compute. "
                               "Analysis is per-district — there is no country-wide "
                               "summary, because per-facility Voronoi computation over "
-                              "many points is slow even for small areas."]),
-                    html.Div([html.Strong("Thresholds: "),
-                              "the summary applies your current hazard thresholds set "
-                              "above."], style={"marginTop": "4px"}),
+                              "many points is slow even for small areas.")]),
+                    html.Div([html.Strong(tr("Thresholds:") + " "),
+                              tr("the summary applies your current hazard thresholds set "
+                              "above.")], style={"marginTop": "4px"}),
                 ]),
             ]),
-            html.Button("Compute", id="infra-compute-btn", className="ps-btn",
+            html.Button(tr("Compute"), id="infra-compute-btn", className="ps-btn",
                         n_clicks=0, disabled=True),
         ]),
         dcc.Loading(
@@ -243,7 +250,7 @@ def toggle_infra_thr(n):
 )
 def infra_thr_badge(values, ids, topics):
     overrides, _ = _threshold_overrides(_infra_editor_topics(topics), ids, values)
-    return f"{len(overrides)} changed" if overrides else ""
+    return tr("{n} changed", n=len(overrides)) if overrides else ""
 
 
 @app.callback(
@@ -327,9 +334,9 @@ def infra_populate_countries(tab):
         print(f"[infra] country discovery failed: {e}")
         countries = []
     if not countries:
-        return [], "— no infrastructure data available —"
+        return [], tr("— no infrastructure data available —")
     return ([{"label": c, "value": c} for c in countries],
-            "Search country / territory…")
+            tr("Search country / territory…"))
 
 
 # ── Region selection (writes the shared region stores) ────────────────────────
@@ -355,13 +362,13 @@ def infra_on_country_select(country):
     # source-qualified layers (empty if none are ingested yet).
     if not country:
         return (None, None, None, None, None, None, {"display": "none"},
-                [], None, "— select a country first —")
+                [], None, tr("— select a country first —"))
     ucode  = get_country_ucode(country)
     bounds = get_country_bounds(ucode)
     options = _infra_layer_options(country)
     value   = options[0]["value"] if options else None
-    placeholder = ("— select a facility layer —" if options
-                   else "— no infrastructure data for this country yet —")
+    placeholder = (tr("— select a facility layer —") if options
+                   else tr("— no infrastructure data for this country yet —"))
     return (country, ucode, bounds, "adm2 (Districts/Counties)", None, None,
             {"display": "block"}, options, value, placeholder)
 
@@ -377,7 +384,7 @@ def infra_update_badge(name, tab):
         return None, ({"display": "block"} if tab == "infrastructure"
                       else no_update)
     badge = html.Div(className="selected-badge", children=[
-        html.Div("Selected region", className="selected-badge-tag"),
+        html.Div(tr("Selected region"), className="selected-badge-tag"),
         html.Div(name, className="selected-badge-name"),
     ])
     return badge, {"display": "none"}  # hide the "click a district" hint
@@ -447,7 +454,7 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
             return None, "", ok_style, "", no_update
         asset_id = infra_asset_id(country, layer_name)
         if not asset_id:
-            return None, "Select a country first.", ok_style, "", no_update
+            return None, tr("Select a country first."), ok_style, "", no_update
         color    = infra_layer_style(layer_name)["color"].lstrip("#")
         label    = layer_name
         if trig == "store-country":
@@ -464,9 +471,10 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
         tile_url = get_infra_tile_url(asset_id, color)   # whole country (no AOI)
         bounds   = get_asset_bounds(asset_id)
     except Exception as e:
-        return None, f"Error loading asset: {e}", err_style, no_update, no_update
+        return None, tr("Error loading asset: {e}", e=e), err_style, no_update, no_update
 
-    status   = f"✓  {n} features — {label}"
+    status   = "✓  " + tr("{n} features — {name}", n=fmt_int(n),
+                          name=_infra_layer_label(label))
     viewport = {"bounds": bounds, "transition": "fitBounds"} if fit else no_update
     return ({"asset_id": asset_id, "name_field": "name", "props": props},
             status, ok_style, tile_url, viewport)
@@ -475,8 +483,8 @@ def infra_load_asset(layer_name, _n, tab, country, asset_input, infra_viz):
 def _infra_download(groups, rows, filename, banner_lines=None):
     """Secondary (ghost) styled-Excel download link, below the visual summary."""
     return html.A(
-        "⬇  Download full data (Excel)",
-        href=build_xlsx("Facility exposure", groups, rows, banner_lines),
+        "⬇  " + tr("Download full data (Excel)"),
+        href=build_xlsx(tr("Facility exposure"), groups, rows, banner_lines),
         download=filename, className="ps-btn-ghost",
         style={"display": "block", "textAlign": "center", "textDecoration": "none",
                "padding": "9px 16px", "marginTop": "10px"},
@@ -485,7 +493,7 @@ def _infra_download(groups, rows, filename, banner_lines=None):
 
 # Disclaimer shown in the panel and embedded in the CSV: per-facility figures
 # come from each facility's own (overlapping) buffer and must not be summed.
-INFRA_PERFAC_DISCLAIMER = (
+INFRA_PERFAC_DISCLAIMER = N_(
     "Per-facility figures count children within each facility's individual "
     "buffer; buffers overlap, so these values may double-count and must not be "
     "summed. Use the dissolved-buffer summary above for district totals."
@@ -514,8 +522,8 @@ def _bar_row(label, count, pct, color):
                 label,
             ]),
             html.Span([
-                html.Span(f"{count:,}", className="info-val"),
-                html.Span(f" ({pct:.1f}%)", className="info-pct"),
+                html.Span(fmt_int(count), className="info-val"),
+                html.Span(f" ({fmt_pct(pct)})", className="info-pct"),
             ]),
         ]),
         html.Div(className="bar-track", children=[
@@ -564,12 +572,13 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                 html.Span(className="info-lbl", children=[
                     html.Span(className="topic-swatch", style={"background": color}),
                     _info_icon(hazards[0], "infra") if hazards else None,
-                    topic.upper(),
+                    tr(topic).upper(),
                 ]),
                 html.Span([
-                    html.Span(f"{td['pop']:,}", className="info-val"),
-                    html.Span(f" ({pct:.1f}%)", className="info-pct"),
-                    html.Span(f"  · {td['fac']} fac.", className="info-pct",
+                    html.Span(fmt_int(td["pop"]), className="info-val"),
+                    html.Span(f" ({fmt_pct(pct)})", className="info-pct"),
+                    html.Span("  · " + tr("{n} fac.", n=fmt_int(td["fac"])),
+                              className="info-pct",
                               style={"color": "var(--lo)"}),
                 ]),
             ]),
@@ -596,7 +605,7 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
                               className="info-lbl",
                               style={"paddingLeft": "22px", "color": "var(--lo)",
                                      "fontWeight": "400", "fontSize": "0.85em"}),
-                    html.Span(f"{hc:,}" if hc else "—", className="info-val",
+                    html.Span(fmt_int(hc) if hc else "—", className="info-val",
                               style={"color": "var(--mid)", "fontWeight": "500"}),
                 ]))
             items.append(html.Details(open=True, className="topic-detail", children=[
@@ -610,9 +619,10 @@ def _infra_combined_items(per_topic, per_sub, site_tally, sel_topics, total,
 
 def _intensity_label(h, live_spec):
     if live_spec:
-        units = live_spec.get("units")
-        return f"{live_spec['label']} ({units})" if units else live_spec["label"]
-    units = (HAZARD_INFO.get(h) or {}).get("units")
+        units = tr(live_spec.get("units"))
+        label = tr(live_spec["label"])
+        return f"{label} ({units})" if units else label
+    units = tr((HAZARD_INFO.get(h) or {}).get("units"))
     return f"{_hazard_label(h)} ({units})" if units else _hazard_label(h)
 
 
@@ -650,14 +660,14 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     phase 2."""
     nu = (no_update,) * 7
     if not asset:
-        return (_infra_error("Select or load a facility layer first."), *nu)
+        return (_infra_error(tr("Select or load a facility layer first.")), *nu)
     if not adm2_ucode or not level or level == "adm0 (Country)":
-        return (_infra_error("Select an adm2 region and click a district on the map "
-                             "to bound the analysis."), *nu)
+        return (_infra_error(tr("Select an adm2 region and click a district on "
+                                "the map to bound the analysis.")), *nu)
     # Districts inherit their country's data availability: the adm2 ucode
     # carries the same stem, so this catches them without a separate list.
     if is_no_data_ucode(adm2_ucode):
-        return (_no_data_panel(region_name or "this region"), *nu)
+        return (_no_data_panel(region_name or tr("this region")), *nu)
     asset_id = asset["asset_id"]
     color = _infra_color_for_asset(asset_id)
 
@@ -666,8 +676,8 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
         live_spec = _live_spec(fc_dataset, fc_asset, fc_start, fc_end,
                                fc_reducer, fc_threshold)
         if not live_spec:
-            return (_infra_error("Choose an Observed or Forecast layer in "
-                                 "Visualization first."), *nu)
+            return (_infra_error(tr("Choose an Observed or Forecast layer in "
+                                    "Visualization first.")), *nu)
         topics_sel, overrides = None, {}
     else:
         topics_sel = topics or None
@@ -682,7 +692,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     except ForecastError as e:
         return (_infra_error(str(e)), *nu)
     except Exception as e:
-        return (_infra_error(f"GEE error: {e}"), *nu)
+        return (_infra_error(tr("GEE error: {e}", e=e)), *nu)
 
     sel_topics = r.get("topics") or [t for t in HAZARD_TOPICS
                                      if t not in EXPOSURE_ONLY_TOPICS]
@@ -692,13 +702,11 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
     site_tally = r.get("facility_site_tally") or {}
     n_site_exp = sum(1 for f in r.get("facilities_site", [])
                      if any(int(f["properties"].get(t) or 0) for t in sel_topics))
-    pct     = f"{exposed/total*100:.1f}%" if total else "—"
-
     cards = [
-        _metric(f"{nfac:,}", "Facilities"),
-        _metric(_fmt(total), "Children served"),
-        _metric(_fmt(exposed), "Children exposed", color="#e31a1c"),
-        _metric(f"{n_site_exp:,}", "Facilities in hazard", color="#e31a1c"),
+        _metric(fmt_int(nfac), tr("Facilities")),
+        _metric(_fmt(total), tr("Children served")),
+        _metric(_fmt(exposed), tr("Children exposed"), color="#e31a1c"),
+        _metric(fmt_int(n_site_exp), tr("Facilities in hazard"), color="#e31a1c"),
     ]
 
     items = _infra_combined_items(r.get("per_topic_exposed"),
@@ -708,21 +716,23 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
 
     n_custom = len(overrides or {})
     thr_note = (_live_summary(live_spec) if live_spec else
-                f"{n_custom} custom threshold(s) applied"
-                if n_custom else "Standard (default) thresholds")
-    where = region_name or "the selected district"
-    caption = (f"{nfac:,} facilities in {where}. Population is attributed to "
-               "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
-               "rows show exposed children · facilities whose site is in that "
-               f"hazard. {thr_note}.")
+                tr("{n} custom threshold(s) applied", n=n_custom)
+                if n_custom else tr("Standard (default) thresholds"))
+    where = region_name or tr("the selected district")
+    caption = tr("{n} facilities in {where}. Population is attributed to "
+                 "each facility's nearest-neighbour (Voronoi) catchment; per-hazard "
+                 "rows show exposed children · facilities whose site is in that "
+                 "hazard. {thr_note}.",
+                 n=fmt_int(nfac), where=where, thr_note=thr_note)
 
-    prov = [f"Region: {region_name or adm2_ucode} · {level}",
-            "Facilities: as supplied by the selected infrastructure layer "
-            "(see the layer name for its source)"]
+    prov = [tr("Region: {region}", region=region_name or adm2_ucode)
+            + f" · {tr(level)}",
+            tr("Facilities: as supplied by the selected infrastructure layer "
+               "(see the layer name for its source)")]
     if live_spec:
         prov += _live_provenance(live_spec)
     panel = html.Div([
-        _infra_panel("Facility exposure", cards, items, None, caption=caption),
+        _infra_panel(tr("Facility exposure"), cards, items, None, caption=caption),
         _provenance_block(prov),
     ])
 
@@ -748,7 +758,7 @@ def infra_compute(_n, asset, adm2_ucode, region_name, level, topics,
            "live": live_spec}
     pending = {"asset_id": asset_id, "ucode": adm2_ucode, "topics": topics_sel,
                "overrides": overrides or None, "live": live_spec}
-    placeholder = html.Div("Preparing per-facility download…",
+    placeholder = html.Div(tr("Preparing per-facility download…"),
                            className="ps-caption", style={"padding": "4px 0"})
 
     # Fit the map to the district once its layers are built — same treatment as
@@ -780,7 +790,7 @@ def infra_compute_perfacility(pending):
                                       threshold_overrides=pending.get("overrides"),
                                       live=_build_live(live_spec) if live_spec else None)
     except Exception as e:
-        return html.Div(f"Per-facility data failed: {e}", className="ps-caption",
+        return html.Div(tr("Per-facility data failed: {e}", e=e), className="ps-caption",
                         style={"color": "var(--red)"})
 
     topic_cols = r.get("topic_cols") or []
@@ -815,24 +825,24 @@ def infra_compute_perfacility(pending):
 
     # Column groups drive the styled workbook's merged header + cell formats.
     groups = [
-        {"title": "Facility", "columns": [
-            {"key": "name", "label": "Name",      "kind": "text"},
-            {"key": "lon",  "label": "Longitude", "kind": "float"},
-            {"key": "lat",  "label": "Latitude",  "kind": "float"},
+        {"title": tr("Facility"), "columns": [
+            {"key": "name", "label": tr("Name"),      "kind": "text"},
+            {"key": "lon",  "label": tr("Longitude"), "kind": "float"},
+            {"key": "lat",  "label": tr("Latitude"),  "kind": "float"},
         ]},
-        {"title": "Catchment population (children)", "columns": [
-            {"key": "voronoi_pop", "label": "In catchment", "kind": "int"},
-            {"key": "exposed_pop", "label": "Exposed",      "kind": "int"},
+        {"title": tr("Catchment population (children)"), "columns": [
+            {"key": "voronoi_pop", "label": tr("In catchment"), "kind": "int"},
+            {"key": "exposed_pop", "label": tr("Exposed"),      "kind": "int"},
         ]},
-        {"title": "Site in hazard (1 = exposed)", "columns": [
-            {"key": t, "label": t, "kind": "flag"} for t in topic_cols
+        {"title": tr("Site in hazard (1 = exposed)"), "columns": [
+            {"key": t, "label": tr(t), "kind": "flag"} for t in topic_cols
         ]},
-        {"title": "Hazard intensity at site (native units)", "columns": [
+        {"title": tr("Hazard intensity at site (native units)"), "columns": [
             {"key": h, "label": _intensity_label(h, live_spec), "kind": "float"}
             for h in int_cols
         ]},
     ]
-    banner = ["Facility exposure — per-facility detail"]
+    banner = [tr("Facility exposure — per-facility detail")]
     if live_spec:
         banner += _live_provenance(live_spec)
     else:
@@ -840,9 +850,9 @@ def infra_compute_perfacility(pending):
                                      or [t for t in HAZARD_TOPICS
                                          if t not in EXPOSURE_ONLY_TOPICS],
                                      pending.get("overrides"))
-    banner.append("Catchment population uses each facility's nearest-neighbour "
-                  "(Voronoi) catchment (non-overlapping, summable). Site flags and "
-                  "Exposed reflect the thresholds above; intensity columns are raw "
-                  "native values.")
+    banner.append(tr("Catchment population uses each facility's nearest-neighbour "
+                     "(Voronoi) catchment (non-overlapping, summable). Site flags and "
+                     "Exposed reflect the thresholds above; intensity columns are raw "
+                     "native values."))
     return _infra_download(groups, rows, "infra_facility_exposure.xlsx",
                            banner_lines=banner)

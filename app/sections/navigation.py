@@ -4,6 +4,7 @@ from config.hazards import EXPOSURE_ONLY_TOPICS, HAZARD_TOPICS
 from dash import ALL, ctx, html, Input, no_update, Output, State
 
 from dash_app import app
+from i18n import N_, tr, trc
 from bootstrap import GLOBAL_VIEWPORT
 from ui.components import (
     _fmt_window, phase_btn_class, rail_btn_class, seg_btn_class,
@@ -95,14 +96,14 @@ def switch_tab(nav, cur_tab, cur_view, cur_phase, last):
 #
 # What counts as "something on the map", per section:
 _RESULT_STORES = {
-    "hazard":         ("store-hazard-layer",   "a hazard layer"),
-    "exposure":       ("store-exposure-topic", "an exposure layer"),
-    "analysis":       ("store-analysis-viz",   "exposure results"),
-    "infrastructure": ("store-infra-viz",      "infrastructure results"),
-    "observed":       ("store-forecast-viz",   "observed-hazard results"),
-    "forecast":       ("store-forecast-viz",   "forecast results"),
-    "ewpop":          ("store-forecast-viz",   "exposure results"),
-    "elnino":         ("store-elnino-viz",     "El Niño results"),
+    "hazard":         ("store-hazard-layer",   N_("a hazard layer")),
+    "exposure":       ("store-exposure-topic", N_("an exposure layer")),
+    "analysis":       ("store-analysis-viz",   N_("exposure results")),
+    "infrastructure": ("store-infra-viz",      N_("infrastructure results")),
+    "observed":       ("store-forecast-viz",   N_("observed-hazard results")),
+    "forecast":       ("store-forecast-viz",   N_("forecast results")),
+    "ewpop":          ("store-forecast-viz",   N_("exposure results")),
+    "elnino":         ("store-elnino-viz",     N_("El Niño results")),
 }
 
 
@@ -227,11 +228,10 @@ def leave_guard(*args):
     # would switch the pane behind the dialog, which is the whole thing the
     # confirmation exists to prevent.
     _, what = entry
-    body = [
-        "This section is showing ", html.Strong(what),
-        f". Moving to {nav_label(dest)} clears the map layers and the results "
-        f"panel, and the calculation would have to be run again.",
-    ]
+    body = trc("This section is showing {what}. Moving to {dest} clears the "
+               "map layers and the results panel, and the calculation would "
+               "have to be run again.",
+               what=html.Strong(tr(what)), dest=nav_label(dest))
     return no_update, dest, {"display": "flex"}, body
 
 
@@ -277,12 +277,12 @@ def update_mode_badge(phase, view, tab, dataset, asset, start, end):
         return None, {"display": "none"}
     p = PHASE_BY_KEY[phase]
     cfg = _forecast_cfg(dataset, asset) if view in EW_HAZARD_VIEWS else None
-    source = ("Seasonal outlook" if tab == "elnino" else
-              _ew_source(cfg) if cfg else p["badge"])
-    parts = [html.Span(p["label"], className="mmb-phase"),
+    source = (tr("Seasonal outlook") if tab == "elnino" else
+              tr(_ew_source(cfg)) if cfg else tr(p["badge"]))
+    parts = [html.Span(tr(p["label"]), className="mmb-phase"),
              html.Span(source, className="mmb-source")]
     if cfg:
-        parts.append(html.Span(cfg["label"], className="mmb-detail"))
+        parts.append(html.Span(tr(cfg["label"]), className="mmb-detail"))
         window = _fmt_window(start, end)
         if window:
             parts.append(html.Span(window, className="mmb-detail"))

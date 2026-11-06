@@ -8,6 +8,7 @@ from core.gee import (
 )
 
 from dash_app import app
+from i18n import tr
 from bootstrap import (
     ANALYSIS_TOPIC_SLOTS, CARTO_ATTR, CARTO_FALLBACK, ESRI_ATTR, ESRI_SAT,
     GEE_ATTR, GLOBAL_CENTER, GLOBAL_ZOOM, UN_ATTR, UN_CLEARMAP,
@@ -29,7 +30,7 @@ def map_component():
         html.Div(id="map-loading", className="map-loading",
                  style={"display": "none"}, children=[
             html.Div(className="map-loading-spinner"),
-            html.Span("Loading layer…", className="map-loading-text"),
+            html.Span(tr("Loading layer…"), className="map-loading-text"),
         ]),
         # Which phase and hazard source the map is showing, so a forecast is
         # never mistaken for the historical catalogue (see update_mode_badge).
@@ -40,7 +41,7 @@ def map_component():
                  style={"display": "none"}, children=[
             html.Div(id="map-legend-header", className="map-legend-header",
                      n_clicks=0, children=[
-                html.Span("Legend", className="map-legend-title"),
+                html.Span(tr("Legend"), className="map-legend-title"),
                 html.I(className="bi bi-chevron-up", id="map-legend-chevron"),
             ]),
             html.Div(id="map-legend-body"),
@@ -48,15 +49,15 @@ def map_component():
         _elnino_layer_panel(),
         # Basemap toggle (map ↔ satellite) — bottom-left floating control.
         html.Button(
-            [html.I(className="bi bi-globe-americas"), html.Span("Satellite")],
+            [html.I(className="bi bi-globe-americas"), html.Span(tr("Satellite"))],
             id="basemap-toggle", className="basemap-toggle", n_clicks=0,
-            title="Toggle satellite basemap",
+            title=tr("Toggle satellite basemap"),
         ),
         # PLACEHOLDER COPY — pending comms/legal sign-off.
         html.Div(id="map-disclaimer", className="map-disclaimer", children=[
             html.Span(
-                "Modelled estimates, not observed impacts. Boundaries and names "
-                "shown do not imply endorsement or acceptance by the UNICEF",
+                tr("Modelled estimates, not observed impacts. Boundaries and names "
+                "shown do not imply endorsement or acceptance by the UNICEF"),
                 className="map-disclaimer-text",
             ),
         ]),

@@ -7,6 +7,7 @@ from config.hazards import (
 from dash import ALL, ctx, dcc, html, Input, no_update, Output, State
 
 from dash_app import app
+from i18n import tr
 from bootstrap import MH_LAYERS, TOPIC_LIST
 from ui.components import _layer_label, _layer_meta
 from ui.threshold import build_threshold_editor_for, _threshold_overrides
@@ -48,12 +49,12 @@ def tab_hazard_layers():
 
     items = []
     # Multi-hazard section
-    items.append(html.Div("Multi Hazard", className="layer-section-header"))
+    items.append(html.Div(tr("Multi Hazard"), className="layer-section-header"))
     for n in MH_LAYERS:
         items.append(_layer_item(n))
 
     # Per-topic sections
-    items.append(html.Div("Hazard Intensity", className="layer-section-header"))
+    items.append(html.Div(tr("Hazard Intensity"), className="layer-section-header"))
     for topic, names in by_topic:
         color     = TOPIC_COLORS.get(topic, "#9ca3af")
         foldable  = topic in SUB_TOPIC_DETAIL
@@ -63,7 +64,7 @@ def tab_hazard_layers():
                                  "borderRadius":"2px","background":color,
                                  "marginRight":"7px","verticalAlign":"middle",
                                  "flexShrink":"0"}),
-                html.Span(topic, style={"flex":"1"}),
+                html.Span(tr(topic), style={"flex":"1"}),
                 html.I(className="bi bi-chevron-down",
                        id={"type":"topic-chevron","index":topic},
                        style={"fontSize":"0.65rem","color":"var(--lo)",
@@ -88,10 +89,10 @@ def tab_hazard_layers():
 
     # ── Population section — WorldPop 2025 grids, grouped by age band. Reuses
     # _layer_item so selection/click behaviour matches the hazard layers. ──
-    items.append(html.Div("Population", className="layer-section-header"))
+    items.append(html.Div(tr("Population"), className="layer-section-header"))
     for group in dict.fromkeys(p["group"] for p in POPULATION_LAYERS):
         items.append(html.Div(
-            group,
+            tr(group),
             className="layer-section-header",
             style={"paddingLeft": "24px", "fontWeight": "500",
                    "fontSize": "0.65rem", "color": "var(--mid)",
@@ -115,7 +116,7 @@ def _exposure_topic_row(t, selected):
                         "role": "radio"}),
             html.Div(className="topic-swatch",
                      style={"background": TOPIC_COLORS.get(t, "#888")}),
-            html.Span(t, className="topic-name"),
+            html.Span(tr(t), className="topic-name"),
         ],
         id={"type": "topic-item", "index": t},
         className="topic-item active" if selected else "topic-item",
@@ -131,10 +132,10 @@ def _exposure_inline_editor(topic):
         html.Div(id="exposure-thr-toggle", className="athr-toggle", n_clicks=0,
                  children=[
             html.I(className="bi bi-chevron-right", id="exposure-thr-chevron"),
-            html.Span("Adjust thresholds", className="athr-toggle-label"),
+            html.Span(tr("Adjust thresholds"), className="athr-toggle-label"),
             html.Span("", id="exposure-thr-badge", className="athr-badge"),
         ]),
-        html.Div("Changing a threshold updates the exposure map for this topic.",
+        html.Div(tr("Changing a threshold updates the exposure map for this topic."),
                  className="ps-caption", style={"marginTop": "4px",
                                                 "color": "var(--mid)"}),
         html.Div(id="exposure-thr-body", style={"display": "none"}, children=[
@@ -152,19 +153,19 @@ def tab_exposure():
         html.Div(id="exposure-topic-list",
                  children=[_exposure_topic_row(t, False) for t in TOPIC_LIST]),
         html.Div(className="exposure-method-note", children=[
-            html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
+            html.Div(tr("Methodology"), className="hi-label", style={"marginBottom": "6px"}),
             html.P(
-                "All exposure estimates use WorldPop's global gridded children population "
-                "estimate (under 18) for 2025 at 100 m spatial resolution.",
+                tr("All exposure estimates use WorldPop's global gridded children population "
+                "estimate (under 18) for 2025 at 100 m spatial resolution."),
                 className="exposure-method-p",
             ),
             html.P(
-                "For topics with multiple hazard layers (e.g. Drought combines agricultural "
+                tr("For topics with multiple hazard layers (e.g. Drought combines agricultural "
                 "and meteorological drought), hazard coverage is first computed independently "
                 "for each layer at its own threshold. An OR union is then applied across "
                 "layers to derive the combined topic footprint, which is subsequently "
                 "overlaid with the WorldPop under-18 grid to estimate the number of "
-                "children exposed.",
+                "children exposed."),
                 className="exposure-method-p",
             ),
         ]),
@@ -176,42 +177,42 @@ def tab_mh():
     # (MHC_PALETTE / MHI_PALETTE), rendered once a layer is actually selected.
     return html.Div(id="tab-mh", style={"display": "none"}, children=[
         html.Div(className="ps", children=[
-            html.Div("Hazard Count (MHC)", className="ps-label"),
-            html.Div("Areas exposed to ≥ N simultaneous hazard topics", className="ps-caption"),
+            html.Div(tr("Hazard Count (MHC)"), className="ps-label"),
+            html.Div(tr("Areas exposed to ≥ N simultaneous hazard topics"), className="ps-caption"),
             dcc.Dropdown(
                 id="mhc-select", className="ps-select",
                 options=[{"label": v, "value": v} for v in MHC_OPTIONS],
-                value=None, placeholder="None",
+                value=None, placeholder=tr("None"),
                 clearable=True, searchable=False,
             ),
         ]),
         html.Div(className="ps", children=[
-            html.Div("Hazard Intensity (MHI)", className="ps-label"),
-            html.Div("Areas with pixel hazard score above global percentile", className="ps-caption"),
+            html.Div(tr("Hazard Intensity (MHI)"), className="ps-label"),
+            html.Div(tr("Areas with pixel hazard score above global percentile"), className="ps-caption"),
             dcc.Dropdown(
                 id="mhi-select", className="ps-select",
                 options=[{"label": f"P{v}", "value": v} for v in MHI_OPTIONS],
-                value=None, placeholder="None",
+                value=None, placeholder=tr("None"),
                 clearable=True, searchable=False,
             ),
         ]),
         html.Div(className="exposure-method-note", children=[
-            html.Div("Methodology", className="hi-label", style={"marginBottom": "6px"}),
+            html.Div(tr("Methodology"), className="hi-label", style={"marginBottom": "6px"}),
             html.P([
-                html.Strong("MHC — "),
-                "Each hazard topic is flagged at the pixel level when its threshold is exceeded. "
+                html.Strong(tr("MHC — ")),
+                tr("Each hazard topic is flagged at the pixel level when its threshold is exceeded. "
                 "For topics with multiple layers (e.g. Drought combines agricultural and "
                 "meteorological drought), an OR union is applied across layers before flagging. "
                 "MHC then counts how many topics flag each pixel; only pixels reaching the "
-                "user-selected minimum count N are displayed.",
+                "user-selected minimum count N are displayed."),
             ], className="exposure-method-p"),
             html.P([
-                html.Strong("MHI — "),
-                "A continuous pixel-based hazard score is derived by combining the normalised "
+                html.Strong(tr("MHI — ")),
+                tr("A continuous pixel-based hazard score is derived by combining the normalised "
                 "intensity values across all hazard layers, integrating both the breadth and "
                 "severity of co-occurring hazards. The user selects a global percentile "
                 "threshold (e.g. P90); only pixels whose score exceeds that percentile are "
-                "highlighted on the map.",
+                "highlighted on the map."),
             ], className="exposure-method-p"),
         ]),
     ])
@@ -305,7 +306,7 @@ def sync_exposure_thresholds(values, ids, topic):
     """Publish the exposure editor's thresholds to the shared store (drives the
     exposure map) and update the 'N changed' badge."""
     overrides, _ = _threshold_overrides([topic] if topic else [], ids, values)
-    badge = f"{len(overrides)} changed" if overrides else ""
+    badge = tr("{n} changed", n=len(overrides)) if overrides else ""
     return overrides, badge
 
 

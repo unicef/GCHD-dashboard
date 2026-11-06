@@ -18,6 +18,7 @@ from threading import RLock
 import ee
 from cachetools import TTLCache, cached as _ttl_cached
 
+from i18n import N_, tr
 from config.hazards import ADMIN_DATA, POP_VIS
 from config.elnino import (
     ISSUES, issue_collection, issue_asset,
@@ -67,9 +68,10 @@ def _band_names(asset_id):
     try:
         prop = ee.Image(asset_id).get("band_names").getInfo()
     except Exception as e:
-        raise ElNinoError(
-            f"Cannot read {asset_id}. The El Niño assets may not be shared "
-            f"with this app's service account. ({str(e)[:120]})")
+        raise ElNinoError(tr(
+            "Cannot read {asset}. The El Niño assets may not be shared with "
+            "this app's service account. ({error})",
+            asset=asset_id, error=str(e)[:120]))
     if prop:
         names = [b.strip() for b in str(prop).split(",") if b.strip()]
         if names:
@@ -80,7 +82,7 @@ def _band_names(asset_id):
 def _period(period):
     p = PERIOD_MAP.get(period)
     if not p:
-        raise ElNinoError(f"Unknown period '{period}'.")
+        raise ElNinoError(tr("Unknown period '{period}'.", period=period))
     return p
 
 
@@ -257,7 +259,7 @@ def _signal_mask(img, signal, threshold, apply_dry_mask=True, period=None):
     """
     cfg = SIGNAL_MAP.get(signal)
     if not cfg:
-        raise ElNinoError(f"Unknown signal '{signal}'.")
+        raise ElNinoError(tr("Unknown signal '{signal}'.", signal=signal))
 
     # A union signal ("either") is the OR of its components. They are mutually
     # exclusive by construction — dry needs p_below > p_above and wet the
@@ -272,8 +274,9 @@ def _signal_mask(img, signal, threshold, apply_dry_mask=True, period=None):
 
     if cfg.get("compound"):
         if period is None:
-            raise ElNinoError(
-                f"Signal '{signal}' is a compound signal and needs a period.")
+            raise ElNinoError(tr(
+                "Signal '{signal}' is a compound signal and needs a period.",
+                signal=signal))
         cimg = _compound_image(period)
         # NO `.gt(other)` test. For dry/wet that test is what guarantees
         # exclusivity, but the compound classes are not exclusive: different
@@ -561,7 +564,7 @@ def build_explore_image(period, layer, signal, threshold, apply_dry_mask=True):
     """A single-band ee.Image for the map, named "value"."""
     cfg = EXPLORE_MAP.get(layer)
     if not cfg:
-        raise ElNinoError(f"Unknown layer '{layer}'.")
+        raise ElNinoError(tr("Unknown layer '{layer}'.", layer=layer))
     img = _tercile_image(period)
     # `period` is in the context because the skill and composite transforms read
     # OTHER assets keyed by it, rather than bands of `img`.
@@ -685,7 +688,7 @@ def compute_elnino_exposure(period, signal, threshold, feature_ucode,
             "main": main, "sensitivity": ee.Dictionary(extras),
         }).getInfo()
     except Exception as e:
-        raise ElNinoError(f"Computation failed: {str(e)[:200]}")
+        raise ElNinoError(tr("Computation failed: {e}", e=str(e)[:200]))
 
     stats = dict(out.get("main") or {})
     stats["_sensitivity"] = {k: (v or 0)
@@ -752,7 +755,7 @@ def hindcast_area_share(period, signal, threshold, feature_ucode, admin_level):
 
     cfg = SIGNAL_MAP.get(signal)
     if not cfg:
-        raise ElNinoError(f"Unknown signal '{signal}'.")
+        raise ElNinoError(tr("Unknown signal '{signal}'.", signal=signal))
 
     region = _admin_region(admin_level, feature_ucode)
     fc_img = _tercile_image(period)
@@ -1122,16 +1125,16 @@ def nino34_series(months=NINO34_MONTHS):
 def enso_label(value):
     """NOAA-convention wording for an ONI value."""
     if value is None:
-        return "unknown"
+        return N_("unknown")
     if value >= ENSO_STRONG_MIN:
-        return "Strong El Niño"
+        return N_("Strong El Niño")
     if value >= ENSO_EVENT_MIN:
-        return "El Niño"
+        return N_("El Niño")
     if value <= -ENSO_STRONG_MIN:
-        return "Strong La Niña"
+        return N_("Strong La Niña")
     if value <= -ENSO_EVENT_MIN:
-        return "La Niña"
-    return "Neutral"
+        return N_("La Niña")
+    return N_("Neutral")
 
 
 @_ttl_cached(cache=TTLCache(maxsize=1, ttl=_RESULT_TTL), lock=_lock)

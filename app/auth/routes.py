@@ -1,11 +1,18 @@
 """Flask session secret, OTP login page and the request guard."""
 import datetime as _dt
+import html as _html
 import os
 import secrets as _secrets
 from auth.otp import request_otp, SESSION_HOURS, verify_otp
 from flask import redirect as _fredirect, request as _freq, session as _fsess
 
 from dash_app import app, _BASE_PATHNAME, _INSTANCE
+from i18n import current_lang, is_rtl, tr
+
+
+def _t(text, **kw):
+    """tr() escaped for the raw HTML of this page."""
+    return _html.escape(tr(text, **kw))
 
 
 # Scope the session cookie to the subpath and give it its own name so it can never
@@ -54,37 +61,40 @@ def _render_login(step, email, error):
     safe_email = (email or "").replace('"', "").replace("<", "").replace(">", "")
     if step == "email":
         form_inner = (
-            '<label>UNICEF Email Address</label>'
+            '<label>' + _t("UNICEF Email Address") + '</label>'
             '<input type="email" name="email" placeholder="yourname@unicef.org"'
             ' value="' + safe_email + '" autofocus required>'
         )
-        btn_label = "Send Verification Code"
-        hint = "A 6-digit code will be sent to your inbox."
+        btn_label = _t("Send Verification Code")
+        hint = _t("A 6-digit code will be sent to your inbox.")
     else:
         form_inner = (
             '<div style="font-size:.74rem;color:var(--mid);margin-bottom:16px">'
-            "Code sent to <strong>" + safe_email + "</strong></div>"
+            + _html.escape(tr("Code sent to {email}")).replace(
+                "{email}", "<strong>" + safe_email + "</strong>") + "</div>"
             '<input type="hidden" name="email" value="' + safe_email + '">'
-            "<label>6-Digit Verification Code</label>"
+            "<label>" + _t("6-Digit Verification Code") + "</label>"
             '<input type="text" name="code" placeholder="000000" maxlength="6"'
             ' autofocus required inputmode="numeric"'
             ' style="letter-spacing:.3em;font-size:1.1rem;text-align:center">'
         )
-        btn_label = "Sign In"
-        hint = f'<a href="{_BASE_PATHNAME}login">Use a different email</a>'
-    err_html = '<div class="lc-err">' + error + "</div>" if error else '<div class="lc-err"></div>'
+        btn_label = _t("Sign In")
+        hint = f'<a href="{_BASE_PATHNAME}login">{_t("Use a different email")}</a>'
+    err_html = '<div class="lc-err">' + _html.escape(error) + "</div>" if error else '<div class="lc-err"></div>'
     return (
-        "<!DOCTYPE html><html><head>"
+        f'<!DOCTYPE html><html lang="{current_lang()}" '
+        f'dir="{"rtl" if is_rtl() else "ltr"}"><head>'
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>UNICEF Hazard DB — Sign In</title>"
+        "<title>UNICEF Hazard DB — " + _t("Sign In") + "</title>"
         f'<link rel="stylesheet" href="{_BASE_PATHNAME}assets/style.css">'
         "<style>" + _CSS + "</style>"
         "</head><body>"
         '<div class="lc">'
         '<div class="lc-icon"><i class="bi bi-globe2"></i></div>'
         '<div class="lc-title">UNICEF Global Child Hazard Database</div>'
-        '<div class="lc-sub">Staff access only · @unicef.org required</div>'
+        '<div class="lc-sub">' + _t("Staff access only · @unicef.org required")
+        + "</div>"
         f'<form method="POST" action="{_BASE_PATHNAME}login">'
         + form_inner + err_html
         + '<button type="submit" class="lc-btn">' + btn_label + "</button>"
@@ -116,12 +126,12 @@ def _login_page():
                 _fsess.permanent = True
                 app.server.permanent_session_lifetime = _dt.timedelta(hours=SESSION_HOURS)
                 return _fredirect(_BASE_PATHNAME)
-            error = "Incorrect or expired code. Please try again."
+            error = tr("Incorrect or expired code. Please try again.")
             step  = "code"
         else:
             ok, msg = request_otp(email)
             if ok:
                 step = "code"
             else:
-                error = msg or "Failed to send code."
+                error = tr(msg) if msg else tr("Failed to send code.")
     return _render_login(step, email, error)

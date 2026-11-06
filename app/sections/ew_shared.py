@@ -3,14 +3,15 @@ from config.forecast import (
     CUSTOM_NAME, CUSTOM_PALETTE, DAILY_REDUCERS, FORECAST_MAP, REDUCERS,
 )
 from core.forecast import build_live_hazard, forecast_run_label
+from i18n import N_, tr
 
 from ui.components import _as_float, _fmt_window
 
 
 def _ew_source(cfg):
     if cfg["is_custom"]:
-        return "Custom layer"
-    return "Forecast" if cfg.get("kind") == "forecast" else "Observed"
+        return N_("Custom layer")
+    return N_("Forecast") if cfg.get("kind") == "forecast" else N_("Observed")
 
 
 # ── EW Infra analysis: the live hazard ─────────────────────────────────────
@@ -44,11 +45,13 @@ def _build_live(spec):
 
 
 def _live_summary(spec):
-    units = f" {spec['units']}" if spec.get("units") else ""
-    return (f"Hazard: {spec['label']} ({spec['source'].lower()}), "
-            f"{_fmt_window(spec['start'], spec['end'])}, "
-            f"{REDUCERS.get(spec['reducer'], spec['reducer']).lower()}, "
-            f"exposed where value > {spec['threshold']:g}{units}")
+    units = f" {tr(spec['units'])}" if spec.get("units") else ""
+    return tr("Hazard: {label} ({source}), {window}, {aggregation}, exposed "
+              "where value > {threshold}",
+              label=tr(spec["label"]), source=tr(spec["source"]).lower(),
+              window=_fmt_window(spec["start"], spec["end"]),
+              aggregation=tr(REDUCERS.get(spec["reducer"], spec["reducer"])).lower(),
+              threshold=f"{spec['threshold']:g}{units}")
 
 
 def _live_provenance(spec):
@@ -56,9 +59,9 @@ def _live_provenance(spec):
            if spec.get("name") else None)
     lines = [_live_summary(spec)]
     if run:
-        lines.append(f"Model run: {run}")
-    lines.append("Children counted on the 100 m population grid, as in "
-                 "Preparedness infrastructure analysis.")
+        lines.append(tr("Model run: {run}", run=run))
+    lines.append(tr("Children counted on the 100 m population grid, as in "
+                    "Preparedness infrastructure analysis."))
     return lines
 
 
