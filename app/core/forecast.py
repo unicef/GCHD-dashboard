@@ -282,6 +282,29 @@ def _to_date(v):
     return dt.date.fromisoformat(str(v)[:10])
 
 
+@_ttl_cached(cache=_result_cache(8), lock=_lock)
+def latest_complete_day(name):
+    """Last UTC day with all its steps published, for sub-daily NRT datasets
+    (IMERG); None for the rest, or when the lookup fails."""
+    cfg = FORECAST_MAP.get(name) or {}
+    per_day = cfg.get("steps_per_day")
+    if cfg.get("kind") != "nrt" or not per_day:
+        return None
+    today = dt.date.today()
+    try:
+        t = (ee.ImageCollection(cfg["id"])
+             .filterDate((today - dt.timedelta(days=30)).isoformat(),
+                         (today + dt.timedelta(days=1)).isoformat())
+             .aggregate_max("system:time_start").getInfo())
+    except Exception:
+        return None
+    if t is None:
+        return None
+    last_step_end = (dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc)
+                     + dt.timedelta(days=1 / per_day))
+    return last_step_end.date() - dt.timedelta(days=1)
+
+
 def default_window(name):
     """(start, end) ISO strings for a dataset's initial picker state.
 
@@ -296,23 +319,31 @@ def default_window(name):
     span = int(cfg.get("default_span_days", 7))
     if cfg.get("kind") == "forecast":
         return today.isoformat(), (today + dt.timedelta(days=span)).isoformat()
-    end = today - dt.timedelta(days=int(cfg.get("lag_days", 0)))
+    end = (latest_complete_day(name)
+           or today - dt.timedelta(days=int(cfg.get("lag_days", 0))))
     return (end - dt.timedelta(days=span)).isoformat(), end.isoformat()
 
 
 def clamp_window(name, start, end):
-    """Clamp a window to the dataset's max_span_days. Returns (start, end, msg);
-    msg is None when nothing was changed."""
+    """Clamp a window to the dataset's max_span_days and, where known, its
+    latest complete day. Returns (start, end, msg); msg is None when nothing
+    was changed."""
     cfg = FORECAST_MAP.get(name) or {}
     s, e = _to_date(start), _to_date(end)
     if e < s:
         s, e = e, s
+    msgs = []
     cap = int(cfg.get("max_span_days", 30))
     if (e - s).days > cap:
         e = s + dt.timedelta(days=cap)
-        return s.isoformat(), e.isoformat(), (
-            f"Window capped at {cap} days for this dataset.")
-    return s.isoformat(), e.isoformat(), None
+        msgs.append(f"Window capped at {cap} days for this dataset.")
+    latest = latest_complete_day(name)
+    if latest and e > latest:
+        e = latest
+        s = min(s, e)
+        msgs.append(f"Data is complete through {latest:%d %b %Y} (UTC); "
+                    "the window now ends there.")
+    return s.isoformat(), e.isoformat(), " ".join(msgs) or None
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +446,10 @@ def _daily(coll, cfg, s, e1, reducer):
         else:
             f = ee.Filter.And(ee.Filter.gte(prop, lo), ee.Filter.lt(prop, hi))
         day = coll.filter(f)
-        days.append(day.mean().multiply(per_day).set("n", day.size()))
-    totals = ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+        days.append(day.mean().set("n", day.size()))
+    # Drop empty days before the multiply: an empty day's mean has no bands.
+    totals = (ee.ImageCollection.fromImages(days).filter(ee.Filter.gt("n", 0))
+              .map(lambda im: im.multiply(per_day)))
     return totals.max() if reducer == "daily_max" else totals.mean()
 
 

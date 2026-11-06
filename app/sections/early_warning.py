@@ -12,7 +12,7 @@ from core.forecast import (
     active_datasets_live, clamp_window, compute_forecast_exposure,
     default_window, forecast_run_label, ForecastError,
     get_forecast_exposed_tile, get_forecast_intensity_tile,
-    get_forecast_preview_tile, probe_custom_asset,
+    get_forecast_preview_tile, latest_complete_day, probe_custom_asset,
 )
 from core.gee import (
     get_country_bounds, get_country_ucode, get_feature_bounds,
@@ -558,7 +558,8 @@ def forecast_dataset_params(dataset, asset):
             min_d = (today - dt.timedelta(days=2)).isoformat()
             max_d = (today + dt.timedelta(days=16)).isoformat()
         else:
-            min_d, max_d = "2015-01-01", today.isoformat()
+            latest = latest_complete_day(name)
+            min_d, max_d = "2015-01-01", (latest or today).isoformat()
 
     lo, hi = cfg.get("min", 0), cfg.get("max", 100)
     first = (cfg.get("reducers") or ["mean"])[0]
@@ -873,6 +874,7 @@ app.clientside_callback(
 # ── Date window clamping ─────────────────────────────────────────────────────
 
 @app.callback(
+    Output("forecast-dates",      "start_date", allow_duplicate=True),
     Output("forecast-dates",      "end_date", allow_duplicate=True),
     Output("forecast-dates-note", "children"),
     Input("forecast-dates",       "start_date"),
@@ -883,18 +885,22 @@ app.clientside_callback(
 )
 def forecast_clamp_dates(start, end, dataset, asset):
     if not start or not end:
-        return no_update, ""
+        return no_update, no_update, ""
     cfg = _forecast_cfg(dataset, asset)
     if not cfg:
-        return no_update, ""
+        return no_update, no_update, ""
     if cfg["is_custom"]:
         s, e = dt.date.fromisoformat(start[:10]), dt.date.fromisoformat(end[:10])
         days = (e - s).days + 1
-        return no_update, f"{days} day window."
+        return no_update, no_update, f"{days} day window."
     s2, e2, msg = clamp_window(cfg["name"], start[:10], end[:10])
     days = (dt.date.fromisoformat(e2) - dt.date.fromisoformat(s2)).days + 1
-    note = msg or f"{days} day window."
-    return (e2 if e2 != end[:10] else no_update), note
+    latest = latest_complete_day(cfg["name"])
+    note = msg or (f"{days} day window."
+                   + (f" Data is complete through {latest:%d %b %Y} (UTC)."
+                      if latest else ""))
+    return ((s2 if s2 != start[:10] else no_update),
+            (e2 if e2 != end[:10] else no_update), note)
 
 
 # ── Compute-button enable/disable ────────────────────────────────────────────
