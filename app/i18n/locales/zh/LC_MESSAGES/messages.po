@@ -1,0 +1,4743 @@
+# GCHD dashboard - zh UI catalog.
+# Entries marked 'Draft (machine-assisted) - needs native review' were machine-assisted and await
+# native review.
+msgid ""
+msgstr ""
+"Project-Id-Version: GCHD 1.0\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-11-06 14:48-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh\n"
+"Language-Team: zh <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.16.0\n"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:226
+msgid "   of which boys"
+msgstr "   其中男童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:228
+msgid "   of which girls"
+msgstr "   其中女童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:334
+msgid " Also require unusual temperature"
+msgstr " 同时要求气温异常"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:400
+msgid " Exclude areas too dry to interpret"
+msgstr " 排除过于干燥、无法解读的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:508 config/elnino.py:543 config/elnino.py:657 config/elnino.py:681
+msgid "%"
+msgstr "%"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:883
+#, python-format
+msgid "% of 51 ensemble members"
+msgstr "51 个集合成员的百分比"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:899
+#, python-format
+msgid "% of 51 ensemble members meeting BOTH conditions"
+msgstr "同时满足两个条件的集合成员占 51 个成员的百分比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:624 sections/analysis.py:635
+#, python-format
+msgid "% of children"
+msgstr "儿童百分比"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:762
+msgid ""
+"'{asset}' is a {type} asset. This tab needs an Image or ImageCollection (use the Analysis tab for"
+" boundary tables)."
+msgstr "“{asset}”是 {type} 类型的资源。此选项卡需要 Image 或 ImageCollection（边界表请使用“分析”选项卡）。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1062
+msgid "(band {band})"
+msgstr "（波段 {band}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1214 sections/elnino.py:1642
+msgid "({pct} of boys)"
+msgstr "（占男童 {pct}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1226 sections/elnino.py:1653
+msgid "({pct} of girls)"
+msgstr "（占女童 {pct}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1502
+msgid "({pct} of normal)"
+msgstr "（为常年的 {pct}）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:434
+msgid "0.1° (~11 km) · 30-minute"
+msgstr "0.1°（约 11 公里）· 30 分钟"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:453
+msgid "0.1° (~11 km; native ~9 km) · hourly"
+msgstr "0.1°（约 11 公里；原生约 9 公里）· 逐小时"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:429 config/forecast.py:439 config/forecast.py:444
+msgid "0.25° (~28 km) · hourly to 5 days ahead, then 3-hourly"
+msgstr "0.25°（约 28 公里）· 5 天内逐小时，之后每 3 小时"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:472 config/forecast.py:480 config/forecast.py:486
+msgid "0.4° (~44 km) · 3-hourly"
+msgstr "0.4°（约 44 公里）· 每 3 小时"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:460 config/forecast.py:465
+msgid "1 km · daily"
+msgstr "1 公里 · 每日"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:449
+msgid "1 km · daily (one daytime overpass)"
+msgstr "1 公里 · 每日（一次白天过境）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:179
+msgid "1. Download the template"
+msgstr "1. 下载模板"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:305
+msgid "1. Period"
+msgstr "1. 时段"
+
+#: sections/analysis.py:46 sections/early_warning.py:306 sections/infrastructure.py:69
+msgid "1. Select country / territory"
+msgstr "1. 选择国家/地区"
+
+#: sections/analysis.py:116
+msgid "1. Upload GeoJSON (max 100 features, 1 MB)"
+msgstr "1. 上传 GeoJSON（最多 100 个要素，1 MB）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:162
+msgid ""
+"10 m wind speed derived from U/V components. 17.5 m/s is the WMO tropical-storm threshold, as in "
+"the static catalog."
+msgstr "由 U/V 分量推导的 10 米风速。17.5 米/秒为世界气象组织热带风暴阈值，与静态目录一致。"
+
+#: sections/analysis.py:145
+msgid "100 features and 1 MB"
+msgstr "100 个要素和 1 MB"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:181
+msgid "2 m air temperature, already in °C. Same scale and thresholds as the observed ERA5-Land layer."
+msgstr "2 米气温，已为 °C。尺度和阈值与观测的 ERA5-Land 图层相同。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:471 config/forecast.py:479 config/forecast.py:485
+msgid "2 runs a day, to 5 days ahead"
+msgstr "每天 2 次运行，预报至 5 天"
+
+#: sections/analysis.py:56 sections/early_warning.py:317
+msgid "2. Analysis level"
+msgstr "2. 分析级别"
+
+#: sections/infrastructure.py:89
+msgid "2. Facility layer"
+msgstr "2. 设施图层"
+
+#: sections/analysis.py:154
+msgid "2. Feature name / ID field"
+msgstr "2. 要素名称/ID 字段"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:200
+msgid "2. Fill it in."
+msgstr "2. 填写模板。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:322
+msgid "2. Signal"
+msgstr "2. 信号"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1290
+msgid "3-month mean to {date}"
+msgstr "截至 {date} 的 3 个月平均"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:205
+msgid "3. Check it here"
+msgstr "3. 在此检查"
+
+#: sections/infrastructure.py:122
+msgid "3. Hazard topics"
+msgstr "3. 灾害主题"
+
+#: sections/analysis.py:67
+msgid "3. Hazard topics & thresholds"
+msgstr "3. 灾害主题与阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:362
+msgid "3. Probability threshold"
+msgstr "3. 概率阈值"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:428 config/forecast.py:438 config/forecast.py:443
+msgid "4 runs a day, to 16 days ahead"
+msgstr "每天 4 次运行，预报至 16 天"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:397
+msgid "4. Arid-area handling"
+msgstr "4. 干旱地区处理"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:226
+msgid "4. Send it to the GCHD team"
+msgstr "4. 发送给 GCHD 团队"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:421
+msgid "6. Select country / territory"
+msgstr "6. 选择国家/地区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:434
+msgid "7. Analysis level"
+msgstr "7. 分析层级"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:745
+#, python-format
+msgid ""
+"A cell carries a signal when its probability reaches the slider value and exceeds the opposite "
+"tercile. 50% is the default; ECMWF's own charts shade from about 40%. Because 51 members quantise"
+" probability in steps of about 2 points, the figure is reported at several thresholds."
+msgstr "当某格点的概率达到滑块值且超过相反三分位时，即带有信号。默认值为 50%；ECMWF 自身的图从约 40% 开始着色。由于 51 个成员使概率以约 2 个百分点为步长量化，结果按多个阈值报告。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:627
+msgid ""
+"A child can be exposed to several hazards, so the topic figures overlap and must not be added "
+"together."
+msgstr "一名儿童可能暴露于多种灾害，因此各主题数字有重叠，不应相加。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:642
+msgid ""
+"A child is counted as exposed when the hazard value in their 100 m cell exceeds the threshold. A "
+"topic counts a child exposed to any of its hazards."
+msgstr "当儿童所在 100 米格点的灾害值超过阈值时，即计为受影响。某一主题统计暴露于其中任一灾害的儿童。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:804
+msgid ""
+"A compound probability is counted per ensemble MEMBER — the fraction of members where both "
+"conditions hold at once — not the product of the two separate probabilities. Dry and hot go "
+"together physically (drier soil means less evaporative cooling), so multiplying would understate "
+"the risk where it matters most. The dependence layer shows how much difference that makes."
+msgstr "复合概率按集合成员计数——即两个条件同时成立的成员比例——而非两个单独概率的乘积。干与热在物理上相互关联（土壤越干，蒸发冷却越弱），相乘会在最关键之处低估风险。相关性图层显示了这种差异有多大。"
+
+#: sections/layers.py:211
+msgid ""
+"A continuous pixel-based hazard score is derived by combining the normalised intensity values "
+"across all hazard layers, integrating both the breadth and severity of co-occurring hazards. The "
+"user selects a global percentile threshold (e.g. P90); only pixels whose score exceeds that "
+"percentile are highlighted on the map."
+msgstr "通过综合所有灾害图层的归一化强度值，得出基于像元的连续灾害评分，同时反映并发灾害的广度和严重程度。用户选择一个全球百分位阈值（如 P90）；地图上仅突出显示评分超过该百分位的像元。"
+
+#: config/hazards.py:401
+msgid ""
+"A fluvial or riverine flood is a rise, usually brief, in the water level of a stream or water "
+"body to a peak from which the water level recedes at a slower rate."
+msgstr "河流洪水是指河流或水体水位通常短暂地上涨至峰值，随后以较慢速度回落的现象。"
+
+#: config/hazards.py:447
+msgid ""
+"A heatwave can be defined as a period where local excess heat accumulates over a sequence of "
+"unusually hot days and nights. Heatwave duration refers to the total number of days an event "
+"lasts."
+msgstr "热浪可定义为在一系列异常炎热的昼夜中局地过量热量不断累积的时期。热浪持续时间是指一次事件持续的总天数。"
+
+#: config/hazards.py:440
+msgid ""
+"A heatwave can be defined as a period where local excess heat accumulates over a sequence of "
+"unusually hot days and nights. Heatwave frequency refers to the number of heatwaves per year."
+msgstr "热浪可定义为在一系列异常炎热的昼夜中局地过量热量不断累积的时期。热浪频率是指每年发生热浪的次数。"
+
+#: config/hazards.py:454
+msgid ""
+"A heatwave can be defined as a period where local excess heat accumulates over a sequence of "
+"unusually hot days and nights. Heatwave severity refers to the temperature above the local 15-day"
+" average during the heatwave, expressed in degrees Celsius."
+msgstr "热浪可定义为在一系列异常炎热的昼夜中局地过量热量不断累积的时期。热浪强度是指热浪期间高于当地 15 天平均气温的温度，以摄氏度表示。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:277
+msgid "A signal is a reason to look closer, not a forecast of drought or flooding."
+msgstr "信号是需要进一步关注的理由，而非干旱或洪水预报。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:903
+msgid ""
+"A signal means this forecast puts the season in the driest or wettest third of what the model "
+"itself usually predicts — not that rainfall will be low or high in absolute terms, and not that a"
+" drought or flood will occur. It is a reason to look closer. Adding the heat requirement narrows "
+"it to places where unusual rainfall and unusual warmth are forecast together."
+msgstr "信号表示该预报将季节置于模式通常预报值中最干或最湿的三分位——并不表示降水在绝对意义上偏少或偏多，也不表示会发生干旱或洪水。它是需要进一步关注的理由。加上高温条件后，范围缩小到同时预报有异常降水和异常温暖的地方。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1548
+msgid "A single month is read against its forecast issue's seasonal mask, so this is approximate."
+msgstr "单个月份对照其预报期次的季节掩膜解读，因此为近似值。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:777
+msgid ""
+"A tercile signal is relative to THIS MODEL's climatology. “Wetter than normal” means wetter than "
+"SEAS5 usually predicts — not wet in absolute terms, and not a flood forecast."
+msgstr "三分位信号是相对于该模式自身气候而言的。“比常年偏湿”是指比 SEAS5 通常预报的更湿——并非绝对意义上的湿润，也不是洪水预报。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1703
+msgid ""
+"A tercile signal is relative to this model's own climatology — it is not a forecast of drought or"
+" flooding."
+msgstr "三分位信号是相对于该模式自身气候而言的——它不是干旱或洪水预报。"
+
+#: config/hazards.py:413
+msgid ""
+"A tropical storm is a type of storm system characterized by a low-pressure center, a closed low-"
+"level atmospheric circulation, strong winds, and a spiral arrangement of thunderstorms that "
+"produce heavy rain."
+msgstr "热带风暴是一种风暴系统，其特征包括低压中心、封闭的低层大气环流、强风以及呈螺旋状分布并带来强降雨的雷暴。"
+
+#: ui/registry.py:117
+msgid "AI"
+msgstr "AI"
+
+#: ui/registry.py:61
+msgid "AI Assistant"
+msgstr "AI 助手"
+
+#: sections/ai.py:36
+msgid "AI Assistant Access"
+msgstr "AI 助手访问"
+
+#: sections/ai.py:276
+msgid "AI error: {e}"
+msgstr "AI 错误：{e}"
+
+#: sections/ai.py:273
+msgid "AI returned an unexpected response. Please try rephrasing."
+msgstr "AI 返回了意外的响应，请尝试换一种说法。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:320
+msgid "AOD"
+msgstr "AOD"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:248
+msgid "ATTRIBUTION"
+msgstr "归因"
+
+#: ui/layout.py:94
+msgid "About this data"
+msgstr "关于本数据"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:398
+msgid "Absorbing aerosol index (Sentinel-5P)"
+msgstr "吸收性气溶胶指数（Sentinel-5P）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:159
+msgid "Accepted by the person downloading this file on {time}."
+msgstr "下载本文件的人员已于 {time} 接受。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:492
+msgid ""
+"According to the ECMWF SEAS5 seasonal forecast issued {issue}, about {n} children ({pct} of all "
+"children) in {region} live in {phrase} for {period}, forecast with at least {threshold}% "
+"probability."
+msgstr ""
+"根据 {issue} 发布的 ECMWF SEAS5 季节预报，{region} 约有 {n} 名儿童（占全部儿童的 {pct}）在 {period} 居住于{phrase}，预报概率至少为 "
+"{threshold}%。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:501
+#, python-format
+msgid ""
+"According to the ECMWF SEAS5 seasonal forecast issued {issue}, no children in {region} live in "
+"{phrase} for {period} at a forecast probability of {threshold}% or more."
+msgstr "根据 {issue} 发布的 ECMWF SEAS5 季节预报，在预报概率为 {threshold}% 或以上时，{region} 没有儿童在 {period} 居住于{phrase}。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:227
+msgid "Active fire brightness (FIRMS)"
+msgstr "活跃火点亮温（FIRMS）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:245
+msgid "Active fire days (FIRMS)"
+msgstr "活跃火点日数（FIRMS）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/infrastructure.py:98 ui/layout.py:171
+msgid "Add your own facility data"
+msgstr "添加您自己的设施数据"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:41
+msgid "Adding the heat requirement"
+msgstr "加入高温条件"
+
+#: sections/analysis.py:82 sections/infrastructure.py:137 sections/layers.py:135
+msgid "Adjust thresholds"
+msgstr "调整阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:202
+msgid "Administrative level"
+msgstr "行政级别"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:815
+msgid ""
+"Against a 1993–2016 baseline the model puts about a fifth of land in its warmest third outright, "
+"and much of the tropics near certainty. Where nearly every member is hot, “hot and dry” carries "
+"almost the same information as “dry” — the compound signals add most in the subtropics, southern "
+"Africa and Australia among them, and least near the equator."
+msgstr ""
+"相对 1993–2016 "
+"年基准，模式直接将约五分之一的陆地置于其最暖三分位，热带大部分接近确定。在几乎所有成员都偏热的地方，“偏热且偏干”所含信息与“偏干”几乎相同——复合信号在亚热带（包括非洲南部和澳大利亚）作用最大，在赤道附近作用最小。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1082
+msgid "Aggregation"
+msgstr "聚合方式"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:259
+msgid "Aggregation over the window"
+msgstr "窗口内聚合方式"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1245
+msgid "Aggregation: {name}"
+msgstr "聚合方式：{name}"
+
+#: config/hazards.py:42
+msgid "Agricultural Drought"
+msgstr "农业干旱"
+
+#: config/hazards.py:420
+msgid "Agricultural Stress Index (%)"
+msgstr "农业胁迫指数（%）"
+
+#: config/hazards.py:419
+msgid ""
+"Agricultural drought occurs when there is insufficient soil moisture to meet the needs of a "
+"particular crop at a particular time."
+msgstr "当土壤水分不足以满足特定作物在特定时期的需求时，即发生农业干旱。"
+
+#: config/forecast.py:270 config/forecast.py:293 config/forecast.py:335 config/forecast.py:351
+#: config/forecast.py:368 config/forecast.py:383 config/hazards.py:52 config/hazards.py:87
+msgid "Air Pollution"
+msgstr "空气污染"
+
+#: config/hazards.py:488
+msgid ""
+"Air pollution refers to the presence of substances in the atmosphere that are harmful to human "
+"health and the environment. Fine particle air pollution (PM2.5) refers to airborne particles "
+"measuring less than 2.5 micrometers in diameter emitted from vehicles, fuel use, power plants, "
+"agriculture, waste burning, wildfires, and other sources."
+msgstr "空气污染是指大气中存在对人类健康和环境有害的物质。细颗粒物空气污染（PM2.5）是指由车辆、燃料使用、发电厂、农业、垃圾焚烧、野火及其他来源排放的直径小于 2.5 微米的空气颗粒物。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:170
+msgid "Air temperature forecast (NOAA GFS)"
+msgstr "气温预报（NOAA GFS）"
+
+#: config/hazards.py:281 config/hazards.py:282 config/hazards.py:283
+msgid "All ages"
+msgstr "所有年龄"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:11
+msgid "All checks passed - {ok} rows ready to send."
+msgstr "全部检查通过——可发送行数：{ok}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1107
+msgid "All children"
+msgstr "全部儿童"
+
+# Draft (machine-assisted) - needs native review
+#: ui/legend.py:173
+msgid "All children (per 1 km)"
+msgstr "全部儿童（每 1 公里）"
+
+#: sections/layers.py:158
+msgid ""
+"All exposure estimates use WorldPop's global gridded children population estimate (under 18) for "
+"2025 at 100 m spatial resolution."
+msgstr "所有暴露估算均采用 WorldPop 2025 年全球格网化儿童人口估算（18 岁以下），空间分辨率为 100 米。"
+
+#: sections/infrastructure.py:127
+msgid "All hazards (default)"
+msgstr "所有灾害（默认）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:876
+msgid "Also require unusual temperature"
+msgstr "同时要求气温异常"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:289
+msgid "Analyse children exposed"
+msgstr "分析受影响儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:293
+msgid "Analyse facilities exposed"
+msgstr "分析受影响设施"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:245
+msgid "Any clear signal, dry or wet — the two never overlap, so this is exactly their sum."
+msgstr "任何明确信号（偏干或偏湿）——两者从不重叠，因此正好是两者之和。"
+
+#: sections/layers.py:181
+msgid "Areas exposed to ≥ N simultaneous hazard topics"
+msgstr "同时暴露于 ≥ N 个灾害主题的区域"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:213
+msgid ""
+"Areas too dry in a normal season for 'drier' or 'wetter' to mean anything are left out of the "
+"count."
+msgstr "常年季节过于干燥、“偏干”或“偏湿”毫无意义的地区不计入。"
+
+#: sections/layers.py:191
+msgid "Areas with pixel hazard score above global percentile"
+msgstr "像元灾害评分高于全球百分位的区域"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:211
+msgid "Arid areas excluded"
+msgstr "排除干旱地区"
+
+#: sections/ai.py:67
+msgid "Ask"
+msgstr "提问"
+
+#: ui/registry.py:62
+msgid "Ask about hazard layers or child exposure"
+msgstr "询问灾害图层或儿童暴露情况"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:480
+msgid "Asset has no readable bands."
+msgstr "该资源没有可读取的波段。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:196
+msgid "Attribution"
+msgstr "归因"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:285
+msgid ""
+"Attribution note: the El Niño mask covers rainfall only. For a combined rainfall + temperature "
+"signal it says nothing about whether the heat component is El Niño-related, so read it as the "
+"weaker claim."
+msgstr "归因说明：厄尔尼诺掩膜仅涵盖降水。对于降水 + 气温的复合信号，它无法说明高温部分是否与厄尔尼诺有关，因此应视为较弱的结论。"
+
+#: ui/components.py:22
+msgid "Availability"
+msgstr "时间范围"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:27
+msgid "Average daily total"
+msgstr "日均总量"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:22
+msgid "Average over period"
+msgstr "时段平均"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1523
+msgid ""
+"Averaged over the signal area, against the model's own 1993–2016 normal. This is the size of the "
+"departure; the probability above is only how consistently the ensemble predicts it."
+msgstr "在信号区内取平均，相对模式自身 1993–2016 年常年值。这是偏离的幅度；上方的概率仅表示集合预报它的一致程度。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:207
+msgid "Band"
+msgstr "波段"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:153
+msgid "Beaufort 6, strong breeze (≥10.8 m/s)"
+msgstr "蒲福 6 级，强风（≥10.8 米/秒）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:829
+msgid "Before you download"
+msgstr "下载前请注意"
+
+#: config/hazards.py:408
+msgid "Binary"
+msgstr "二值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:132
+msgid ""
+"Both describe a specific time window, so these numbers are not comparable with the Pop Analysis "
+"tab, whose hazards are fixed 100-year return periods."
+msgstr "二者都描述特定时间窗口，因此这些数字不能与“人口分析”选项卡相比，后者的灾害为固定的 100 年一遇。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:616 sections/early_warning.py:1110 sections/early_warning.py:1208
+#: sections/elnino.py:1637
+msgid "Boys"
+msgstr "男童"
+
+#: config/hazards.py:285
+msgid "Boys (under 18)"
+msgstr "男童（18 岁以下）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:232
+msgid "Boys in signal area ÷ all boys in region."
+msgstr "信号区男童 ÷ 地区全部男童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:227
+msgid "Boys under 18 in the signal area."
+msgstr "信号区内 18 岁以下男童。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:461
+msgid ""
+"Brightness temperature of pixels where a fire has already been detected. FIRMS pixels are "
+"algorithm-confirmed detections, so this grades how intense confirmed fires are — it does not "
+"detect whether fire is present."
+msgstr "已探测到火点的像元的亮温。FIRMS 像元是经算法确认的探测，因此本图层衡量已确认火灾的强度——并不探测是否存在火灾。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:155
+msgid "Cancel"
+msgstr "取消"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:736
+msgid "Cannot read '{asset}'. Check the id and that the asset is shared publicly. ({error})"
+msgstr "无法读取“{asset}”。请检查 ID，并确认该资源已公开共享。（{error}）"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:71
+msgid ""
+"Cannot read {asset}. The El Niño assets may not be shared with this app's service account. "
+"({error})"
+msgstr "无法读取 {asset}。厄尔尼诺资源可能未与本应用的服务账号共享。（{error}）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:368
+msgid "Carbon monoxide (Sentinel-5P)"
+msgstr "一氧化碳（Sentinel-5P）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:504
+msgid ""
+"Carbon monoxide total column, a good biomass-burning tracer. Plumes travel far, so a high value "
+"need not indicate a local source. Not a surface concentration."
+msgstr "一氧化碳总柱，是生物质燃烧的良好示踪物。烟羽传输很远，因此高值未必意味着本地来源。这不是地面浓度。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:169
+msgid "Catalog"
+msgstr "目录"
+
+#: sections/infrastructure.py:833
+msgid "Catchment population (children)"
+msgstr "服务区人口（儿童）"
+
+#: sections/infrastructure.py:853
+msgid ""
+"Catchment population uses each facility's nearest-neighbour (Voronoi) catchment (non-overlapping,"
+" summable). Site flags and Exposed reflect the thresholds above; intensity columns are raw native"
+" values."
+msgstr "服务区人口采用每个设施的最近邻（泰森多边形）服务区（互不重叠，可加总）。站点标记和“暴露”列反映上述阈值；强度列为原始单位的原始值。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:750
+msgid ""
+"Cells whose climatology is under the cutoff are excluded: where normal rainfall is a fraction of "
+"a millimetre, a 'wettest third' is rounding noise at any threshold. This is not a tuning choice —"
+" leave it off and desert children are counted as flood-exposed."
+msgstr "气候值低于临界值的格点被排除：常年降水仅为零点几毫米的地方，任何阈值下的“最湿三分位”都只是舍入噪声。这不是可调的选择——若关闭掩膜，沙漠中的儿童会被计为受洪水影响。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:259
+msgid "Changes what the map shows, not the numbers."
+msgstr "改变的是地图显示内容，而非数字。"
+
+#: sections/layers.py:138
+msgid "Changing a threshold updates the exposure map for this topic."
+msgstr "更改阈值将更新该主题的暴露地图。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:8
+msgid "Check"
+msgstr "请检查"
+
+#: sections/ai.py:200
+msgid "Child exposure to {topic} in {country} at {level} level"
+msgstr "{country} {level} 级别儿童对{topic}的暴露"
+
+#: sections/ai.py:103
+msgid "Child exposure — {country}"
+msgstr "儿童暴露 — {country}"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:755
+msgid ""
+"Child population is summed wherever the signal holds, using the same under-18 grid as every other"
+" tab, so a figure here reconciles with an Analysis-tab figure for the same region."
+msgstr "在信号成立处累加儿童人口，采用与其他所有选项卡相同的 18 岁以下人口网格，因此此处数字与同一地区在“分析”选项卡中的数字一致。"
+
+#: config/hazards.py:284 config/hazards.py:285 config/hazards.py:286
+msgid "Children"
+msgstr "儿童"
+
+#: ui/legend.py:74
+msgid "Children (per 100 m)"
+msgstr "儿童（每 100 米）"
+
+#: config/hazards.py:284
+msgid "Children (under 18)"
+msgstr "儿童（18 岁以下）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:221
+msgid "Children (under 18) living in areas that meet the threshold."
+msgstr "居住在达到阈值地区的儿童（18 岁以下）。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/ew_shared.py:63
+msgid "Children counted on the 100 m population grid, as in Preparedness infrastructure analysis."
+msgstr "儿童按 100 米人口网格计数，与“备灾”基础设施分析相同。"
+
+#: sections/analysis.py:623 sections/analysis.py:634 sections/early_warning.py:1094
+#: sections/early_warning.py:1172 sections/infrastructure.py:708 ui/legend.py:527
+msgid "Children exposed"
+msgstr "暴露儿童"
+
+#: ui/legend.py:104
+msgid "Children exposed (per 100 m)"
+msgstr "暴露儿童（每 100 米）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:651
+msgid "Children exposed to hazards — {region}"
+msgstr "受灾害影响的儿童 — {region}"
+
+#: sections/ai.py:209
+msgid "Children exposed to {topics} simultaneously in {country} at {level} level"
+msgstr "{country} {level} 级别同时暴露于{topics}的儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1101
+msgid "Children exposed — {label}"
+msgstr "受影响儿童 — {label}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1121
+msgid "Children exposed — {region}"
+msgstr "受影响儿童 — {region}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:621
+msgid "Children exposed, by hazard topic"
+msgstr "受影响儿童（按灾害主题）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1535 sections/elnino_export.py:249
+msgid "Children in El Niño-consistent areas"
+msgstr "处于与厄尔尼诺一致区域的儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:236
+msgid "Children in excluded arid areas"
+msgstr "被排除干旱地区内的儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1594 sections/elnino_export.py:220 sections/elnino_export.py:311
+msgid "Children in signal area"
+msgstr "信号区内儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:225
+msgid "Children in signal area ÷ total children in region."
+msgstr "信号区儿童 ÷ 地区儿童总数。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:250
+msgid "Children in signal areas where El Niño has historically pushed rainfall in the same direction."
+msgstr "信号区中厄尔尼诺历史上曾使降水朝同一方向变化之处的儿童。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:969
+msgid ""
+"Children in the signal area who are also in places where El Niño has historically pushed rainfall"
+" the same direction this forecast now points. The remainder may be unusual for other reasons "
+"entirely. This narrows the claim from 'unusual weather is forecast' to 'unusual weather "
+"consistent with El Niño is forecast', which is the stronger statement — but it is a rainfall mask"
+" only, so for a compound signal it says nothing about whether the heat component is El Niño-"
+"related."
+msgstr "信号区内同时位于厄尔尼诺历史上曾使降水朝本次预报方向变化之处的儿童。其余儿童可能因完全不同的原因而面临异常。这将表述从“预报有异常天气”收窄为“预报有与厄尔尼诺一致的异常天气”，后者是更强的表述——但这只是降水掩膜，对于复合信号，它无法说明高温部分是否与厄尔尼诺有关。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/legend.py:174
+msgid "Children in {area}"
+msgstr "{area}内的儿童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:193
+msgid ""
+"Children living where the seasonal forecast leans towards this outcome. A forecast, not a "
+"measured impact."
+msgstr "居住在季节预报倾向于该结果之处的儿童。这是预报，而非实测影响。"
+
+#: sections/infrastructure.py:707
+msgid "Children served"
+msgstr "服务儿童数"
+
+#: ui/registry.py:36
+msgid "Children's Exposure"
+msgstr "儿童暴露"
+
+# Draft (machine-assisted) - needs native review
+#: sections/infrastructure.py:679
+msgid "Choose an Observed or Forecast layer in Visualization first."
+msgstr "请先在“可视化”中选择观测或预报图层。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:232 sections/early_warning.py:710
+msgid "Choose an observed or forecast layer…"
+msgstr "选择观测或预报图层…"
+
+#: sections/infrastructure.py:82
+msgid "Click a district on the map to analyze."
+msgstr "在地图上点击一个区县进行分析。"
+
+#: sections/analysis.py:272
+msgid "Click a district on the map, then Compute."
+msgstr "在地图上点击一个区县，然后点击“计算”。"
+
+#: sections/analysis.py:271
+msgid "Click a province on the map, then Compute."
+msgstr "在地图上点击一个省份，然后点击“计算”。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:944
+msgid "Click a region on the map to select it."
+msgstr "在地图上点击一个地区以选择它。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1039
+msgid "Click the region on the map."
+msgstr "请在地图上点击该地区。"
+
+#: sections/analysis.py:75
+msgid ""
+"Climate hazards are selected by default. Add or remove topics, and adjust any hazard's threshold "
+"below."
+msgstr "默认选择气候灾害。可在下方添加或移除主题，并调整任一灾害的阈值。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:564
+msgid "Climatological rainfall"
+msgstr "气候平均降水"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:228
+msgid "Close"
+msgstr "关闭"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:290
+msgid ""
+"Co-occurrence with El Niño is not proof of causation: the forecast is the model's response to "
+"every initial condition it was given, and El Niño is never isolated within it."
+msgstr "与厄尔尼诺同时出现并不证明因果关系：预报是模式对其所有初始条件的响应，厄尔尼诺从未在其中被单独分离。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:481
+msgid ""
+"Coarse particulate matter at the surface, forecast up to 5 days ahead. PM10 includes wind-blown "
+"dust and so rises sharply during dust events, often reaching many times the PM2.5 level."
+msgstr "提前最多 5 天预报的地面粗颗粒物。PM10 包含风吹扬尘，因此在沙尘事件期间急剧上升，常达到 PM2.5 水平的数倍。"
+
+#: config/hazards.py:40 config/hazards.py:80
+msgid "Coastal Flood"
+msgstr "沿海洪水"
+
+#: config/hazards.py:407
+msgid ""
+"Coastal flooding is most frequently the result of storm surges and high winds coinciding with "
+"high tides."
+msgstr "沿海洪水最常见的成因是风暴潮和大风与高潮位同时发生。"
+
+# Draft (machine-assisted) - needs native review
+#: auth/routes.py:73
+msgid "Code sent to {email}"
+msgstr "验证码已发送至 {email}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:18
+msgid "Column '{col}' is ignored - country, type and source are set when the layer is registered."
+msgstr "列“{col}”将被忽略——国家、类型和来源会在登记图层时设置。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:194
+msgid "Combined"
+msgstr "复合"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:688
+msgid "Combined category"
+msgstr "复合类别"
+
+#: config/hazards.py:538
+msgid ""
+"Combined count of climate hazard types exceeding their respective thresholds at each pixel. "
+"Includes 8 climate topics: River Flood, Coastal Flood, Tropical Storm, Drought, Heatwave, Extreme"
+" Heat, Fire, and Sand and Dust Storm. Climate-related topics (Air Pollution, Malaria) and "
+"geophysical hazards (Landslide, Earthquake, Volcanoes) are excluded."
+msgstr ""
+"每个像元上超过各自阈值的气候灾害类型的综合计数。包括 8 "
+"个气候主题：河流洪水、沿海洪水、热带风暴、干旱、热浪、极端高温、火灾以及沙尘暴。不包括气候相关主题（空气污染、疟疾）和地球物理灾害（滑坡、地震、火山）。"
+
+#: config/hazards.py:544
+msgid "Combined hazard count and intensity score across all hazard types."
+msgstr "涵盖所有灾害类型的灾害数量与强度综合评分。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:39
+msgid "Combined threshold"
+msgstr "复合阈值"
+
+# Draft (machine-assisted) - needs native review
+#: config/hazards.py:58 config/hazards.py:92
+msgid "Complex Emergencies"
+msgstr "复合型紧急情况"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:265
+msgid ""
+"Compound heat and drought — water scarcity, crop failure and heat stress arriving together. "
+"Counted per ensemble member."
+msgstr "高温与干旱叠加——缺水、作物歉收和热应激同时出现。按集合成员计数。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:679
+msgid "Compound signal probability"
+msgstr "复合信号概率"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:810
+#, python-format
+msgid ""
+"Compound thresholds are NOT comparable with single-variable ones. Requiring two conditions "
+"together puts the no-information baseline at 11.1% rather than 33%, so a 25% compound probability"
+" sits as far above chance as a 50% rainfall probability. The slider changes range when a compound"
+" signal is selected for exactly this reason."
+msgstr ""
+"复合阈值与单变量阈值不可比较。同时要求两个条件使无信息基准降至 11.1% 而非 33%，因此 25% 的复合概率高于随机水平的程度与 50% "
+"的降水概率相当。正因如此，选择复合信号时滑块范围会随之改变。"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:691 sections/early_warning.py:993 sections/elnino.py:1085
+msgid "Computation failed: {e}"
+msgstr "计算失败：{e}"
+
+#: sections/infrastructure.py:163
+msgid "Compute"
+msgstr "计算"
+
+#: sections/analysis.py:161 sections/analysis.py:208
+msgid "Compute Exposure"
+msgstr "计算暴露"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:55
+msgid "Compute children exposed to the selected hazard by admin unit"
+msgstr "按行政单元计算受所选灾害影响的儿童"
+
+#: sections/analysis.py:101 sections/early_warning.py:332 sections/elnino.py:450
+msgid "Compute exposure"
+msgstr "计算暴露"
+
+#: ui/registry.py:41
+msgid "Compute number of children exposed by admin unit"
+msgstr "按行政单元计算暴露儿童人数"
+
+#: ui/registry.py:44
+msgid "Compute number of facilities exposed, and number of children affected by admin unit"
+msgstr "按行政单元计算暴露设施数量及受影响儿童人数"
+
+#: sections/ai.py:175
+msgid "Computing ···"
+msgstr "计算中 ···"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:405
+msgid "Convention in UV aerosol-index studies: above ~1 indicates absorbing aerosol; not health-based"
+msgstr "紫外气溶胶指数研究中的惯例：高于约 1 表示存在吸收性气溶胶；并非基于健康"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:697
+msgid "Cooler and drier"
+msgstr "偏凉且偏干"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:286
+msgid "Cooler and drier than normal"
+msgstr "比常年偏凉且偏干"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:290
+msgid ""
+"Cooler and drier than normal — water stress without the heat load, so a milder version of the "
+"drought pathway."
+msgstr "比常年偏凉且偏干——有水分胁迫但无热负荷，是干旱路径的较温和版本。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:695
+msgid "Cooler and wetter"
+msgstr "偏凉且偏湿"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:275
+msgid "Cooler and wetter than normal"
+msgstr "比常年偏凉且偏湿"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:279
+msgid ""
+"Cooler and wetter than normal — a flood risk proxy, and the combination least often forecast this"
+" season."
+msgstr "比常年偏凉且偏湿——洪水风险替代指标，也是本季预报中最少出现的组合。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:25
+msgid "Coordinates look like metres, not degrees - reproject to WGS84 (EPSG:4326) before exporting."
+msgstr "坐标看起来是米而非度——导出前请重投影为 WGS84（EPSG:4326）。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:170
+msgid "Copernicus CDS — seasonal-monthly-single-levels"
+msgstr "Copernicus CDS — seasonal-monthly-single-levels"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:17
+msgid "Copied"
+msgstr "已复制"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:17 sections/elnino_export.py:582
+msgid "Copy"
+msgstr "复制"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:580
+msgid "Copy the full sentence"
+msgstr "复制完整句子"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:671
+msgid ""
+"Correlation between the model's hindcast seasonal mean temperature and ERA5-Land, 1993–2016. "
+"Higher than the rainfall equivalent almost everywhere — but ERA5 is a reanalysis sharing model "
+"lineage with SEAS5, so this flatters temperature relative to the CHIRPS-scored rainfall skill."
+msgstr ""
+"模式回报季节平均气温与 ERA5-Land 的相关系数（1993–2016）。几乎处处高于降水对应值——但 ERA5 是与 SEAS5 同源的再分析资料，因此相对于以 CHIRPS "
+"评分的降水技巧，气温技巧被高估。"
+
+#: sections/ai.py:344 sections/ai.py:365 sections/ai.py:390
+msgid "Could not compute exposure: {e}"
+msgstr "无法计算暴露：{e}"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:759
+msgid "Could not inspect '{asset}': {error}"
+msgstr "无法检查“{asset}”：{error}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:34
+msgid "Could not read that file as CSV: {error}"
+msgstr "无法将该文件读取为 CSV：{error}"
+
+#: config/hazards.py:539
+msgid "Count"
+msgstr "计数"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:466
+msgid ""
+"Count of days within the window on which a fire was detected at each pixel. Distinguishes a "
+"single flare-up from a sustained burn. Cloud cover and overpass timing cause missed days, so this"
+" under-counts."
+msgstr "窗口期内每个像元探测到火点的天数。可区分单次突发与持续燃烧。云量和过境时间会导致漏测，因此会低估。"
+
+#: sections/ai.py:312
+msgid "Country not found: {country}"
+msgstr "未找到国家：{country}"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:173
+msgid ""
+"Country offices can have their own schools, health facilities or water points added as a layer in"
+" this tab. Send us the data in the format below and we prepare and load it for you."
+msgstr "国家办事处可将其自有的学校、卫生设施或供水点作为图层添加到此选项卡。请按以下格式将数据发送给我们，我们将为您准备并加载。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:172
+msgid "Custom"
+msgstr "自定义"
+
+#: sections/analysis.py:40
+msgid "Custom Boundary"
+msgstr "自定义边界"
+
+# Draft (machine-assisted) - needs native review
+#: sections/ew_shared.py:13
+msgid "Custom layer"
+msgstr "自定义图层"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:708
+msgid "Custom layer: {id}"
+msgstr "自定义图层：{id}"
+
+#: sections/analysis.py:86
+msgid "Custom thresholds apply at ADM1/ADM2. Country-level (ADM0) analysis uses the standard thresholds."
+msgstr "自定义阈值适用于 ADM1/ADM2 级别。国家级（ADM0）分析使用标准阈值。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:81
+msgid "Damage"
+msgstr "损失"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:197
+msgid "Damage Assessment — planned, not yet available"
+msgstr "损失评估——已规划，尚未推出"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:914
+msgid "Data is complete through {day} (UTC)."
+msgstr "数据完整至 {day}（UTC）。"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:345
+msgid "Data is complete through {day} (UTC); the window now ends there."
+msgstr "数据完整至 {day}（UTC）；窗口现截止于该日。"
+
+#: ui/components.py:311
+msgid "Data not available"
+msgstr "暂无数据"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1069
+msgid "Data source"
+msgstr "数据来源"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1237
+msgid "Dataset: {label}"
+msgstr "数据集：{label}"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:201
+msgid ""
+"Daytime land-surface temperature (not air temperature) — runs hotter than a 2 m reading. Clear-"
+"sky pixels only. For a 2 m air temperature, use the ERA5-Land layer instead."
+msgstr "白天地表温度（非气温）——高于 2 米读数。仅晴空像元。如需 2 米气温，请改用 ERA5-Land 图层。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:450
+msgid ""
+"Daytime temperature of the ground surface measured by MODIS. This runs considerably hotter than "
+"air temperature and is observed, not forecast."
+msgstr "MODIS 测得的白天地表温度。明显高于气温，且为观测值而非预报。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:646
+msgid "Default thresholds"
+msgstr "默认阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:621
+msgid "Default {value}: {source}"
+msgstr "默认值 {value}：{source}"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:251
+msgid "Definitional: more than one day with a detection, i.e. not a single flare-up"
+msgstr "按定义：探测到火点超过一天，即不是单次突发"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:710
+msgid "Dependence vs independence"
+msgstr "相关性与独立性"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:510
+msgid ""
+"Depending on the probability required, the figure ranges from {high} (at {high_t}%) to {low} (at "
+"{low_t}%)."
+msgstr "根据所要求的概率，该数字从 {high}（{high_t}%）到 {low}（{low_t}%）不等。"
+
+#: config/hazards.py:402
+msgid "Depth in m"
+msgstr "深度（米）"
+
+#: ui/components.py:21
+msgid "Description"
+msgstr "说明"
+
+#: ui/registry.py:34
+msgid "Display areas exposed to multiple hazards"
+msgstr "显示暴露于多种灾害的区域"
+
+#: ui/registry.py:37
+msgid "Display child population exposed to each type of hazard at different thresholds"
+msgstr "显示不同阈值下暴露于各类灾害的儿童人口"
+
+#: ui/layout.py:111
+msgid "Don't show this again"
+msgstr "不再显示"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:157
+msgid "Download"
+msgstr "下载"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:1031
+msgid "Download Excel ({n} feature × {h} hazards)"
+msgid_plural "Download Excel ({n} features × {h} hazards)"
+msgstr[0] "下载 Excel（{n} 个要素 × {h} 种灾害）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1712
+msgid "Download Excel workbook"
+msgstr "下载 Excel 工作簿"
+
+#: sections/infrastructure.py:486
+msgid "Download full data (Excel)"
+msgstr "下载完整数据（Excel）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:165
+msgid "Draft translations are machine-assisted and awaiting review; the English version is authoritative."
+msgstr "草稿译文为机器辅助翻译，尚待审校；以英文版本为准。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:226 config/elnino.py:524
+msgid "Drier than normal"
+msgstr "比常年偏干"
+
+#: sections/analysis.py:122
+msgid "Drop file or click to browse"
+msgstr "拖放文件或点击浏览"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:213
+msgid "Drop your CSV here, or click to choose"
+msgstr "将 CSV 拖放到此处，或点击选择"
+
+#: config/hazards.py:43 config/hazards.py:44 config/hazards.py:82
+msgid "Drought"
+msgstr "干旱"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:229
+msgid "Drought risk proxy — the season falls in the driest third."
+msgstr "干旱风险替代指标——该季节落在最干的三分位。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:315
+msgid "Dust forecast (CAMS)"
+msgstr "沙尘预报（CAMS）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:326
+msgid ""
+"Dust-specific aerosol optical depth — unlike the Sentinel-5P aerosol index it separates dust from"
+" smoke, and it forecasts ahead rather than reporting the last overpass."
+msgstr "沙尘专属气溶胶光学厚度——不同于 Sentinel-5P 气溶胶指数，它能区分沙尘与烟雾，且为提前预报而非报告最近一次过境。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:731
+msgid ""
+"ECMWF SEAS5 (system {system}), issued monthly, 51 ensemble members, the 2nd to 4th months after "
+"the issue month (e.g. issued September → Oct, Nov, Dec). Each member is one plausible version of "
+"the season; their spread is the uncertainty. The issue month itself is excluded: it is partly "
+"fixed by conditions already present at launch."
+msgstr ""
+"ECMWF SEAS5（系统 {system}），每月发布，51 个集合成员，取发布月之后第 2 至第 4 个月（例如 9 月发布 → 10、11、12 "
+"月）。每个成员是该季节的一种可能情景，其离散度即不确定性。发布月本身不计入：它部分取决于起报时已存在的条件。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:172
+msgid "ECMWF SEAS5 system {system} · issued {issues} · hindcast {hindcast}"
+msgstr "ECMWF SEAS5 系统 {system} · 发布于 {issues} · 回报期 {hindcast}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1697
+msgid "ECMWF SEAS5 system {system}, initialised {issue}, hindcast {hindcast}."
+msgstr "ECMWF SEAS5 系统 {system}，起报于 {issue}，回报期 {hindcast}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:216
+msgid "ECMWF SEAS5 system {system}; normal = its own {hindcast} hindcast."
+msgstr "ECMWF SEAS5 系统 {system}；常年值 = 其自身 {hindcast} 回报。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:47 sections/elnino.py:1284
+msgid "ENSO conditions"
+msgstr "ENSO 状况"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:93
+msgid ""
+"ET-SCI TXge35, day with maximum ≥35 °C — also the hot-day definition of the static Extreme heat "
+"layer"
+msgstr "ET-SCI TXge35，最高气温 ≥35 °C 的日数——也是静态“极端高温”图层的热日定义"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:83
+msgid "ETCCDI R20mm (WMO), very heavy precipitation day (≥20 mm), applied to the average day"
+msgstr "ETCCDI R20mm（世界气象组织），极强降水日（≥20 毫米），应用于平均日"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:96
+msgid "ETCCDI TR, tropical night (minimum >20 °C)"
+msgstr "ETCCDI TR，热带夜（最低气温 >20 °C）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1449
+msgid ""
+"Each bar is one hindcast season (1993–2016); the dashed line is this forecast. Shares of AREA, "
+"not population — see the note above for why the two differ."
+msgstr "每根柱代表一个回报季（1993–2016）；虚线为本次预报。这是面积占比而非人口占比——二者为何不同请参见上方说明。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:528
+msgid ""
+"Each cell classified at the threshold on the slider — dry, wet, or neither. The two signals "
+"cannot overlap, so the classes are exclusive. Recomputed live, unlike the stored `cat` band which"
+" is frozen at 50%."
+msgstr "每个格点按滑块上的阈值分类——偏干、偏湿或两者皆非。两种信号不会重叠，因此类别互斥。实时重新计算，与固定在 50% 的已存储 `cat` 波段不同。"
+
+#: sections/layers.py:203
+msgid ""
+"Each hazard topic is flagged at the pixel level when its threshold is exceeded. For topics with "
+"multiple layers (e.g. Drought combines agricultural and meteorological drought), an OR union is "
+"applied across layers before flagging. MHC then counts how many topics flag each pixel; only "
+"pixels reaching the user-selected minimum count N are displayed."
+msgstr ""
+"当某个灾害主题超过其阈值时，即在像元级别对其进行标记。对于包含多个图层的主题（如干旱综合了农业干旱和气象干旱），在标记前对各图层进行“或”合并。随后 MHC "
+"统计每个像元被标记的主题数量；仅显示达到用户所选最小数量 N 的像元。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:796
+msgid ""
+"Each period comes from one monthly forecast issue, named with it. A newer issue replaces an older"
+" one for any month both cover, so figures for the same month can change from one issue to the "
+"next. Periods are withdrawn once their months have passed: past months are observed, not "
+"forecast."
+msgstr "每个时段来自某一期月度预报，并以其命名。对两期都覆盖的月份，较新的一期会取代较旧的一期，因此同一月份的数字可能随期次变化。时段所含月份过去后即被撤下：过去的月份是观测而非预报。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:78
+msgid "Early Warning"
+msgstr "早期预警"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1122
+msgid "Early Warning · Population analysis · {label} · computed {time}"
+msgstr "早期预警 · 人口分析 · {label} · 计算于 {time}"
+
+#: config/hazards.py:56 config/hazards.py:90
+msgid "Earthquake"
+msgstr "地震"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:242 sections/elnino.py:887
+msgid "Either signal"
+msgstr "任一信号"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1132
+msgid "El Niño"
+msgstr "厄尔尼诺"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:57
+msgid "El Niño Seasonal Outlook"
+msgstr "厄尔尼诺季节展望"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:788
+msgid ""
+"El Niño conditions co-occurring with a signal is not proof the signal is caused by them. The "
+"forecast is the model's net response to every initial condition it was given — ENSO is never "
+"isolated within it. The El Niño fingerprint layer is the empirical cross-check: where the "
+"forecast resembles the model's own El Niño composite, the attribution has support; where it does "
+"not, it does not."
+msgstr ""
+"厄尔尼诺条件与信号同时出现并不能证明信号由其引起。预报是模式对其所有初始条件的综合响应——ENSO "
+"从未在其中被单独分离。厄尔尼诺特征图层是经验性交叉检验：预报与模式自身厄尔尼诺合成型相似之处，归因有据可依；不相似之处则无。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:625 sections/elnino.py:1307
+msgid "El Niño rainfall fingerprint"
+msgstr "厄尔尼诺降水特征"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:106
+msgid "El Niño results"
+msgstr "厄尔尼诺结果"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:562
+msgid "Ensemble-mean total rainfall forecast for the period."
+msgstr "该时段的集合平均预报总降水量。"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:732
+msgid "Enter a GEE asset id."
+msgstr "请输入 GEE 资源 ID。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:8
+msgid "Error"
+msgstr "错误"
+
+#: sections/infrastructure.py:474
+msgid "Error loading asset: {e}"
+msgstr "加载资产时出错：{e}"
+
+#: sections/early_warning.py:475
+msgid "Error: {e}"
+msgstr "错误：{e}"
+
+#: config/hazards.py:556
+msgid "Estimated female population of all ages."
+msgstr "所有年龄段的女性人口估算。"
+
+#: config/hazards.py:555
+msgid "Estimated male population of all ages."
+msgstr "所有年龄段的男性人口估算。"
+
+#: config/hazards.py:559
+msgid "Estimated population of boys under 18 years of age."
+msgstr "18 岁以下男童人口估算。"
+
+#: config/hazards.py:557
+msgid ""
+"Estimated population of children under 18 years of age. This is the denominator used for every "
+"child-exposure figure in the app."
+msgstr "18 岁以下儿童人口估算。这是本应用中所有儿童暴露数据所用的分母。"
+
+#: config/hazards.py:560
+msgid "Estimated population of girls under 18 years of age."
+msgstr "18 岁以下女童人口估算。"
+
+#: config/hazards.py:554
+msgid "Estimated total population of all ages."
+msgstr "所有年龄段的总人口估算。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1685
+msgid "Excluded from the count"
+msgstr "未计入的部分"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:58
+msgid ""
+"Explore the seasonal rainfall outlook and compute the number of children in areas with a dry or "
+"wet signal"
+msgstr "浏览季节降水展望，并计算处于偏干或偏湿信号区的儿童人数"
+
+#: sections/early_warning.py:1103 sections/infrastructure.py:835
+msgid "Exposed"
+msgstr "暴露"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1189
+msgid "Exposed children"
+msgstr "受影响儿童"
+
+#: sections/analysis.py:1015
+msgid "Exposed children by hazard"
+msgstr "按灾害划分的暴露儿童"
+
+#: sections/infrastructure.py:130
+msgid ""
+"Exposed population is attributed to each facility's nearest-neighbour (Voronoi) catchment across "
+"the district."
+msgstr "暴露人口按区县内每个设施的最近邻（泰森多边形）服务区进行归属。"
+
+#: sections/ai.py:165
+msgid "Exposed to ALL ({topics}): {n}"
+msgstr "同时暴露于全部（{topics}）：{n}"
+
+#: sections/ai.py:129
+msgid "Exposed to {topic}: {n}"
+msgstr "暴露于{topic}：{n}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1083
+msgid "Exposed where"
+msgstr "受影响条件"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:271
+msgid "Exposed where value >"
+msgstr "受影响条件：数值 >"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1247
+msgid "Exposed where value > {threshold}"
+msgstr "受影响条件：数值 > {threshold}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:642 sections/analysis.py:651 sections/early_warning.py:1121 ui/registry.py:97
+msgid "Exposure"
+msgstr "暴露"
+
+#: ui/registry.py:40
+msgid "Exposure Analysis"
+msgstr "暴露分析"
+
+#: sections/analysis.py:831
+msgid "Exposure by hazard topic"
+msgstr "按灾害主题划分的暴露"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:268
+msgid "Exposure threshold"
+msgstr "暴露阈值"
+
+#: config/forecast.py:170 config/forecast.py:187 config/forecast.py:208 config/hazards.py:48
+#: config/hazards.py:84
+msgid "Extreme Heat"
+msgstr "极端高温"
+
+#: config/hazards.py:461
+msgid ""
+"Extremely high temperatures (extremely hot days) are estimated when a day exceeds 35 degrees "
+"Celsius."
+msgstr "当日气温超过 35 摄氏度时，即估算为极端高温（极端炎热日）。"
+
+#: sections/infrastructure.py:706 ui/legend.py:76
+msgid "Facilities"
+msgstr "设施"
+
+#: sections/infrastructure.py:709
+msgid "Facilities in hazard"
+msgstr "处于灾害中的设施"
+
+#: sections/infrastructure.py:730
+msgid "Facilities: as supplied by the selected infrastructure layer (see the layer name for its source)"
+msgstr "设施：由所选基础设施图层提供（来源见图层名称）"
+
+#: sections/infrastructure.py:828
+msgid "Facility"
+msgstr "设施"
+
+#: ui/legend.py:78
+msgid "Facility catchments"
+msgstr "设施服务区"
+
+#: sections/infrastructure.py:487 sections/infrastructure.py:735
+msgid "Facility exposure"
+msgstr "设施暴露"
+
+#: sections/infrastructure.py:845
+msgid "Facility exposure — per-facility detail"
+msgstr "设施暴露 — 各设施明细"
+
+# Draft (machine-assisted) - needs native review
+#: auth/routes.py:136
+msgid "Failed to send code."
+msgstr "验证码发送失败。"
+
+#: sections/analysis.py:1007
+msgid "Feature"
+msgstr "要素"
+
+#: sections/analysis.py:201
+msgid "Feature name / ID field"
+msgstr "要素名称/ID 字段"
+
+#: config/hazards.py:283 sections/analysis.py:823 sections/analysis.py:1013
+msgid "Female"
+msgstr "女性"
+
+#: sections/analysis.py:827
+msgid "Female %"
+msgstr "女性占比"
+
+#: ui/components.py:250
+msgid ""
+"Figures are the modelled child population in areas where the hazard exceeds the stated threshold "
+"— indicative of relative exposure, not observed impacts."
+msgstr "数据为灾害超过所述阈值区域内的模拟儿童人口——反映相对暴露程度，而非观测到的影响。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:96
+msgid ""
+"Figures shown are {estimates}, derived from global hazard datasets combined with WorldPop gridded"
+" population. They indicate relative exposure — not observed impacts — and carry uncertainty that "
+"increases at finer administrative levels."
+msgstr "所示数字为{estimates}，由全球灾害数据集与 WorldPop 网格人口结合得出。它们表示相对暴露——而非实际观测到的影响——且行政级别越细，不确定性越大。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:633
+msgid "Filter"
+msgstr "筛选条件"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:473
+msgid ""
+"Fine particulate matter at the surface, forecast up to 5 days ahead by the Copernicus Atmosphere "
+"Monitoring Service. PM2.5 penetrates deep into the lungs and is the pollutant most strongly "
+"linked to child respiratory harm. Unlike satellite column measurements this is a ground-level "
+"concentration, so it can be read directly against health guidelines."
+msgstr "哥白尼大气监测服务提前最多 5 天预报的地面细颗粒物。PM2.5 可深入肺部，是与儿童呼吸系统损害关联最强的污染物。与卫星柱测量不同，这是地面浓度，可直接对照健康指导值。"
+
+#: config/forecast.py:227 config/forecast.py:245 config/hazards.py:49 config/hazards.py:85
+msgid "Fire"
+msgstr "火灾"
+
+#: config/hazards.py:50
+msgid "Fire Frequency"
+msgstr "火灾频率"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:239
+msgid ""
+"Fire-pixel brightness temperature. FIRMS carries no FRP or detection-count band, so brightness is"
+" the intensity measure."
+msgstr "火点像元亮温。FIRMS 不含 FRP 或探测次数波段，因此以亮温衡量强度。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:234
+msgid "Flood risk proxy — the season falls in the wettest third."
+msgstr "洪水风险替代指标——该季节落在最湿的三分位。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:324 sections/elnino.py:442
+msgid "For ADM1/ADM2, click the region on the map."
+msgstr "对于 ADM1/ADM2，请在地图上点击该地区。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:741
+#, python-format
+msgid ""
+"For each cell, the fraction of the 51 members below the 33rd percentile (drier third) and above "
+"the 67th (wetter third). With terciles, 33% is the no-information baseline."
+msgstr "对每个格点，51 个成员中低于第 33 百分位（最干三分位）和高于第 67 百分位（最湿三分位）的比例。按三分位划分，33% 即无信息基准。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1304
+msgid ""
+"For the empirical check, compare the map against the {layer} layer — the model's own difference "
+"between its El Niño and neutral hindcast seasons."
+msgstr "如需经验检验，请将地图与{layer}图层对照——即模式自身在厄尔尼诺与中性回报季之间的差异。"
+
+#: sections/layers.py:163
+msgid ""
+"For topics with multiple hazard layers (e.g. Drought combines agricultural and meteorological "
+"drought), hazard coverage is first computed independently for each layer at its own threshold. An"
+" OR union is then applied across layers to derive the combined topic footprint, which is "
+"subsequently overlaid with the WorldPop under-18 grid to estimate the number of children exposed."
+msgstr ""
+"对于包含多个灾害图层的主题（如干旱综合了农业干旱和气象干旱），首先按各图层自身阈值独立计算灾害覆盖范围，然后对各图层进行“或”合并，得出该主题的综合范围，再将其与 WorldPop 18 "
+"岁以下人口格网叠加，以估算暴露儿童人数。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:521 sections/early_warning.py:163 sections/early_warning.py:703
+#: sections/ew_shared.py:14 ui/registry.py:89
+msgid "Forecast"
+msgstr "预报"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:51
+msgid "Forecast Hazards"
+msgstr "预报灾害"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:215
+msgid "Forecast issued"
+msgstr "预报发布"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:604
+msgid "Forecast issued {issue}. Dry-area cutoff: {mm} mm."
+msgstr "预报发布于 {issue}。干旱地区临界值：{mm} 毫米。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:602
+msgid "Forecast issued {issue}. Three-month total. Dry-area cutoff: {mm} mm."
+msgstr "预报发布于 {issue}。三个月总量。干旱地区临界值：{mm} 毫米。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1256
+msgid ""
+"Forecast layers are 11–44 km, so exposure is computed on a 1 km population grid rather than 100 "
+"m. Totals differ from the Pop Analysis tab by well under 1%."
+msgstr "预报图层分辨率为 11–44 公里，因此暴露基于 1 公里而非 100 米人口网格计算。总数与“人口分析”选项卡的差异远小于 1%。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:537
+#, python-format
+msgid ""
+"Forecast mean minus the model's climatological mean, in mm. This is the magnitude the "
+"probabilities do not carry: a cell can be 90% likely to be wetter while only 3 mm above normal."
+msgstr "预报均值减去模式气候平均值，单位为毫米。这是概率无法体现的幅度：某格点偏湿的可能性可达 90%，却只比常年多 3 毫米。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:647
+msgid "Forecast mean temperature"
+msgstr "预报平均气温"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:246
+msgid "Forecast minus normal mean temperature, averaged over the signal area."
+msgstr "预报平均气温减去常年平均气温，在信号区内取平均。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:241
+msgid "Forecast minus normal season rainfall, averaged over the signal area."
+msgstr "预报降水减去常年季节降水，在信号区内取平均。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:487
+msgid ""
+"Forecast optical thickness of airborne desert dust. Because CAMS models dust as its own species, "
+"this isolates dust from smoke and other aerosols — and it looks days ahead rather than reporting "
+"a past satellite overpass."
+msgstr "预报的空中沙漠尘埃光学厚度。由于 CAMS 将沙尘作为独立物种建模，本图层可将沙尘与烟雾及其他气溶胶区分开——并提前数天预报，而非报告过去的卫星过境。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:558
+msgid "Forecast rainfall"
+msgstr "预报降水"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:507
+msgid "Forecast runs publish a few times a day — try a wider window."
+msgstr "预报每天发布数次——请尝试更宽的时间窗口。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:642
+msgid ""
+"Forecast seasonal mean temperature minus the model's own 1993–2016 climatology. Global land mean "
+"is about +1 °C, so most of the map is warm — the baseline is three decades old, not a pre-"
+"industrial one."
+msgstr "预报季节平均气温减去模式自身 1993–2016 年气候值。全球陆地均值约为 +1 °C，因此地图大部分偏暖——基准是三十年前的，并非工业化前水平。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:44
+msgid "Forecast skill"
+msgstr "预报技巧"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1384
+msgid "Forecast skill here"
+msgstr "此处的预报技巧"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:839
+msgid ""
+"Forecast skill varies by region, and the forecast grid is 1° (about 110 km at the equator), so "
+"figures are not precise below district level. Quote the range across thresholds and the forecast "
+"issue date — suggested wording below."
+msgstr "预报技巧因地区而异，且预报网格为 1°（赤道处约 110 公里），因此低于区级的数字并不精确。请引用跨阈值的范围以及预报发布日期——建议措辞见下文。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:179
+msgid ""
+"Forecast: ECMWF SEAS5 system {system}, issued {issue}, compared against its own {hindcast} "
+"hindcast. Population: {population}. Generated {time}."
+msgstr "预报：ECMWF SEAS5 系统 {system}，发布于 {issue}，对照其自身 {hindcast} 回报。人口：{population}。生成于 {time}。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:684
+msgid ""
+"Fraction of the 51 members where BOTH variables land in their extreme tercile at once. Read "
+"against 11.1%, not 33%: requiring two conditions together makes the no-information baseline 1/9."
+msgstr "51 个成员中两个变量同时落入各自极端三分位的比例。应以 11.1% 而非 33% 为参照：同时满足两个条件使无信息基准降为 1/9。"
+
+#: sections/ai.py:197
+msgid "Full hazard exposure summary for {country} at {level} level"
+msgstr "{country} {level} 级别灾害暴露完整摘要"
+
+#: sections/analysis.py:980 sections/analysis.py:1099 sections/infrastructure.py:695
+msgid "GEE error: {e}"
+msgstr "GEE 错误：{e}"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:119
+msgid "GFS runs 4x daily out to 16 days. Rainfall is totalled per UTC day from the latest run."
+msgstr "GFS 每天运行 4 次，预报至 16 天。降水按 UTC 日由最新一次运行累计。"
+
+#: sections/analysis.py:142
+msgid ""
+"GeoJSON upload supports up to {limits}. For larger files, upload your boundary to {gee} as an "
+"asset, make it publicly sharable, then paste the asset path into the text box below. "
+msgstr "GeoJSON 上传最多支持 {limits}。对于更大的文件，请将边界作为资产上传至 {gee}，设置为公开共享，然后将资产路径粘贴到下方文本框中。"
+
+#: sections/analysis.py:38
+msgid "GeoRepo Boundaries"
+msgstr "GeoRepo 边界"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:617 sections/early_warning.py:1113 sections/early_warning.py:1220
+#: sections/elnino.py:1648
+msgid "Girls"
+msgstr "女童"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:618
+msgid "Girls %"
+msgstr "女童占比"
+
+#: config/hazards.py:286
+msgid "Girls (under 18)"
+msgstr "女童（18 岁以下）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:235
+msgid "Girls in signal area ÷ all girls in region."
+msgstr "信号区女童 ÷ 地区全部女童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:229
+msgid "Girls under 18 in the signal area."
+msgstr "信号区内 18 岁以下女童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1102
+msgid "Group"
+msgstr "群体"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:294
+msgid "HOW TO QUOTE THIS"
+msgstr "引用方式"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:239
+msgid "HOW UNUSUAL"
+msgstr "异常程度"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:135
+msgid ""
+"Half-hourly satellite rainfall, ~2 day latency. Totalled per UTC day; missing half-hours are "
+"filled with the day's mean rate."
+msgstr "半小时卫星降水，延迟约 2 天。按 UTC 日累计；缺失的半小时以当日平均雨强补齐。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:227 ui/registry.py:95
+msgid "Hazard"
+msgstr "灾害"
+
+#: sections/layers.py:180
+msgid "Hazard Count (MHC)"
+msgstr "灾害数量（MHC）"
+
+#: sections/layers.py:57
+msgid "Hazard Intensity"
+msgstr "灾害强度"
+
+#: sections/layers.py:190
+msgid "Hazard Intensity (MHI)"
+msgstr "灾害强度（MHI）"
+
+#: ui/registry.py:30
+msgid "Hazard Layers"
+msgstr "灾害图层"
+
+#: ui/components.py:314
+msgid ""
+"Hazard and exposure data are not available for {region}, so no figures are reported. This "
+"reflects a gap in the underlying global datasets, not an absence of hazard or of children."
+msgstr "{region}暂无灾害和暴露数据，因此不报告任何数据。这反映的是底层全球数据集的缺口，而非不存在灾害或儿童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:380
+msgid "Hazard changed since the result below was computed. Compute again to update it."
+msgstr "自下方结果计算以来灾害设置已更改。请重新计算以更新。"
+
+#: ui/legend.py:312
+msgid "Hazard count (≥ {n})"
+msgstr "灾害数量（≥ {n}）"
+
+#: sections/analysis.py:1034
+msgid "Hazard exposure"
+msgstr "灾害暴露"
+
+#: sections/analysis.py:1020
+msgid "Hazard exposure by feature"
+msgstr "按要素划分的灾害暴露"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:1027
+msgid "Hazard exposure for {n} feature ready."
+msgid_plural "Hazard exposure for {n} features ready."
+msgstr[0] "已完成 {n} 个要素的灾害暴露计算。"
+
+#: sections/infrastructure.py:840
+msgid "Hazard intensity at site (native units)"
+msgstr "站点灾害强度（原始单位）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1068
+msgid "Hazard layer"
+msgstr "灾害图层"
+
+#: ui/legend.py:50
+msgid "Hazard score"
+msgstr "灾害评分"
+
+#: ui/legend.py:317
+msgid "Hazard score (> P{p})"
+msgstr "灾害评分（> P{p}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:622
+msgid "Hazard topic"
+msgstr "灾害主题"
+
+#: ui/legend.py:47
+msgid "Hazard topics (count)"
+msgstr "灾害主题（数量）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/ew_shared.py:49
+msgid "Hazard: {label} ({source}), {window}, {aggregation}, exposed where value > {threshold}"
+msgstr "灾害：{label}（{source}），{window}，{aggregation}，受影响条件：数值 > {threshold}"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:52
+msgid "Hazards forecast for the days ahead (under development)"
+msgstr "未来几天预报的灾害（开发中）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:48
+msgid "Hazards recently recorded by near-real-time satellite and reanalysis data (under development)"
+msgstr "近实时卫星和再分析数据近期记录的灾害（开发中）"
+
+#: config/hazards.py:368
+msgid "Health Facilities"
+msgstr "卫生设施"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:186
+msgid "Health facilities"
+msgstr "卫生设施"
+
+#: config/hazards.py:83
+msgid "Heatwave"
+msgstr "热浪"
+
+#: config/hazards.py:46
+msgid "Heatwave Duration"
+msgstr "热浪持续时间"
+
+#: config/hazards.py:45
+msgid "Heatwave Frequency"
+msgstr "热浪频率"
+
+#: config/hazards.py:47
+msgid "Heatwave Severity"
+msgstr "热浪强度"
+
+#: ui/legend.py:57
+msgid "High"
+msgstr "高"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:349
+msgid "Hindcast season (year)"
+msgstr "回报季（年份）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:338
+msgid "Historical"
+msgstr "历史"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:43 sections/elnino.py:1427
+msgid "Historical context"
+msgstr "历史背景"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:77
+msgid "Historical hazard data"
+msgstr "历史灾害数据"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:46
+msgid "Historically linked to El Nino"
+msgstr "与厄尔尼诺的历史关联"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1531
+msgid "Historically linked to El Niño"
+msgstr "与厄尔尼诺的历史关联"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:655
+msgid "Hot/cool tercile probability"
+msgstr "偏热/偏凉三分位概率"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:694
+msgid "Hotter and drier"
+msgstr "偏热且偏干"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:261
+msgid "Hotter and drier than normal"
+msgstr "比常年偏热且偏干"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:696
+msgid "Hotter and wetter"
+msgstr "偏热且偏湿"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:268
+msgid "Hotter and wetter than normal"
+msgstr "比常年偏热且偏湿"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:959
+msgid ""
+"How far from normal, as opposed to how likely. The probability says the season lands in the "
+"driest third; the anomaly says whether that means 10 mm below average or 200. Both are relative "
+"to the model's own 1993-2016 climatology, so a temperature anomaly here is not an absolute "
+"forecast temperature and carries the model's cool bias."
+msgstr ""
+"偏离常年的幅度，而非可能性。概率说明季节落入最干三分位；距平说明这意味着比平均少 10 毫米还是 200 毫米。两者都相对于模式自身 1993-2016 "
+"年气候值，因此这里的气温距平不是绝对的预报气温，且带有模式的偏冷偏差。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:715
+msgid ""
+"How many times more likely hot-and-dry is than if the two were independent, on a log₂ scale — 0 "
+"means independent, +1 means twice as likely. Positive values are the land–atmosphere feedback "
+"showing up in the ensemble, and are why the compound probability is counted per member rather "
+"than multiplied."
+msgstr "“偏热且偏干”比两者相互独立时可能性高多少倍，取 log₂ 尺度——0 表示独立，+1 表示两倍。正值体现了集合中的陆–气反馈，这正是复合概率按成员计数而非相乘的原因。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1663 sections/elnino_export.py:303
+msgid "How much does the probability threshold matter?"
+msgstr "概率阈值有多大影响？"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:370
+msgid "How this figure was produced"
+msgstr "该数字的计算方法"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:629
+msgid ""
+"How this model's rainfall differs between its 8 El Niño hindcast seasons and its 9 neutral ones. "
+"Where the current forecast resembles this pattern, attributing it to El Niño has empirical "
+"support from the model's own history; where it does not, it does not."
+msgstr "该模式在 8 个厄尔尼诺回报季与 9 个中性季之间的降水差异。当前预报与此型态相似之处，将其归因于厄尔尼诺有模式自身历史的经验支持；不相似之处则没有。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:639 sections/early_warning.py:1117
+msgid "How this was computed"
+msgstr "计算方法"
+
+#: sections/infrastructure.py:153
+msgid "How to run:"
+msgstr "操作方法："
+
+#: sections/analysis.py:147
+msgid "How to upload a table to GEE →"
+msgstr "如何向 GEE 上传表格 →"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:45
+msgid "How unusual is it"
+msgstr "异常程度"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1519
+msgid "How unusual is it?"
+msgstr "异常程度如何？"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:948
+msgid ""
+"How well the model's hindcast tracked observations in each cell, 1993-2016, as a correlation. It "
+"says whether a signal here has a historical track record — it corrects nothing and changes no "
+"count. Read it as the generous measure: a correlation grades how well the model ranked wet and "
+"dry years, which is an easier test than whether its stated probabilities verify. A region can "
+"correlate respectably and still add little over guessing."
+msgstr ""
+"以相关系数表示的 1993-2016 "
+"年模式回报在每个格点跟踪观测的程度。它说明此处的信号是否有历史表现——不修正任何内容，也不改变任何计数。应视之为宽松的衡量：相关系数衡量的是模式对干湿年份的排序能力，这比其所给概率能否得到验证更容易通过。某地区可能相关性尚可，却几乎不比随机猜测好。"
+
+#: ui/layout.py:114
+msgid "I Understand"
+msgstr "我已了解"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:855
+msgid "I understand these are forecast estimates, not measured impacts."
+msgstr "我了解这些是预报估算，而非实测影响。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1099 sections/early_warning.py:1185
+msgid "Images used"
+msgstr "使用的图像"
+
+#: sections/infrastructure.py:834
+msgid "In catchment"
+msgstr "服务区内"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1104
+msgid "In region"
+msgstr "区域内"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:135
+msgid "In short."
+msgstr "简而言之。"
+
+#: sections/ai.py:254
+msgid "Incorrect credentials."
+msgstr "凭据不正确。"
+
+# Draft (machine-assisted) - needs native review
+#: auth/routes.py:129
+msgid "Incorrect or expired code. Please try again."
+msgstr "验证码错误或已过期，请重试。"
+
+#: config/hazards.py:427 config/hazards.py:434 config/hazards.py:483 config/hazards.py:532
+msgid "Index"
+msgstr "指数"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:513
+msgid ""
+"Index of UV-absorbing aerosols — desert dust and smoke. Values above about 1 suggest an active "
+"dust episode. It does not separate dust from smoke, and measures the column rather than ground-"
+"level concentration."
+msgstr "吸收紫外线的气溶胶指数——沙漠尘埃和烟雾。高于约 1 表明可能正发生沙尘事件。它不区分沙尘与烟雾，测量的是柱而非地面浓度。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:102 ui/registry.py:111
+msgid "Infra analysis"
+msgstr "基础设施分析"
+
+#: ui/registry.py:43
+msgid "Infrastructure Analysis"
+msgstr "基础设施分析"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1721
+msgid "JSON (for scripts)"
+msgstr "JSON（供脚本使用）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:231
+msgid "K"
+msgstr "K"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1136
+msgid "La Niña"
+msgstr "拉尼娜"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:187
+msgid "Land surface temperature (MODIS)"
+msgstr "地表温度（MODIS）"
+
+#: config/hazards.py:89
+msgid "Landslide"
+msgstr "滑坡"
+
+#: config/hazards.py:55
+msgid "Landslide Rainfall"
+msgstr "降雨型滑坡"
+
+#: config/hazards.py:510
+msgid "Landslides per km² per year"
+msgstr "每平方公里每年滑坡次数"
+
+#: ui/components.py:173
+msgid "Language"
+msgstr "语言"
+
+#: sections/infrastructure.py:831
+msgid "Latitude"
+msgstr "纬度"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:29
+msgid ""
+"Latitudes span both hemispheres - check for a missing minus sign if the country is entirely north"
+" or south of the equator."
+msgstr "纬度横跨南北两个半球——如果该国完全位于赤道以北或以南，请检查是否漏了负号。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:131
+msgid "Leave and clear"
+msgstr "离开并清除"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:126
+msgid "Leave this section?"
+msgstr "离开此部分？"
+
+#: ui/map_view.py:44
+msgid "Legend"
+msgstr "图例"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1086
+msgid "Live data"
+msgstr "实时数据"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:80
+msgid "Live hazard data"
+msgstr "实时灾害数据"
+
+#: sections/analysis.py:192 sections/early_warning.py:197 sections/infrastructure.py:111
+msgid "Load"
+msgstr "加载"
+
+# Draft (machine-assisted) - needs native review
+#: ui/map_view.py:33
+msgid "Loading layer…"
+msgstr "正在加载图层…"
+
+#: sections/infrastructure.py:830
+msgid "Longitude"
+msgstr "经度"
+
+#: ui/legend.py:57
+msgid "Low"
+msgstr "低"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:421
+msgid "Low (r < 0.2)"
+msgstr "低（r < 0.2）"
+
+#: sections/analysis.py:780
+msgid "MHC (≥{n} topics)"
+msgstr "MHC（≥{n} 个主题）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/layers.py:202
+msgid "MHC — "
+msgstr "MHC — "
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:782
+msgid "MHI (≥P{p})"
+msgstr "MHI（≥P{p}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/layers.py:210
+msgid "MHI — "
+msgstr "MHI — "
+
+#: config/hazards.py:469
+msgid "MW"
+msgstr "兆瓦"
+
+#: config/hazards.py:88
+msgid "Malaria"
+msgstr "疟疾"
+
+#: config/hazards.py:502
+msgid ""
+"Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites"
+" of infected female Anopheles mosquitoes. P. falciparum is the deadliest malaria parasite and the"
+" most prevalent on the African continent."
+msgstr "疟疾是一种危及生命的疾病，由受感染的雌性按蚊叮咬人类传播的寄生虫引起。恶性疟原虫（P. falciparum）是最致命的疟原虫，在非洲大陆最为流行。"
+
+#: config/hazards.py:282 sections/analysis.py:819 sections/analysis.py:1012
+msgid "Male"
+msgstr "男性"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:255
+msgid "Map layer"
+msgstr "地图图层"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:455
+msgid "Marginal (BSS 0–0.1)"
+msgstr "边际（BSS 0–0.1）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:25
+msgid "Median over period"
+msgstr "时段中位数"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:367
+msgid "Method"
+msgstr "方法"
+
+#: sections/early_warning.py:1234 sections/elnino.py:126 sections/layers.py:156 sections/layers.py:200
+#: ui/components.py:283
+msgid "Methodology"
+msgstr "方法"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:24
+msgid "Minimum over period"
+msgstr "时段最小值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1075
+msgid "Model run"
+msgstr "模式运行"
+
+# Draft (machine-assisted) - needs native review
+#: sections/ew_shared.py:62
+msgid "Model run: {run}"
+msgstr "模式运行：{run}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1242
+msgid "Model run: {run} (one run, by valid time)"
+msgstr "模式运行：{run}（单次运行，按有效时间）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/map_view.py:59
+msgid ""
+"Modelled estimates, not observed impacts. Boundaries and names shown do not imply endorsement or "
+"acceptance by the UNICEF"
+msgstr "为模型估算值，而非实际观测到的影响。所示边界和名称不代表联合国儿童基金会的认可或接受"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:422
+msgid "Moderate (r 0.2–0.4)"
+msgstr "中等（r 0.2–0.4）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:282
+msgid ""
+"Monthly ECMWF SEAS5 forecasts (latest issued {issue}), not a live feed. Each period is labelled "
+"with its issue. It shows where the season is likely to fall in the driest or wettest third of "
+"what this model normally predicts, during a period when El Niño conditions are present."
+msgstr "ECMWF SEAS5 月度预报（最新发布：{issue}），并非实时数据流。每个时段都标注其发布期次。它显示在厄尔尼诺条件存在期间，本季可能落入该模式通常预报值中最干或最湿三分位的地区。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1294
+msgid ""
+"Monthly sea-surface temperature anomaly in the Niño 3.4 region, {first} to {last}. Dashed lines "
+"mark the ±{thr} °C event thresholds. Observed from NOAA OISST — independent of the rainfall "
+"forecast."
+msgstr "Niño 3.4 区逐月海表温度距平，{first} 至 {last}。虚线标示 ±{thr} °C 事件阈值。观测数据来自 NOAA OISST——独立于降水预报。"
+
+#: sections/layers.py:52
+msgid "Multi Hazard"
+msgstr "多灾害"
+
+#: sections/analysis.py:835
+msgid "Multi Hazard Filters"
+msgstr "多灾害筛选"
+
+#: ui/registry.py:33
+msgid "Multi Hazard Indicators"
+msgstr "多灾害指标"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:96
+msgid "Multi-hazard"
+msgstr "多灾害"
+
+#: sections/ai.py:150
+msgid "Multi-hazard exposure — {country}"
+msgstr "多灾害暴露 — {country}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:632
+msgid "Multi-hazard filters"
+msgstr "多灾害筛选"
+
+#: sections/infrastructure.py:829
+msgid "Name"
+msgstr "名称"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:32
+msgid ""
+"Names containing a line break: {n}. These are collapsed automatically, but a line break can shift"
+" columns in some exports."
+msgstr "包含换行符的名称：{n}。系统会自动合并，但换行符在某些导出中可能导致列错位。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1086
+msgid ""
+"Near-real-time and forecast data change as new images and model runs arrive; the figures are for "
+"the window and run above, as available when computed."
+msgstr "近实时和预报数据会随新图像和新模式运行的到来而变化；这些数字对应上述时间窗口和运行，以计算时可用数据为准。"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1137
+msgid "Neutral"
+msgstr "中性"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:335
+msgid "Nitrogen dioxide (Sentinel-5P)"
+msgstr "二氧化氮（Sentinel-5P）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:494
+msgid ""
+"Nitrogen dioxide measured as a TOTAL COLUMN through the atmosphere — a traffic and combustion "
+"marker. This is not a surface concentration and is not directly comparable to WHO air quality "
+"guidelines."
+msgstr "以穿过大气的总柱浓度测量的二氧化氮——交通和燃烧标志物。这不是地面浓度，不能直接对照世卫组织空气质量指导值。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:453
+msgid "No better than guessing (BSS ≤ 0)"
+msgstr "不优于随机猜测（BSS ≤ 0）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1478
+msgid ""
+"No children are in a {threshold} signal area here. Lowering it to {lower} would return {children}"
+" children — so this is a demanding cutoff, not an absence of signal. The row below shows the full"
+" range."
+msgstr "此处没有儿童处于 {threshold} 的信号区。若降至 {lower}，将得到 {children} 名儿童——因此这是一个严格的临界值，而非没有信号。下方一行显示完整范围。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1470
+msgid ""
+"No children fall under this signal at any threshold tested — this region has no clear signal for "
+"the selected period, not a missing result."
+msgstr "在所有测试阈值下均无儿童处于该信号之下——该地区在所选时段内没有明确信号，而非结果缺失。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:693
+msgid "No clear combined signal"
+msgstr "无明确复合信号"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:523
+msgid "No clear signal"
+msgstr "无明确信号"
+
+#: sections/analysis.py:661
+msgid "No data available."
+msgstr "暂无数据。"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:415
+msgid "No dataset selected."
+msgstr "未选择数据集。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:75
+msgid "No datasets available in this category."
+msgstr "此类别中没有可用的数据集。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:16
+msgid "No facility_id column - ids will be generated, so a re-submission cannot update existing records."
+msgstr "缺少 facility_id 列——将自动生成 ID，因此重新提交时无法更新现有记录。"
+
+#: sections/analysis.py:839
+msgid "No hazard data available:"
+msgstr "暂无灾害数据："
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:611
+msgid "No hazard data for this region"
+msgstr "该地区无灾害数据"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:193
+msgid ""
+"No health standard for land-surface temperature; dashboard choice, above the 35 °C air level as "
+"LST runs hotter in sun"
+msgstr "地表温度没有健康标准；仪表板自定，高于 35 °C 气温水平，因为日照下地表温度更高"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:505
+msgid "No images for {label} between {start} and {end}."
+msgstr "{start} 至 {end} 之间没有 {label} 图像。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:14
+msgid "No latitude column. Name it 'latitude' (also accepted: lat, y)."
+msgstr "缺少纬度列。请命名为“latitude”（也接受：lat、y）。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:13
+msgid "No longitude column. Name it 'longitude' (also accepted: lon, long, x)."
+msgstr "缺少经度列。请命名为“longitude”（也接受：lon、long、x）。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:15
+msgid "No name column - facilities will be unlabelled."
+msgstr "缺少名称列——设施将没有标签。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1134 sections/elnino.py:1565
+msgid "No result."
+msgstr "无结果。"
+
+#: sections/analysis.py:1003
+msgid "No results returned."
+msgstr "未返回结果。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:21
+msgid "No row has a usable coordinate pair."
+msgstr "没有任何行包含可用的坐标对。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:95
+msgid "No standard for a multi-day mean; dashboard choice"
+msgstr "多日平均无标准；仪表板自定"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:322
+#, python-format
+msgid "No standard; dashboard choice near the top 1% of populated land (p99 0.5–0.8)"
+msgstr "无标准；仪表板自定，接近有人居住陆地的前 1%（p99 0.5–0.8）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:234
+msgid ""
+"No standard; every FIRMS pixel is a detected fire, and 330 K keeps those above the typical ~320 K"
+" median"
+msgstr "无标准；每个 FIRMS 像元都是已探测火点，330 K 保留高于典型中位数约 320 K 的像元"
+
+#: sections/ai.py:378
+msgid "No topics specified."
+msgstr "未指定主题。"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:475
+msgid ""
+"No {label} run found covering {date}. Runs publish a few hours after their start time — try a "
+"later start date."
+msgstr "未找到覆盖 {date} 的 {label} 运行。各次运行在起报后数小时发布——请尝试更晚的开始日期。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:208
+msgid "No-information baseline"
+msgstr "无信息基准"
+
+#: sections/layers.py:185 sections/layers.py:195
+msgid "None"
+msgstr "无"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:418 config/elnino.py:451
+msgid "Not assessed (no land observations)"
+msgstr "未评估（无陆地观测）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:969
+msgid ""
+"Not comparable with the rainfall threshold — a combined event is rarer, so its whole scale sits "
+"lower."
+msgstr "不可与降水阈值比较——复合事件更罕见，因此整个尺度更低。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:238
+msgid "Not counted above, and not evidence of 'no signal'."
+msgstr "未计入上方，也不能证明“没有信号”。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:9
+msgid "Not ready to send - fix the errors above."
+msgstr "尚不能发送——请先修正上述错误。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1476
+msgid "Nothing clears this threshold."
+msgstr "没有区域达到此阈值。"
+
+#: config/hazards.py:448
+msgid "Number of days"
+msgstr "天数"
+
+#: config/hazards.py:462
+msgid "Number of days over 35°C"
+msgstr "超过 35°C 的天数"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:258
+msgid "Number of days with a detected fire pixel in the window."
+msgstr "时间窗口内探测到火点像元的天数。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:521 sections/early_warning.py:147
+msgid "Observation"
+msgstr "观测"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:703 sections/ew_shared.py:14 ui/registry.py:88
+msgid "Observed"
+msgstr "观测"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:47
+msgid "Observed Hazards"
+msgstr "观测灾害"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:208
+msgid "Observed air temperature (ERA5-Land)"
+msgstr "观测气温（ERA5-Land）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:454
+msgid ""
+"Observed air temperature 2 m above ground, from the ERA5-Land reanalysis. Health heat thresholds "
+"are defined on 2 m air temperature, so this is the comparable measure — MODIS land-surface "
+"temperature runs considerably hotter. Reanalysis fills cloudy days that satellite retrievals "
+"miss, at the cost of roughly six days' latency."
+msgstr "来自 ERA5-Land 再分析的离地 2 米观测气温。健康高温阈值以 2 米气温定义，因此这是可比的衡量——MODIS 地表温度明显更高。再分析可补足卫星反演缺失的阴天，代价是约六天的延迟。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:125
+msgid "Observed rainfall (GPM IMERG)"
+msgstr "观测降水（GPM IMERG）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:981
+msgid ""
+"Observed sea-surface temperature anomaly in the Niño 3.4 region, from NOAA OISST — independent of"
+" the rainfall forecast. It shows whether an El Niño is actually underway. It does NOT prove the "
+"forecast signal is caused by one: the forecast is the model's net response to every initial "
+"condition it was given, and ENSO is never isolated within it. For the empirical check, compare "
+"the map against the El Niño rainfall fingerprint layer."
+msgstr ""
+"Niño 3.4 区观测海表温度距平，来自 NOAA OISST——独立于降水预报。它显示厄尔尼诺是否确实正在发生。它并不能证明预报信号由其引起：预报是模式对其所有初始条件的综合响应，ENSO "
+"从未在其中被单独分离。如需经验检验，请将地图与厄尔尼诺降水特征图层对照。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:253
+msgid ""
+"Of the children in the signal area. The rest may be unusual for other reasons. Consistency with "
+"El Niño is not proof of cause."
+msgstr "以信号区内儿童为基数。其余可能因其他原因而异常。与厄尔尼诺一致并不证明因果。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:887
+#, python-format
+msgid ""
+"One threshold on one number — NOT two filters applied in sequence. Each of the 51 members is "
+"checked against both its own rainfall and its own temperature, and counts only if both land in "
+"their extreme third. The percentage is the fraction of members that did. Counting per member is "
+"what keeps the physical link between heat and drought: multiplying two separate probabilities "
+"would assume they are independent, and they are not. Because two conditions must hold at once, "
+"chance agreement is 1 in 9 (11.1%), not 1 in 3 — so the whole scale sits lower, and 60% of "
+"members agreeing on both is already an extreme demand. A 25% compound value is as far above "
+"chance as 70% is for rainfall alone; the two numbers are not comparable."
+msgstr ""
+"这是对单一数值的单一阈值——而不是依次应用的两个筛选条件。51 "
+"个成员中的每一个都同时以其自身的降水和气温检验，只有两者都落入极端三分位才计入。百分比即符合条件的成员比例。按成员计数保留了高温与干旱之间的物理联系：将两个单独概率相乘等于假定二者独立，而事实并非如此。由于必须同时满足两个条件，随机一致的概率为九分之一（11.1%）而非三分之一——因此整个尺度更低，60%"
+" 的成员在两者上都一致已是极端要求。25% 的复合值高于随机水平的程度与仅降水的 70% 相当；这两个数字不可比较。"
+
+# Draft (machine-assisted) - needs native review
+#: auth/otp.py:35
+msgid "Only @unicef.org addresses are allowed."
+msgstr "仅允许使用 @unicef.org 邮箱地址。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:551
+msgid "Outlook unavailable"
+msgstr "展望不可用"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:383
+msgid "Ozone column (Sentinel-5P)"
+msgstr "臭氧柱（Sentinel-5P）"
+
+#: config/hazards.py:495
+msgid ""
+"P. vivax is the dominant malaria parasite in most countries outside of sub-Saharan Africa. "
+"Malaria is a life-threatening disease caused by parasites transmitted to humans through the bites"
+" of infected female Anopheles mosquitoes."
+msgstr "间日疟原虫（P. vivax）是撒哈拉以南非洲以外大多数国家的主要疟原虫。疟疾是一种危及生命的疾病，由受感染的雌性按蚊叮咬人类传播的寄生虫引起。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:293
+msgid "PM10 forecast (CAMS)"
+msgstr "PM10 预报（CAMS）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:270
+msgid "PM2.5 forecast (CAMS)"
+msgstr "PM2.5 预报（CAMS）"
+
+#: config/hazards.py:489
+msgid "PM2.5 in μg/m³"
+msgstr "PM2.5（μg/m³）"
+
+#: sections/ai.py:42
+msgid "Password"
+msgstr "密码"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:670
+msgid "Paste any GEE Image or ImageCollection id to run the same exposure analysis."
+msgstr "粘贴任意 GEE Image 或 ImageCollection ID，即可运行相同的暴露分析。"
+
+#: config/hazards.py:517
+msgid "Peak Ground Acceleration (g)"
+msgstr "地面峰值加速度（g）"
+
+#: config/hazards.py:516
+msgid ""
+"Peak ground acceleration (PGA) on reference rock for a 475-year return period (10% probability of"
+" exceedance in 50 years), from the GEM Global Seismic Hazard Map v2023.1."
+msgstr "基准基岩上 475 年重现期（50 年超越概率 10%）的地面峰值加速度（PGA），数据来自 GEM 全球地震灾害图 v2023.1。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:23
+msgid "Peak over period"
+msgstr "时段峰值"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:955
+msgid "Pearson r"
+msgstr "皮尔逊相关系数 r"
+
+#: sections/infrastructure.py:793
+msgid "Per-facility data failed: {e}"
+msgstr "各设施数据生成失败：{e}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/infrastructure.py:496
+msgid ""
+"Per-facility figures count children within each facility's individual buffer; buffers overlap, so"
+" these values may double-count and must not be summed. Use the dissolved-buffer summary above for"
+" district totals."
+msgstr "按设施统计的数字计算的是每个设施各自缓冲区内的儿童；缓冲区相互重叠，因此这些数值可能重复计算，不应相加。区级总数请使用上方的合并缓冲区汇总。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:203
+msgid "Period"
+msgstr "时段"
+
+#: config/hazards.py:496 config/hazards.py:503
+msgid "Persons"
+msgstr "人"
+
+#: config/hazards.py:566
+msgid "Persons per 100 m pixel"
+msgstr "每 100 米像元人数"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:234
+msgid "Pick a layer below to preview it."
+msgstr "在下方选择一个图层进行预览。"
+
+#: ui/components.py:56
+msgid "Pixel-based hazard score (MHI)"
+msgstr "基于像元的灾害评分（MHI）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:99 ui/registry.py:108
+msgid "Pop analysis"
+msgstr "人口分析"
+
+#: sections/analysis.py:641 sections/early_warning.py:1085 sections/layers.py:92
+msgid "Population"
+msgstr "人口"
+
+#: sections/analysis.py:1010
+msgid "Population (children)"
+msgstr "人口（儿童）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:54
+msgid "Population Analysis"
+msgstr "人口分析"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:218
+msgid "Population data"
+msgstr "人口数据"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1701
+msgid "Population grid: {n} m."
+msgstr "人口网格：{n} 米。"
+
+#: sections/early_warning.py:1253 ui/components.py:281
+msgid "Population: {basis}"
+msgstr "人口：{basis}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1250
+msgid "Population: {basis}, aggregated to {n} m"
+msgstr "人口：{basis}，聚合至 {n} 米"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:409
+msgid ""
+"Positive values indicate UV-absorbing aerosols — desert dust and smoke. Values above ~1 suggest "
+"an active dust episode."
+msgstr "正值表示吸收紫外线的气溶胶——沙漠尘埃和烟雾。高于约 1 表明可能正发生沙尘事件。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:445
+msgid ""
+"Predicted air temperature 2 m above ground from NOAA GFS — the standard height for weather "
+"observations, so this is comparable to a thermometer reading rather than a surface temperature."
+msgstr "NOAA GFS 预报的离地 2 米气温——气象观测的标准高度，因此可与温度计读数相比，而非地表温度。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:524
+msgid "Predicted conditions — looks ahead"
+msgstr "预测状况——着眼未来"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:75
+msgid "Preparedness"
+msgstr "备灾"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:652
+msgid "Preparedness · Population analysis · computed {time}"
+msgstr "备灾 · 人口分析 · 计算于 {time}"
+
+#: sections/infrastructure.py:761
+msgid "Preparing per-facility download…"
+msgstr "正在准备各设施数据下载…"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:17
+msgid "Press Ctrl+C"
+msgstr "请按 Ctrl+C"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:840
+msgid "Preview failed: {e}"
+msgstr "预览失败：{e}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:846
+msgid "Previewing {images} from the {run} run · {range} — select a region below to compute exposure."
+msgstr "正在预览 {run} 运行的 {images} · {range}——在下方选择地区以计算暴露。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:849
+msgid "Previewing {images} · {range} — select a region below to compute exposure."
+msgstr "正在预览 {images} · {range}——在下方选择地区以计算暴露。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:510
+msgid ""
+"Probability that the selected signal occurs — the fraction of the 51 ensemble members falling in "
+"that tercile. Follows the signal selector above."
+msgstr "所选信号出现的概率——51 个集合成员中落入该三分位的比例。随上方的信号选择而变化。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:660
+msgid ""
+"Probability the season lands in the warmest third of the model's own climatology. Note how much "
+"of the tropics sits near 100%: against a 1993–2016 baseline, warming has made the hot tercile "
+"close to certain in many places, which is why it adds little there."
+msgstr "该季节落入模式自身气候最暖三分位的概率。注意热带大部分接近 100%：相对 1993–2016 年基准，变暖已使许多地方的偏热三分位近乎确定，因此在那里意义不大。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:38 sections/elnino_export.py:205
+msgid "Probability threshold"
+msgstr "概率阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:647 sections/early_warning.py:1090
+msgid "Produced by"
+msgstr "制作方"
+
+#: config/hazards.py:523
+msgid ""
+"Proximity to holocene volcanoes (active since 1800) within a 100 km buffer. The Global Volcanism "
+"Program (GVP) database is a comprehensive record of volcanic activity and related phenomena "
+"worldwide."
+msgstr "距全新世火山（1800 年以来活动）100 公里缓冲区内的邻近程度。全球火山活动计划（GVP）数据库全面记录了全球火山活动及相关现象。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1677
+msgid "Quote the range, not a single figure."
+msgstr "请引用范围，而不是单一数字。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:255
+msgid "RELIABILITY"
+msgstr "可靠性"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:302 config/forecast.py:104 config/forecast.py:125 sections/elnino.py:191
+#: sections/elnino.py:324
+msgid "Rainfall"
+msgstr "降水"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:303
+msgid "Rainfall + temperature"
+msgstr "降水 + 气温"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:533
+msgid "Rainfall anomaly"
+msgstr "降水距平"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:243
+#, python-format
+msgid "Rainfall anomaly (% of normal)"
+msgstr "降水距平（占常年 %）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:240
+msgid "Rainfall anomaly (mm vs model normal)"
+msgstr "降水距平（毫米，相对模式常年值）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:541
+msgid "Rainfall anomaly vs normal"
+msgstr "降水距平百分率"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:104
+msgid "Rainfall forecast (NOAA GFS)"
+msgstr "降水预报（NOAA GFS）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:584
+msgid "Rainfall skill (classified)"
+msgstr "降水预报技巧（分级）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:597
+msgid "Rainfall skill (correlation)"
+msgstr "降水预报技巧（相关系数）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1504
+msgid "Rainfall vs normal"
+msgstr "降水与常年比较"
+
+#: config/hazards.py:509
+msgid ""
+"Rainfall-triggered landslide hazard based on the GFDRR Global Landslide Hazard Map (V2), "
+"representing the annual frequency of significant rainfall-induced landslides per km²."
+msgstr "基于 GFDRR 全球滑坡灾害图（V2）的降雨诱发滑坡灾害，表示每平方公里重大降雨诱发滑坡的年发生频率。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:140
+msgid "Read me first"
+msgstr "请先阅读"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:164
+msgid "Read this before quoting a number"
+msgstr "引用数字前请阅读"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:171
+msgid "Read this before quoting any number in this file"
+msgstr "引用本文件中任何数字前请阅读"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1036 sections/elnino.py:1039
+msgid "Ready."
+msgstr "就绪。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:218
+msgid ""
+"Reanalysis 2 m air temperature, the basis health heat thresholds are defined on — unlike MODIS "
+"land-surface temperature, and unaffected by cloud cover. ~6 day latency."
+msgstr "再分析 2 米气温，健康高温阈值即据此定义——不同于 MODIS 地表温度，且不受云量影响。延迟约 6 天。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:525
+msgid "Recently observed — not a forecast"
+msgstr "近期观测——并非预报"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:404
+msgid ""
+"Recommended. Where normal rainfall is a fraction of a millimetre, a “wettest third” is rounding "
+"noise at any threshold — without this, desert children are counted as flood-exposed."
+msgstr "推荐。常年降水仅为零点几毫米的地方，任何阈值下的“最湿三分位”都只是舍入噪声——若不启用，沙漠中的儿童会被计为受洪水影响。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:575
+msgid ""
+"Red where the climatology is below the cutoff and a tercile is rounding noise rather than signal "
+"— a 'wet third' on 0.3 mm of normal rainfall means nothing. Excluded from exposure by default."
+msgstr "红色表示气候值低于阈值、三分位只是舍入噪声而非信号的地区——在常年仅 0.3 毫米降水的地方，“最湿三分位”毫无意义。默认不计入暴露。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:640 sections/early_warning.py:1084 sections/elnino_export.py:201
+msgid "Region"
+msgstr "地区"
+
+#: sections/analysis.py:851 sections/early_warning.py:1248 sections/infrastructure.py:728
+msgid "Region: {region}"
+msgstr "区域：{region}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:195
+msgid "Reliability"
+msgstr "可靠性"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:150
+msgid "Reliability varies."
+msgstr "可靠性因地而异。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:912
+msgid ""
+"Requires the same ensemble members to be in the warmest (or coolest) third as well, giving four "
+"combinations. Hot-and-dry drives water scarcity, crop failure and heat stress together; hot-and-"
+"wet is the window for malaria, dengue and waterborne disease; cool-and-wet is a flood proxy; "
+"cool-and-dry is water stress without the heat load. Two cautions. Against a 1993-2016 baseline, "
+"warming has made the warmest third close to certain across much of the tropics, so there the hot "
+"requirement adds little and the count stays near the rainfall-only figure — it discriminates most"
+" in the subtropics. And the cool combinations are genuinely rarer for the same reason, so expect "
+"smaller counts rather than reading them as an error."
+msgstr ""
+"要求同一批集合成员也处于最暖（或最凉）三分位，由此形成四种组合。偏热且偏干同时导致缺水、作物歉收和热应激；偏热且偏湿是疟疾、登革热和水源性疾病的传播窗口；偏凉且偏湿是洪水替代指标；偏凉且偏干是没有热负荷的水分胁迫。有两点需注意。相对"
+" 1993-2016 "
+"年基准，变暖已使热带大部分地区的最暖三分位近乎确定，因此在那里高温条件作用不大，计数接近仅看降水的数字——其区分作用主要体现在亚热带。同样原因，偏凉组合确实更少见，因此计数较小属正常，不应视为错误。"
+
+#: ui/threshold.py:94
+msgid "Reset to defaults"
+msgstr "恢复默认值"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:23
+msgid "Resolution"
+msgstr "分辨率"
+
+#: config/hazards.py:39 config/hazards.py:79
+msgid "River Flood"
+msgstr "河流洪水"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:27
+msgid "Rows at exactly 0,0 (usually a blank coordinate rather than a real location): {n}."
+msgstr "恰好位于 0,0 的行（通常是空坐标而非真实位置）：{n}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:31
+msgid "Rows sharing a coordinate with another row (possible duplicates): {n}."
+msgstr "与其他行坐标相同的行（可能重复）：{n}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:20
+msgid "Rows with a missing or non-numeric coordinate (dropped): {n} of {total}."
+msgstr "坐标缺失或非数值的行（将被删除）：{n}/{total}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:23
+msgid ""
+"Rows with latitude outside -90..90: {n}. If these look like longitudes, the two columns are "
+"swapped."
+msgstr "纬度超出 -90..90 的行：{n}。如果它们看起来像经度，说明两列互换了。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:22
+msgid "Rows with longitude outside -180..180: {n}."
+msgstr "经度超出 -180..180 的行：{n}。"
+
+#: config/hazards.py:433
+msgid ""
+"SPEI adds the effect of evapotranspiration and is better suited to assess droughts under climate "
+"change scenarios where temperature changes are important. Probability values are computed from "
+"the full 1958–2025 record (804 monthly time steps)."
+msgstr "SPEI 增加了蒸散的影响，更适合评估温度变化显著的气候变化情景下的干旱。概率值根据 1958–2025 年完整记录（804 个月度时间步长）计算。"
+
+#: config/hazards.py:426
+msgid ""
+"SPI measures the deviation of precipitation from the climatological average over a given "
+"accumulation period and is widely used to detect and characterize meteorological droughts. "
+"Probability values are computed from the full 1958–2025 record (804 monthly time steps)."
+msgstr "SPI 衡量给定累积期内降水量相对于气候平均值的偏离程度，被广泛用于识别和描述气象干旱。概率值根据 1958–2025 年完整记录（804 个月度时间步长）计算。"
+
+#: config/hazards.py:51
+msgid "Sand Dust Storm"
+msgstr "沙尘暴"
+
+#: config/forecast.py:315 config/forecast.py:399 config/hazards.py:86
+msgid "Sand and Dust Storm"
+msgstr "沙尘暴"
+
+#: config/hazards.py:482
+msgid ""
+"Sand and dust storms (SDS) are caused by intense winds over areas of arid soil that pick up large"
+" amounts of ground material into the atmosphere."
+msgstr "沙尘暴（SDS）是由干旱土壤地区上空的强风将大量地表物质卷入大气而形成的。"
+
+#: ui/map_view.py:52
+msgid "Satellite"
+msgstr "卫星"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:435
+msgid ""
+"Satellite-estimated rainfall that has already fallen, from the GPM constellation. Use it to see "
+"what actually happened; it is not a forecast and lags roughly two days."
+msgstr "来自 GPM 卫星群、已经降下的卫星估算降水。用于查看实际发生的情况；它不是预报，延迟约两天。"
+
+#: config/hazards.py:367 ui/layout.py:181
+msgid "Schools"
+msgstr "学校"
+
+#: config/hazards.py:545
+msgid "Score"
+msgstr "评分"
+
+#: sections/analysis.py:50 sections/early_warning.py:310 sections/elnino.py:425
+#: sections/infrastructure.py:76 sections/infrastructure.py:339
+msgid "Search country / territory…"
+msgstr "搜索国家/地区…"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:114
+msgid "Seasonal"
+msgstr "季节"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:280
+msgid "Seasonal outlook"
+msgstr "季节展望"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:780
+msgid ""
+"Seasonal skill is regional. SEAS5 predicts well where ENSO teleconnections are strong and barely "
+"at all elsewhere, so two equal-looking signals are not equally trustworthy. Check the skill layer"
+" before relying on a figure; it is reported alongside each result but is NOT applied to it. Read "
+"it as a generous estimate: the correlation grades how well the model ranks wet and dry years, "
+"which is an easier test than whether the probabilities themselves verify. A region can correlate "
+"respectably and still add little over guessing."
+msgstr ""
+"季节预报技巧因地区而异。SEAS5 在 ENSO "
+"遥相关强的地区预报良好，在其他地区几乎没有技巧，因此两个看似相同的信号可信度并不相同。依赖某个数字前请查看技巧图层；它随每个结果一并报告，但并未应用于结果。应视之为宽松估计：相关系数衡量的是模式对干湿年份排序的能力，这比概率本身能否得到验证更容易通过。某地区可能相关性尚可，却几乎不比随机猜测好。"
+
+#: sections/elnino.py:1036 sections/infrastructure.py:457
+msgid "Select a country first."
+msgstr "请先选择国家。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:943
+msgid "Select a country."
+msgstr "请选择国家。"
+
+#: ui/registry.py:31
+msgid "Select a layer to show the occurrence probability of each type of hazard"
+msgstr "选择图层以显示各类灾害的发生概率"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:334
+msgid "Select a region and dataset, then Compute."
+msgstr "选择地区和数据集，然后点击“计算”。"
+
+#: sections/analysis.py:103 sections/elnino.py:452
+msgid "Select a region, then Compute."
+msgstr "选择区域，然后点击“计算”。"
+
+#: sections/infrastructure.py:665
+msgid "Select an adm2 region and click a district on the map to bound the analysis."
+msgstr "请选择 adm2 区域并在地图上点击一个区县以限定分析范围。"
+
+#: ui/threshold.py:75
+msgid "Select at least one hazard topic to adjust thresholds."
+msgstr "请至少选择一个灾害主题以调整阈值。"
+
+#: sections/analysis.py:72
+msgid "Select hazard topics…"
+msgstr "选择灾害主题…"
+
+#: sections/infrastructure.py:663
+msgid "Select or load a facility layer first."
+msgstr "请先选择或加载设施图层。"
+
+#: sections/analysis.py:366 sections/early_warning.py:431 sections/infrastructure.py:387
+#: ui/legend.py:101 ui/legend.py:115 ui/legend.py:529
+msgid "Selected region"
+msgstr "所选区域"
+
+#: ui/legend.py:89
+msgid "Selected subregion"
+msgstr "所选子区域"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:300
+msgid "Sensitivity"
+msgstr "敏感性"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:759
+msgid ""
+"Separately, the model's {hindcast} hindcast is compared against observations per grid cell: "
+"rainfall against {reference}, temperature against ERA5-Land. The correlation asks whether the "
+"forecast's seasonal average tracked reality year to year, which is what tells you where the model"
+" has a historical track record. It adjusts no figure — it is reported beside each result so a "
+"signal from a well-predicted region can be told from one that is not."
+msgstr ""
+"另外，将模式 {hindcast} 回报逐格点与观测比较：降水对比 {reference}，气温对比 "
+"ERA5-Land。相关系数反映预报季节平均值是否逐年跟随实际，据此可知模式在哪里有可靠的历史表现。它不修正任何数字——随每个结果一并报告，以便区分来自预报良好地区的信号与其他信号。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1603
+msgid "Share"
+msgstr "占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1097 sections/early_warning.py:1105 sections/early_warning.py:1181
+msgid "Share exposed"
+msgstr "受影响比例"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:350
+msgid "Share of area under signal"
+msgstr "处于信号下的面积占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:230
+msgid "Share of boys"
+msgstr "男童占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:224 sections/elnino_export.py:312
+msgid "Share of children"
+msgstr "儿童占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:233
+msgid "Share of girls"
+msgstr "女童占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:252
+msgid "Share of signal attributable"
+msgstr "可归因的信号占比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:206
+msgid "Share of the 51 forecast ensemble members that must agree before an area counts."
+msgstr "某一区域被计入前，51 个预报集合成员中必须一致的比例。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:257
+msgid ""
+"Share of the signal area where the model's past forecasts correlated with {reference} "
+"observations at r ≥ {r} ({hindcast}). A generous measure."
+msgstr "信号区中模式过去预报与 {reference} 观测相关系数 r ≥ {r}（{hindcast}）的占比。这是宽松的衡量。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:343
+msgid ""
+"Shares of interpretable AREA, not population: the child population grid is 2025 and applying it "
+"to 1993 would imply a precision that does not exist. This is why these percentages differ from "
+"the Summary sheet's share of children."
+msgstr "这是可解读面积的占比，而非人口：儿童人口网格为 2025 年数据，将其应用于 1993 年会暗示一种并不存在的精度。这就是这些百分比与摘要表中儿童占比不同的原因。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:689
+msgid "Show / hide on map"
+msgstr "在地图上显示/隐藏"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:564
+msgid "Show the English text"
+msgstr "显示英文原文"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:694
+msgid "Show this layer on the map"
+msgstr "在地图上显示此图层"
+
+#: sections/ai.py:189
+msgid "Showing hazard layer {layer}"
+msgstr "正在显示灾害图层 {layer}"
+
+#: sections/ai.py:186
+msgid "Showing hazard layer {layer} in {country}"
+msgstr "正在显示 {country} 的灾害图层 {layer}"
+
+#: sections/ai.py:195
+msgid "Showing {topic} exposure layer"
+msgstr "正在显示{topic}暴露图层"
+
+#: sections/ai.py:192
+msgid "Showing {topic} exposure layer in {country}"
+msgstr "正在显示 {country} 的{topic}暴露图层"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:889
+msgid "Showing: {signal}"
+msgstr "当前显示：{signal}"
+
+#: sections/ai.py:47
+msgid "Sign In"
+msgstr "登录"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:204
+msgid "Signal"
+msgstr "信号"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:277
+msgid "Signal '{signal}' is a compound signal and needs a period."
+msgstr "信号“{signal}”为复合信号，需要指定时段。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:260
+msgid "Signal area that could be scored"
+msgstr "可评分的信号区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:256
+msgid "Signal area with usable skill"
+msgstr "具备可用技巧的信号区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:518
+msgid "Signal category"
+msgstr "信号类别"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:504
+msgid "Signal probability"
+msgstr "信号概率"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:549
+msgid "Signal strength (wet − dry)"
+msgstr "信号强度（偏湿 − 偏干）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:367
+msgid "Signal where probability ≥"
+msgstr "信号条件：概率 ≥"
+
+#: sections/infrastructure.py:837
+msgid "Site in hazard (1 = exposed)"
+msgstr "站点处于灾害中（1 = 暴露）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1387
+msgid ""
+"Skill is reported, never applied — the count above is unfiltered. The correlation grades how well"
+" the forecast ranked wet and dry years, which is a more forgiving test than whether its "
+"probabilities verify."
+msgstr "技巧仅作报告，从不应用——上方计数未经过滤。相关系数衡量的是预报对干湿年份的排序能力，这比其概率能否得到验证更宽松。"
+
+#: ui/components.py:34
+msgid "Source"
+msgstr "来源"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:169
+msgid "Source: "
+msgstr "来源："
+
+#: sections/infrastructure.py:720
+msgid "Standard (default) thresholds"
+msgstr "标准（默认）阈值"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:129
+msgid "Stay here"
+msgstr "留在此处"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:153
+msgid "Step by step"
+msgstr "逐步说明"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1130
+msgid "Strong El Niño"
+msgstr "强厄尔尼诺"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1134
+msgid "Strong La Niña"
+msgstr "强拉尼娜"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:166 sections/elnino_export.py:571
+msgid "Suggested wording when quoting this figure"
+msgstr "引用此数字的建议措辞"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:351
+msgid "Sulphur dioxide (Sentinel-5P)"
+msgstr "二氧化硫（Sentinel-5P）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:499
+msgid ""
+"Sulphur dioxide total column, strongest near volcanic plumes and heavy industry. Low values are "
+"genuinely negative because of retrieval noise. Not a surface concentration."
+msgstr "二氧化硫总柱，在火山羽流和重工业附近最强。由于反演噪声，低值确实为负。这不是地面浓度。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:187
+msgid "Summary"
+msgstr "摘要"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:377
+msgid ""
+"Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+"CO column — a biomass-burning and combustion tracer."
+msgstr "已由 cams_pm25/cams_pm10（地面浓度，可对照世卫组织，预报）取代——停用。CO 柱浓度——生物质燃烧和燃烧示踪物。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:391
+msgid ""
+"Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+"Total ozone column — dominated by stratospheric ozone, so it is not a surface air-quality measure"
+" on its own."
+msgstr "已由 cams_pm25/cams_pm10（地面浓度，可对照世卫组织，预报）取代——停用。臭氧总柱——以平流层臭氧为主，因此本身并非地面空气质量指标。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:344
+msgid ""
+"Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+"Tropospheric NO₂ column, a traffic and combustion marker. Cloud-free retrievals only."
+msgstr "已由 cams_pm25/cams_pm10（地面浓度，可对照世卫组织，预报）取代——停用。对流层 NO₂ 柱浓度，交通和燃烧标志物。仅无云反演。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:361
+msgid ""
+"Superseded by cams_pm25/cams_pm10 (surface concentration, WHO-comparable, forecast) — inactive. "
+"Volcanic and industrial SO₂. Low values can be negative — this is retrieval noise, not absence of"
+" gas."
+msgstr "已由 cams_pm25/cams_pm10（地面浓度，可对照世卫组织，预报）取代——停用。火山和工业 SO₂。低值可能为负——这是反演噪声，并非没有气体。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:308
+msgid ""
+"Surface PM10, comparable to the WHO guideline of 45 µg/m³ (24-hour mean). Includes coarse dust, "
+"so it spikes far above PM2.5 during dust events."
+msgstr "地面 PM10，可对照世卫组织 45 微克/立方米（24 小时平均）指导值。包含粗颗粒沙尘，因此沙尘事件期间远高于 PM2.5。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:287
+msgid ""
+"Surface PM2.5, directly comparable to the WHO guideline of 15 µg/m³ (24-hour mean). Two 5-day "
+"forecasts per day."
+msgstr "地面 PM2.5，可直接对照世卫组织 15 微克/立方米（24 小时平均）指导值。每天两次 5 天预报。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:440
+msgid ""
+"Sustained 10 m wind speed predicted by NOAA GFS, derived from the U and V wind components. The "
+"17.5 m/s default matches the WMO tropical-storm threshold and the static hazard catalog."
+msgstr "NOAA GFS 预报的 10 米持续风速，由 U、V 分量推导。默认值 17.5 米/秒与世界气象组织热带风暴阈值及静态灾害目录一致。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:219
+msgid "THE ANSWER"
+msgstr "结果"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:509
+#, python-format
+msgid ""
+"TOTAL ozone column, which is roughly 90% stratospheric. This is not a ground-level air quality "
+"measure and should not be read as ozone exposure."
+msgstr "臭氧总柱，约 90% 位于平流层。这不是地面空气质量指标，不应解读为臭氧暴露。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:193
+msgid "Temperature"
+msgstr "气温"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:637
+msgid "Temperature anomaly"
+msgstr "气温距平"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:245
+msgid "Temperature anomaly (°C vs model normal)"
+msgstr "气温距平（°C，相对模式常年值）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:884
+msgid ""
+"Temperature cannot be combined with {either} — the two rainfall directions verify separately, so "
+"there is no single combined probability to threshold."
+msgstr "气温不能与{either}组合——两种降水方向分别验证，因此不存在可设阈值的单一复合概率。"
+
+#: config/hazards.py:455
+msgid "Temperature in °C"
+msgstr "温度（°C）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:666
+msgid "Temperature skill (correlation)"
+msgstr "气温预报技巧（相关系数）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:820
+msgid ""
+"Temperature skill is scored against ERA5-Land, a reanalysis that shares model physics and "
+"assimilation lineage with SEAS5, so it is optimistically biased relative to the CHIRPS-scored "
+"rainfall skill beside it. ERA5 also runs cool over Africa. The tercile framing judges each side "
+"against its own distribution, so a uniform bias cancels — a spatially varying one does not."
+msgstr ""
+"气温技巧以 ERA5-Land 评分，该再分析资料与 SEAS5 共享模式物理和同化渊源，因此相对旁边以 CHIRPS 评分的降水技巧偏于乐观。ERA5 "
+"在非洲还偏冷。三分位框架按各自分布评判，因此均匀偏差会抵消——空间上变化的偏差则不会。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1510
+msgid "Temperature vs normal"
+msgstr "气温与常年比较"
+
+#: sections/ai.py:24
+msgid ""
+"The AI application on GCHD is currently under development. To test the initial version, please "
+"contact {email}."
+msgstr "GCHD 的 AI 应用目前正在开发中。如需测试初始版本，请联系 {email}。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:801
+msgid ""
+"The El Niño attribution mask is seasonal. A single month is read against its forecast issue's "
+"season (e.g. November from the October issue against NDJ), so monthly attribution is approximate."
+msgstr "厄尔尼诺归因掩膜按季节划分。单个月份对照其所属预报期次的季节解读（例如 10 月发布的 11 月对照 NDJ），因此月度归因是近似的。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:545
+msgid ""
+"The anomaly as a share of the climatological mean. +50 mm is trivial in Kerala and enormous in "
+"the Sahel — this is what makes regions comparable."
+msgstr "距平占气候平均值的比例。+50 毫米在喀拉拉邦微不足道，在萨赫勒却极为显著——这使各地区可比。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:736
+msgid "The baseline"
+msgstr "基准"
+
+# Draft (machine-assisted) - needs native review
+#: config/hazards.py:530
+msgid ""
+"The conflict index is a 0–10 hazard intensity layer derived from ACLED event records, "
+"specifically battles, remote violence, and explosions. It captures both the frequency of conflict"
+" events and their fatalities, spatially aggregated to a 0.1° grid using 5 km buffers around each "
+"event point."
+msgstr ""
+"冲突指数是基于 ACLED 事件记录（具体为战斗、远程暴力和爆炸）得出的 0–10 灾害强度图层。它同时反映冲突事件的频率及其死亡人数，以每个事件点周围 5 公里缓冲区在空间上汇总到 0.1° "
+"网格。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:767
+msgid ""
+"The correlation grades the seasonal AVERAGE, not the tercile probabilities the threshold reads. A"
+" model can rank wet and dry years sensibly while still being overconfident about how likely each "
+"third is, and the correlation cannot see that. Read it as the generous measure of the two, and "
+"treat a respectable correlation as 'worth looking at' rather than 'verified'."
+msgstr "相关系数评估的是季节平均值，而非阈值所读取的三分位概率。模式可能合理地排列干湿年份，却仍对各三分位的可能性过于自信，相关系数无法察觉这一点。应将其视为两者中较宽松的衡量，把尚可的相关性视为“值得关注”而非“已验证”。"
+
+#: ui/layout.py:103
+msgid ""
+"The designations employed and the presentation of material on this site do not imply the "
+"expression of any opinion on the part of UNICEF concerning the legal status of any country or "
+"territory, or the delimitation of its frontiers or boundaries."
+msgstr "本网站所采用的名称及其材料的编写方式，并不意味着联合国儿童基金会对任何国家或领土的法律地位、或对其边界或界线的划定表示任何意见。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:749
+msgid "The dry mask"
+msgstr "干旱掩膜"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:754
+msgid "The exposure"
+msgstr "暴露"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:146
+msgid "The figure"
+msgstr "数字"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:12
+msgid "The file has no data rows."
+msgstr "文件中没有数据行。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:730
+msgid "The forecast"
+msgstr "预报"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:794
+msgid ""
+"The forecast grid is 1° (~111 km). A national total is a sum over coarse cells and should not be "
+"read at sub-district precision."
+msgstr "预报网格为 1°（约 111 公里）。全国总数是对粗格点的求和，不应以低于区级的精度解读。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:652
+msgid ""
+"The forecast seasonal mean temperature itself, averaged across the 51 members — the OND mean, not"
+" a total."
+msgstr "预报季节平均气温本身，对 51 个成员取平均——为 OND 平均值，而非累计值。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:740
+msgid "The probabilities"
+msgstr "概率"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:602
+msgid ""
+"The raw correlation behind the classified layer, so the cutoffs can be judged rather than taken "
+"on trust. Negative means the model's hindcast ran opposite to observations."
+msgstr "分级图层背后的原始相关系数，便于判断分级界限而非盲目接受。负值表示模式回报与观测走向相反。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:737
+msgid ""
+"The same model re-run over {hindcast} — 24 years × 25 members = 600 values per grid cell. "
+"Terciles are cut from THIS, the model's own climatology, not from observations, so the model's "
+"biases cancel out."
+msgstr "同一模式在 {hindcast} 期间重新运行——24 年 × 25 个成员 = 每个格点 600 个值。三分位依据的是这个——模式自身的气候，而非观测，因此模式偏差相互抵消。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:877
+#, python-format
+msgid ""
+"The share of the 51 ensemble members that must agree before a cell counts. Higher is more "
+"demanding, so counts fall as you raise it. 'Chance' is where a forecast carrying no information "
+"would sit — 33% for a single variable, because there are three equally likely thirds. A threshold"
+" near chance includes almost everything; the useful question is how far above chance it sits."
+msgstr ""
+"某格点被计入前，51 个集合成员中必须一致的比例。数值越高越严格，因此提高它时计数会下降。“随机水平”是不含任何信息的预报所处的位置——单变量为 "
+"33%，因为有三个等可能的三分位。接近随机水平的阈值几乎包含一切；有意义的问题是它比随机水平高出多少。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:758
+msgid "The skill check"
+msgstr "技巧检验"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:701
+msgid ""
+"The strongest compound signal in each cell at the slider threshold. Assigned by largest "
+"probability, not by precedence — unlike dry/wet these classes are not mutually exclusive, so "
+"different members can support different combinations."
+msgstr "在滑块阈值下每个格点最强的复合信号。按最大概率而非优先顺序指定——与偏干/偏湿不同，这些类别并不互斥，不同成员可能支持不同组合。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:744 sections/elnino.py:140
+msgid "The threshold"
+msgstr "阈值"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:832
+msgid "These figures are a seasonal FORECAST, not a measured impact."
+msgstr "这些数字是季节预报，而非实测影响。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:833
+msgid ""
+"They come from the ECMWF SEAS5 forecast issued {issue} for {period}. They count children (under "
+"18) living where that forecast leans towards drier, wetter, hotter or cooler conditions than "
+"normal. “Normal” is the model's own re-forecasts of {hindcast}, used only as a baseline."
+msgstr ""
+"这些数字来自 {issue} 发布的针对 {period} 的 ECMWF SEAS5 预报。它们统计的是该预报倾向于比常年偏干、偏湿、偏热或偏凉的地区内居住的儿童（18 "
+"岁以下）。“常年”指模式自身对 {hindcast} 的回报，仅用作基准。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:837
+msgid ""
+"They do not predict drought, flooding or harm, and do not reflect vulnerability or capacity to "
+"cope."
+msgstr "它们并不预测干旱、洪水或损害，也不反映脆弱性或应对能力。"
+
+#: sections/ai.py:15
+msgid "Thinking ···"
+msgstr "思考中 ···"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:509
+msgid "This dataset lags about {n} day(s); try an earlier end date."
+msgstr "该数据集约有 {n} 天延迟；请尝试更早的结束日期。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1301
+msgid "This does not prove the forecast signal is caused by ENSO."
+msgstr "这并不能证明预报信号由 ENSO 引起。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:362
+msgid "This forecast ({issue})"
+msgstr "本次预报（{issue}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:341
+msgid "This forecast against the model's own hindcast"
+msgstr "本次预报与模式自身回报的对比"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1433
+msgid "This forecast: {share} of area"
+msgstr "本次预报：面积的 {share}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:515
+msgid ""
+"This is a forecast, not a measured impact. Source: UNICEF Global Child Hazard Database (GCHD), "
+"computed {date}."
+msgstr "这是预报，而非实测影响。来源：UNICEF Global Child Hazard Database（GCHD），计算于 {date}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1544
+msgid ""
+"This mask covers rainfall only, so for a combined signal it says nothing about whether the heat "
+"is El Niño-related — treat it as the weaker claim."
+msgstr "此掩膜仅涵盖降水，因此对于复合信号，它无法说明高温是否与厄尔尼诺有关——应视为较弱的结论。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:231
+msgid ""
+"This section is showing {what}. Moving to {dest} clears the map layers and the results panel, and"
+" the calculation would have to be run again."
+msgstr "此部分正在显示{what}。切换到{dest}会清除地图图层和结果面板，需要重新运行计算。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:625 sections/elnino.py:1607 sections/elnino_export.py:311
+msgid "Threshold"
+msgstr "阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:645
+msgid "Thresholds"
+msgstr "阈值"
+
+#: sections/infrastructure.py:158
+msgid "Thresholds:"
+msgstr "阈值："
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:246
+msgid "Time window"
+msgstr "时间窗口"
+
+#: config/hazards.py:441
+msgid "Times per year"
+msgstr "每年次数"
+
+#: ui/map_view.py:54
+msgid "Toggle satellite basemap"
+msgstr "切换卫星底图"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:571
+msgid "Too dry to interpret"
+msgstr "过于干燥，无法解读"
+
+#: sections/analysis.py:1011
+msgid "Total"
+msgstr "合计"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:430
+msgid ""
+"Total accumulated precipitation predicted by the NOAA Global Forecast System, a physics-based "
+"numerical weather model run four times a day out to 16 days. Values are totalled per UTC day."
+msgstr "NOAA 全球预报系统预报的累计总降水量。该系统是基于物理的数值天气模式，每天运行四次，预报至 16 天。数值按 UTC 日累计。"
+
+#: sections/analysis.py:615 sections/analysis.py:815 sections/early_warning.py:1096
+#: sections/early_warning.py:1176 sections/elnino.py:1598
+msgid "Total children"
+msgstr "儿童总数"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:222
+msgid "Total children in region"
+msgstr "地区儿童总数"
+
+#: sections/ai.py:105 sections/ai.py:127 sections/ai.py:152
+msgid "Total children under 18: {n}"
+msgstr "18 岁以下儿童总数：{n}"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:21
+msgid "Total over period"
+msgstr "时段总量"
+
+#: config/hazards.py:281
+msgid "Total population"
+msgstr "总人口"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:46
+msgid "Translated for convenience; the English text of this notice is authoritative."
+msgstr "译文仅供参考；本声明以英文文本为准。"
+
+#: config/forecast.py:143 config/hazards.py:41 config/hazards.py:81
+msgid "Tropical Storm"
+msgstr "热带风暴"
+
+#: ui/layout.py:93
+msgid "UNICEF — Data Use Notice"
+msgstr "联合国儿童基金会 — 数据使用须知"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:170
+msgid "UNICEF — Infrastructure Data"
+msgstr "UNICEF — 基础设施数据"
+
+#: sections/ai.py:23
+msgid "Under Development"
+msgstr "开发中"
+
+#: ui/components.py:21
+msgid "Units"
+msgstr "单位"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:412
+msgid "Unknown dataset '{name}'."
+msgstr "未知数据集“{name}”。"
+
+#: sections/ai.py:354
+msgid "Unknown hazard topic: {topic}"
+msgstr "未知灾害主题：{topic}"
+
+#: sections/ai.py:319
+msgid "Unknown hazard: {hazard}"
+msgstr "未知灾害：{hazard}"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:567
+msgid "Unknown layer '{layer}'."
+msgstr "未知图层“{layer}”。"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:85
+msgid "Unknown period '{period}'."
+msgstr "未知时段“{period}”。"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:262 core/elnino.py:758
+msgid "Unknown signal '{signal}'."
+msgstr "未知信号“{signal}”。"
+
+#: sections/ai.py:376
+msgid "Unknown topics: {topics}"
+msgstr "未知主题：{topics}"
+
+#: sections/ai.py:393
+msgid "Unrecognised action from AI."
+msgstr "无法识别的 AI 操作。"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:526
+msgid "Unsupported reducer '{name}'."
+msgstr "不支持的聚合方式“{name}”。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:350 sections/elnino.py:874
+msgid "Unusually cool"
+msgstr "异常偏凉"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:349 sections/elnino.py:873
+msgid "Unusually hot"
+msgstr "异常偏热"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:423
+msgid "Usable (r ≥ 0.4)"
+msgstr "可用（r ≥ 0.4）"
+
+#: sections/analysis.py:181
+msgid "Use a GEE Asset"
+msgstr "使用 GEE 资产"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:185
+msgid "Use any GEE Image / ImageCollection"
+msgstr "使用任意 GEE Image / ImageCollection"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:457
+msgid "Useful (BSS ≥ 0.1)"
+msgstr "有用（BSS ≥ 0.1）"
+
+#: sections/ai.py:40
+msgid "User ID"
+msgstr "用户 ID"
+
+#: sections/analysis.py:163 sections/analysis.py:210
+msgid "Uses your current hazard thresholds from the Analysis tab."
+msgstr "使用“分析”选项卡中的当前灾害阈值。"
+
+#: config/hazards.py:53 config/hazards.py:54
+msgid "Vectorborne"
+msgstr "病媒传播"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:784
+msgid "View in Earth Engine catalog ↗"
+msgstr "在 Earth Engine 目录中查看 ↗"
+
+# Draft (machine-assisted) - needs native review
+#: ui/registry.py:94 ui/registry.py:105
+msgid "Visualization"
+msgstr "可视化"
+
+#: config/hazards.py:57 config/hazards.py:91
+msgid "Volcanoes"
+msgstr "火山"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:200
+msgid "WHAT WAS ASKED"
+msgstr "查询条件"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:280 config/forecast.py:303
+msgid "WHO AQG 2021, 24-hour guideline"
+msgstr "世卫组织 2021 年空气质量指导值，24 小时指导值"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:278 config/forecast.py:301
+msgid ""
+"WHO AQG 2021, 24-hour guideline; it is defined on a 24-hour mean, which a 3-hourly peak exceeds "
+"more easily"
+msgstr "世卫组织 2021 年空气质量指导值，24 小时指导值；它基于 24 小时平均值定义，3 小时峰值更容易超过"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:81
+msgid "WMO Severe Weather Information Centre, heavy rain (≥50 mm in 24 h)"
+msgstr "世界气象组织恶劣天气信息中心，大雨（24 小时 ≥50 毫米）"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:151
+msgid "WMO tropical storm, 34 kt (10-min sustained; GFS gives hourly instantaneous wind)"
+msgstr "世界气象组织热带风暴标准，34 节（10 分钟平均风；GFS 提供逐小时瞬时风）"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:272
+msgid "Warm and wet together — the transmission window for malaria, dengue and waterborne disease."
+msgstr "温暖与湿润并存——疟疾、登革热和水源性疾病的传播窗口期。"
+
+#: config/hazards.py:369
+msgid "Water Points"
+msgstr "取水点"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:190
+msgid "Water points"
+msgstr "供水点"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:231 config/elnino.py:525
+msgid "Wetter than normal"
+msgstr "比常年偏湿"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:28
+msgid "Wettest day (highest daily total)"
+msgstr "最湿日（日总量最大值）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:40
+msgid "What a signal means"
+msgstr "信号的含义"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:264
+msgid "What it means"
+msgstr "含义"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:568
+msgid ""
+"What the model normally predicts for this period, pooled over the {hindcast} hindcast. The "
+"baseline the terciles are cut from."
+msgstr "模式在 {hindcast} 回报期内对该时段的通常预报值，是划分三分位的基准。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:209
+msgid "What the probability would be by chance alone. The threshold should sit well above it."
+msgstr "仅凭随机时的概率。阈值应远高于此。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:766
+msgid "What the skill check does not cover"
+msgstr "技巧检验未涵盖的内容"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:280
+msgid "What this tab shows"
+msgstr "此选项卡显示的内容"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1540
+msgid ""
+"Where El Niño has historically pushed rainfall the same direction this forecast points. The rest "
+"may be unusual for other reasons."
+msgstr "厄尔尼诺历史上曾使降水朝本次预报方向变化的地区。其余可能因其他原因而异常。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:591
+msgid ""
+"Where this forecast has demonstrated skill, from the correlation between its 1993–2016 hindcast "
+"and CHIRPS observations. Green cells are worth believing; red ones carry a signal the model has "
+"never predicted well. Grey is unscored, not unskilled — CHIRPS is land-only."
+msgstr ""
+"该预报已显示出技巧的地区，依据其 1993–2016 年回报与 CHIRPS 观测的相关性。绿色格点值得信赖；红色格点的信号是模式从未很好预报过的。灰色表示未评分而非无技巧——CHIRPS "
+"仅覆盖陆地。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:936
+msgid ""
+"Where this forecast sits against the model's own 24 hindcast seasons, as a share of interpretable"
+" AREA. Area, not population: the child population grid is 2025, and applying it to 1993 would "
+"imply a precision that does not exist. This is also why the percentage here usually differs from "
+"the headline figure above, which is a share of CHILDREN — for Colombia the two are 94% and 67%, "
+"because children cluster in the Andes while the signal is measured across the whole territory. "
+"These are the model's hindcast seasons, not a record of observed past droughts."
+msgstr ""
+"本次预报相对于模式自身 24 个回报季节的位置，以可解读面积的占比表示。用面积而非人口：儿童人口网格为 2025 年数据，将其应用于 1993 "
+"年会暗示一种并不存在的精度。这也是此处百分比通常不同于上方主要数字的原因——后者是儿童占比。以哥伦比亚为例，两者分别为 94% 和 "
+"67%，因为儿童集中在安第斯山区，而信号是在整个国土上测量的。这些是模式的回报季节，并非过去实际观测到的干旱记录。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:42
+msgid "Why the threshold matters"
+msgstr "阈值为何重要"
+
+#: config/hazards.py:468
+msgid ""
+"Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, "
+"savannas, and croplands. Fire Radiative Power (FRP) is a measure of the energy released by a fire"
+" in the form of radiation."
+msgstr "野火是植被（包括森林、灌丛、草地、稀树草原和农田）的失控燃烧。火辐射功率（FRP）是衡量火灾以辐射形式释放能量的指标。"
+
+#: config/hazards.py:475
+msgid ""
+"Wildfires are uncontrolled burns of vegetation, including forests, shrublands, grasslands, "
+"savannas, and croplands. Fire frequency is obtained from NASA's Fire Information for Resource "
+"Management System (FIRMS) and is used as a proxy for fire hazard."
+msgstr "野火是植被（包括森林、灌丛、草地、稀树草原和农田）的失控燃烧。火灾频率数据来自美国国家航空航天局（NASA）的资源管理火灾信息系统（FIRMS），用作火灾危险性的替代指标。"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:143
+msgid "Wind speed forecast (NOAA GFS)"
+msgstr "风速预报（NOAA GFS）"
+
+#: config/hazards.py:414
+msgid "Wind speed in m/s"
+msgstr "风速（米/秒）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1070
+msgid "Window"
+msgstr "时间窗口"
+
+# Draft (machine-assisted) - needs native review
+#: core/forecast.py:340
+msgid "Window capped at {n} days for this dataset."
+msgstr "该数据集的时间窗口上限为 {n} 天。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1238
+msgid "Window: {start} → {end} ({images})"
+msgstr "时间窗口：{start} → {end}（{images}）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:305
+msgid ""
+"With 51 ensemble members probability can only move in steps of about 2 points, so cells near any "
+"cutoff qualify on essentially arbitrary grounds. Quote the range."
+msgstr "由于有 51 个集合成员，概率只能以约 2 个百分点为步长变化，因此接近任何临界值的格点是否入选基本是任意的。请引用范围。"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:927
+msgid ""
+"With 51 members, probability can only move in steps of about 2 points, so cells sitting near any "
+"cutoff qualify or not on essentially arbitrary grounds. Showing several thresholds side by side "
+"is what keeps a single headline figure honest — if the count swings wildly across this row, the "
+"exact number matters less than the range."
+msgstr ""
+"由于只有 51 个成员，概率只能以约 2 "
+"个百分点为步长变化，因此接近任何阈值的格点是否入选基本是任意的。并列显示多个阈值能使单一主要数字保持客观——若计数在这一行中大幅波动，则确切数字不如其范围重要。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:125
+msgid "WorldPop 2025, children under 18, {n} m grid"
+msgstr "WorldPop 2025，18 岁以下儿童，{n} 米网格"
+
+#: ui/components.py:247
+msgid "WorldPop under-18 gridded population, 2025, 100 m"
+msgstr "WorldPop 18 岁以下格网化人口，2025 年，100 米"
+
+#: sections/ai.py:213
+msgid "Zooming map to {country}"
+msgstr "正在将地图缩放至 {country}"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:292
+msgid "a cooler-and-drier-than-normal area"
+msgstr "比常年偏凉且偏干的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:281
+msgid "a cooler-and-wetter-than-normal area"
+msgstr "比常年偏凉且偏湿的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:230
+msgid "a drier-than-normal area"
+msgstr "比常年偏干的地区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:99
+msgid "a hazard layer"
+msgstr "一个灾害图层"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:267
+msgid "a hotter-and-drier-than-normal area"
+msgstr "比常年偏热且偏干的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:274
+msgid "a hotter-and-wetter-than-normal area"
+msgstr "比常年偏热且偏湿的地区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:482
+msgid "a signal area"
+msgstr "信号区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:235
+msgid "a wetter-than-normal area"
+msgstr "比常年偏湿的地区"
+
+#: config/hazards.py:339
+msgid "adm0 (Country)"
+msgstr "adm0（国家）"
+
+#: config/hazards.py:344
+msgid "adm1 (Provinces/States)"
+msgstr "adm1（省/州）"
+
+#: config/hazards.py:349
+msgid "adm2 (Districts/Counties)"
+msgstr "adm2（区/县）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1083
+msgid "aggregated value > {threshold}"
+msgstr "聚合值 > {threshold}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:481
+msgid "an area forecast to be either drier or wetter than normal"
+msgstr "预报比常年偏干或偏湿的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:247
+msgid "an area with either signal"
+msgstr "存在任一信号的地区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:100
+msgid "an exposure layer"
+msgstr "一个暴露图层"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1688
+msgid "children live in areas too dry for a tercile to mean anything, and are not counted above."
+msgstr "名儿童居住在过于干燥、三分位毫无意义的地区，未计入上方数字。"
+
+#: sections/infrastructure.py:154
+msgid ""
+"click a district (ADM2) on the map, then press Compute. Analysis is per-district — there is no "
+"country-wide summary, because per-facility Voronoi computation over many points is slow even for "
+"small areas."
+msgstr "在地图上点击一个区县（ADM2），然后点击“计算”。分析按区县进行——不提供全国汇总，因为即使在较小区域内，对大量点逐个设施进行泰森多边形计算也很慢。"
+
+#: config/hazards.py:524
+msgid "cm"
+msgstr "厘米"
+
+#: sections/analysis.py:588 ui/xlsx.py:32
+msgid "custom"
+msgstr "自定义"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:249
+msgid "days"
+msgstr "天"
+
+#: sections/analysis.py:588 ui/xlsx.py:32
+msgid "default"
+msgstr "默认"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:160
+msgid "draft"
+msgstr "草稿"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:190
+msgid "e.g. COPERNICUS/S5P/NRTI/L3_HCHO"
+msgstr "例如 COPERNICUS/S5P/NRTI/L3_HCHO"
+
+#: sections/ai.py:55
+msgid "e.g. Show river flood layer in Bangladesh, or How many children are exposed to heatwaves in India?"
+msgstr "例如：显示孟加拉国的河流洪水图层，或：印度有多少儿童暴露于热浪？"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:101 sections/navigation.py:105
+msgid "exposure results"
+msgstr "暴露结果"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:104
+msgid "forecast results"
+msgstr "预报结果"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:403
+msgid "index"
+msgstr "指数"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:102
+msgid "infrastructure results"
+msgstr "基础设施结果"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:54
+msgid "issued {issue}"
+msgstr "{issue} 发布"
+
+#: config/hazards.py:476
+msgid "km⁻² · yr⁻¹"
+msgstr "km⁻² · 年⁻¹"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1447
+msgid "less widespread than usual."
+msgstr "范围小于往常。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1367
+msgid "little of this signal sits where the model has a track record"
+msgstr "该信号很少位于模式有可靠历史表现的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:147
+msgid "m/s"
+msgstr "米/秒"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:535 config/elnino.py:560 config/elnino.py:566 config/elnino.py:627
+msgid "mm"
+msgstr "毫米"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:965
+msgid "mm for rainfall, °C for temperature"
+msgstr "降水以毫米计，气温以 °C 计"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:78
+msgid "mm/day"
+msgstr "毫米/天"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:372 config/forecast.py:387
+msgid "mmol/m²"
+msgstr "毫摩尔/平方米"
+
+#: ui/layout.py:101
+msgid "modelled estimates"
+msgstr "模拟估算值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1445
+msgid "more widespread than usual."
+msgstr "范围大于往常。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1361
+msgid "most of this signal sits where the model has a track record"
+msgstr "该信号大部分位于模式有可靠历史表现的地区"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:211
+msgid "no"
+msgstr "否"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:274
+msgid "not available"
+msgstr "不可用"
+
+# Draft (machine-assisted) - needs native review
+#: sections/navigation.py:103
+msgid "observed-hazard results"
+msgstr "观测灾害结果"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1364
+msgid "only part of this signal sits where the model has a track record"
+msgstr "该信号只有部分位于模式有可靠历史表现的地区"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:554
+msgid ""
+"p_above − p_below as one signed layer: brown where a dry signal dominates, blue where a wet one "
+"does, pale where the ensemble is split."
+msgstr "以单一带符号图层表示 p_above − p_below：偏干信号占优处为棕色，偏湿信号占优处为蓝色，集合意见分歧处为浅色。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:603
+msgid "per hazard, below"
+msgstr "按灾害分列，见下"
+
+# Draft (machine-assisted) - needs native review
+#: ui/legend.py:525
+msgid "per {n} m"
+msgstr "每 {n} 米"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:552
+msgid "pp"
+msgstr "百分点"
+
+#: ui/threshold.py:57
+msgid "presence/absence"
+msgstr "有/无"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:599 config/elnino.py:668
+msgid "r"
+msgstr "r"
+
+#: ui/threshold.py:58
+msgid "range {lo}–{hi}"
+msgstr "范围 {lo}–{hi}"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:92 ui/components.py:192
+msgid "soon"
+msgstr "即将推出"
+
+#: sections/infrastructure.py:721
+msgid "the selected district"
+msgstr "所选区县"
+
+#: sections/infrastructure.py:159
+msgid "the summary applies your current hazard thresholds set above."
+msgstr "摘要采用上方设置的当前灾害阈值。"
+
+#: sections/infrastructure.py:670
+msgid "this region"
+msgstr "该区域"
+
+# Draft (machine-assisted) - needs native review
+#: ui/components.py:299
+msgid "thr {value}"
+msgstr "阈值 {value}"
+
+# Draft (machine-assisted) - needs native review
+#: core/elnino.py:1128
+msgid "unknown"
+msgstr "未知"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:211
+msgid "yes"
+msgstr "是"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1077
+msgid "{basis}, aggregated to {n} m. Children under 18."
+msgstr "{basis}，聚合至 {n} 米。18 岁以下儿童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:641 sections/early_warning.py:1080
+msgid "{basis}. Children under 18."
+msgstr "{basis}。18 岁以下儿童。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:672
+msgid "{blurb} — pick a layer to preview it."
+msgstr "{blurb}——选择一个图层进行预览。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:162
+msgid "{kind} layers predict conditions ahead."
+msgstr "{kind}图层预测未来的状况。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:145
+msgid "{kind} layers report what recently happened, from near-real-time satellite and reanalysis data."
+msgstr "{kind}图层报告近期实际发生的情况，数据来自近实时卫星和再分析资料。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/legend.py:210
+msgid "{label} (extra layer)"
+msgstr "{label}（附加图层）"
+
+#: ui/legend.py:41
+msgid "{label} (per 100 m)"
+msgstr "{label}（每 100 米）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:131
+msgid ""
+"{lead} A seasonal forecast is run 51 times with slightly different starting conditions. We count "
+"how many of those 51 runs put this season in the driest (or wettest) third of what the model "
+"normally predicts."
+msgstr "{lead} 季节预报会以略有不同的初始条件运行 51 次。我们统计这 51 次运行中有多少将本季置于模式通常预报值中最干（或最湿）的三分位。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:148
+msgid ""
+"{lead} The forecast has a real track record in some regions and almost none in others; each "
+"result says which."
+msgstr "{lead} 该预报在部分地区有可靠的历史表现，在其他地区几乎没有；每个结果都会说明属于哪种情况。"
+
+#: sections/analysis.py:319 sections/infrastructure.py:253 sections/layers.py:309
+msgid "{n} changed"
+msgstr "已更改 {n} 项"
+
+#: sections/infrastructure.py:719
+msgid "{n} custom threshold(s) applied"
+msgstr "已应用 {n} 个自定义阈值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/analysis.py:645
+msgid "{n} custom, the rest default"
+msgstr "{n} 个自定义，其余为默认值"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:909 sections/early_warning.py:913
+msgid "{n} day window."
+msgid_plural "{n} day window."
+msgstr[0] "{n} 天窗口。"
+
+#: sections/infrastructure.py:580
+msgid "{n} fac."
+msgstr "{n} 个设施"
+
+#: sections/infrastructure.py:722
+msgid ""
+"{n} facilities in {where}. Population is attributed to each facility's nearest-neighbour "
+"(Voronoi) catchment; per-hazard rows show exposed children · facilities whose site is in that "
+"hazard. {thr_note}."
+msgstr "{where}共有 {n} 个设施。人口按每个设施的最近邻（泰森多边形）服务区归属；各灾害行显示暴露儿童数 · 站点处于该灾害中的设施数。{thr_note}。"
+
+#: sections/analysis.py:1076 sections/infrastructure.py:476
+msgid "{n} features — {name}"
+msgstr "{n} 个要素 — {name}"
+
+#: ui/components.py:53
+msgid "{n} hazard topics combined"
+msgstr "综合 {n} 个灾害主题"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:485 sections/early_warning.py:844 sections/early_warning.py:1072
+#: sections/early_warning.py:1240
+msgid "{n} image"
+msgid_plural "{n} images"
+msgstr[0] "{n} 幅图像"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:464
+msgid "{n} million"
+msgstr "{n} 百万"
+
+# Draft (machine-assisted) - needs native review
+#: sections/embargo.py:10
+msgid "{ok} of {total} rows usable. Review the points above, then send."
+msgstr "可用行：{ok}/{total}。请检查上述各点后再发送。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:967
+msgid "{ratio} more likely than chance ({chance})."
+msgstr "比随机水平（{chance}）高 {ratio}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:262
+msgid "{reference} covers land between 50°N and 50°S only."
+msgstr "{reference} 仅覆盖北纬 50° 至南纬 50° 之间的陆地。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:329
+msgid "{region}, {signal}, {period}. Bold row = the {threshold}% threshold used on the Summary sheet."
+msgstr "{region}，{signal}，{period}。粗体行 = 摘要表所用的 {threshold}% 阈值。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1075
+msgid "{run} (one run, by valid time)"
+msgstr "{run}（单次运行，按有效时间）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1436
+msgid ""
+"{share} falls under the signal in this forecast. Across the {n} hindcast seasons the average was "
+"{mean} (range {lo}–{hi}), ranking this season {rank} of {total} — {verdict}"
+msgstr "本次预报中，{share}处于信号之下。在 {n} 个回报季中，平均为 {mean}（范围 {lo}–{hi}），本季在 {total} 个季节中排名第 {rank}——{verdict}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1378
+msgid "{share} of it is over ocean or outside the observation record and could not be scored."
+msgstr "其中 {share} 位于海洋上或超出观测记录范围，无法评分。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1370
+msgid ""
+"{share} of the signal area has usable forecast skill (r ≥ {r} against {reference}, {hindcast}) — "
+"{verdict}."
+msgstr "信号区中有 {share} 具备可用的预报技巧（相对 {reference}，{hindcast}，r ≥ {r}）——{verdict}。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1440
+msgid "{share} of this region's interpretable area"
+msgstr "该地区可解读面积的 {share}"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino_export.py:40
+msgid "{span} ({season} season)"
+msgstr "{span}（{season} 季）"
+
+# Draft (machine-assisted) - needs native review
+#: sections/early_warning.py:1070
+msgid "{start} to {end} ({images})"
+msgstr "{start} 至 {end}（{images}）"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:195
+msgid ""
+"{step} Coordinates must be decimal degrees in WGS84 (EPSG:4326) — longitude between −180 and 180,"
+" latitude between −90 and 90, negative south and west. Leave out any column you do not hold; do "
+"not add columns for country, facility type or source."
+msgstr ""
+"{step}坐标必须为 WGS84（EPSG:4326）十进制度——经度在 −180 到 180 之间，纬度在 −90 到 90 "
+"之间，南纬和西经为负。没有的列请省略；不要添加国家、设施类型或来源列。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:202
+msgid ""
+"{step} before sending — drop your filled file below and we will tell you straight away if "
+"anything needs fixing. Nothing is uploaded; the check runs in your browser."
+msgstr "{step}发送前——将填好的文件拖放到下方，我们会立即告诉您是否有需要修正之处。不会上传任何内容；检查在您的浏览器中进行。"
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:178
+msgid "{step} for the facility type you hold:"
+msgstr "{step}（按您持有的设施类型）："
+
+# Draft (machine-assisted) - needs native review
+#: ui/layout.py:223
+msgid ""
+"{step} through your usual channel, telling us the country, the source and date of the data, and "
+"whether it may be shown publicly. We confirm once the layer is live."
+msgstr "{step}请通过您惯用的渠道发送，并告知国家、数据来源和日期，以及是否可以公开显示。图层上线后我们会确认。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:142
+msgid ""
+"{subject} is how many children live in those places — not how many will be harmed. Whether "
+"unusual weather becomes a crisis depends on water, harvests, drainage and health services, none "
+"of which are measured here."
+msgstr "{subject}是居住在这些地方的儿童人数——而不是将受到伤害的人数。异常天气是否演变为危机取决于水源、收成、排水和卫生服务，而这些都未在此衡量。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:137
+msgid ""
+"{subject} is how many runs must agree before a place counts. Raising it is more demanding, so "
+"fewer children are counted."
+msgstr "{subject}是指某地被计入前必须一致的运行次数。提高它要求更严格，因此计入的儿童更少。"
+
+#: sections/ai.py:124
+msgid "{topic} exposure — {country}"
+msgstr "{topic}暴露 — {country}"
+
+#: ui/legend.py:304
+msgid "{topic} — children exposed"
+msgstr "{topic} — 暴露儿童"
+
+#: ui/legend.py:85 ui/legend.py:112
+msgid "{topic} — hazard area"
+msgstr "{topic} — 灾害区域"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:959
+msgid "{value} demands strong ensemble agreement; expect few cells and a conservative count."
+msgstr "{value} 要求集合高度一致；预计入选格点很少，计数偏保守。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:945
+msgid ""
+"{value} is barely above the {chance} joint baseline — for two conditions at once, chance is 1/9, "
+"not 1/3."
+msgstr "{value} 仅略高于 {chance} 的联合基准——同时满足两个条件时，随机概率是 1/9，而非 1/3。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:955
+msgid "{value} is barely above the {chance} no-information baseline — almost every cell will qualify."
+msgstr "{value} 仅略高于 {chance} 的无信息基准——几乎所有格点都会入选。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:949
+#, python-format
+msgid ""
+"{value} of the 51 members have BOTH conditions at once — {margin} points above the {chance} joint"
+" baseline. Not comparable with a single-variable threshold: 25% here is as far above chance as "
+"50% there."
+msgstr ""
+"51 个成员中有 {value} 同时满足两个条件——比 {chance} 的联合基准高 {margin} 个百分点。不能与单变量阈值比较：此处的 25% 高于随机水平的程度与彼处的 50% "
+"相当。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:962
+msgid ""
+"{value} of the 51 members — {margin} points above the {chance} baseline. ECMWF's own charts shade"
+" from about 40%."
+msgstr "51 个成员中的 {value}——比 {chance} 的基准高 {margin} 个百分点。ECMWF 自身的图从约 40% 开始着色。"
+
+# Draft (machine-assisted) - needs native review
+#: sections/elnino.py:1421
+msgid "{year}: {share} of area"
+msgstr "{year}：面积的 {share}"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:493 config/forecast.py:498 config/forecast.py:503 config/forecast.py:508
+#: config/forecast.py:512
+msgid "~5.5 × 3.5 km (gridded at 0.01°) · daily overpass"
+msgstr "约 5.5 × 3.5 公里（按 0.01° 网格化）· 每日过境"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:639 config/elnino.py:649 config/forecast.py:89 config/forecast.py:191
+msgid "°C"
+msgstr "°C"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:988
+msgid "°C anomaly, 3-month running mean"
+msgstr "°C 距平，3 个月滑动平均"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:275 config/forecast.py:298
+msgid "µg/m³"
+msgstr "微克/立方米"
+
+# Draft (machine-assisted) - needs native review
+#: config/forecast.py:339 config/forecast.py:355
+msgid "µmol/m²"
+msgstr "微摩尔/平方米"
+
+# Draft (machine-assisted) - needs native review
+#: config/elnino.py:712
+msgid "×"
+msgstr "×"
+
+#: sections/infrastructure.py:337
+msgid "— no infrastructure data available —"
+msgstr "— 暂无基础设施数据 —"
+
+#: sections/infrastructure.py:371
+msgid "— no infrastructure data for this country yet —"
+msgstr "— 该国暂无基础设施数据 —"
+
+#: sections/infrastructure.py:93 sections/infrastructure.py:365
+msgid "— select a country first —"
+msgstr "— 请先选择国家 —"
+
+#: sections/infrastructure.py:370
+msgid "— select a facility layer —"
+msgstr "— 选择设施图层 —"
+
+#: sections/analysis.py:60 sections/early_warning.py:321 sections/elnino.py:439
+msgid "— select level —"
+msgstr "— 选择级别 —"
+
+#: sections/infrastructure.py:104
+msgid "…or paste a GEE asset path"
+msgstr "…或粘贴 GEE 资产路径"
+
