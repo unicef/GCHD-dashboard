@@ -5,13 +5,13 @@ import secrets as _secrets
 from auth.otp import request_otp, SESSION_HOURS, verify_otp
 from flask import redirect as _fredirect, request as _freq, session as _fsess
 
-from dash_app import app, _BASE_PATHNAME
+from dash_app import app, _BASE_PATHNAME, _INSTANCE
 
 
-# Scope the session cookie to /ew and give it its own name so it can never be
-# confused with the main instance's session cookie on the same domain.
+# Scope the session cookie to the subpath and give it its own name so it can never
+# be confused with another instance's session cookie on the same domain.
 app.server.config["SESSION_COOKIE_PATH"] = _BASE_PATHNAME.rstrip("/") + "/"
-app.server.config["SESSION_COOKIE_NAME"] = "gchd_ew_session"
+app.server.config["SESSION_COOKIE_NAME"] = f"gchd_{_INSTANCE}_session"
 
 _key_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "credentials", "flask_secret.txt")
 if os.path.exists(_key_path):

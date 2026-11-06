@@ -1,4 +1,4 @@
-"""The Dash app instance, served under the /ew subpath."""
+"""The Dash app instance, served under a subpath (/ew unless GCHD_BASE_PATHNAME is set)."""
 import os
 import time
 
@@ -12,10 +12,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # ---------------------------------------------------------------------------
 # This instance is served under the /ew subpath on the shared gchd.unicef.org
 # domain (alongside the main instance at the root path) — see TECHNICAL_DOCUMENTATION.md.
-_BASE_PATHNAME = "/ew/"
+# GCHD_BASE_PATHNAME overrides the subpath, e.g. "/dev/" for the dev instance.
+_BASE_PATHNAME = "/" + os.environ.get("GCHD_BASE_PATHNAME", "/ew/").strip("/") + "/"
+_INSTANCE = _BASE_PATHNAME.strip("/")
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True, url_base_pathname=_BASE_PATHNAME)
-app.title = "UNICEF GCHD — Global Child Hazard Database (EW)"
+app.title = f"UNICEF GCHD — Global Child Hazard Database ({_INSTANCE.upper()})"
 server = app.server
 app.server.wsgi_app = ProxyFix(app.server.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
