@@ -32,12 +32,18 @@ from config import (
 # Initialisation
 # ---------------------------------------------------------------------------
 
+# Compute (EECU quota) is billed to the key's own Cloud project; the assets
+# themselves stay in projects/unicef-ccri, so this service account needs
+# roles/earthengine.viewer on unicef-ccri. Override with GEE_KEY_FILE.
+GEE_KEY_FILE = os.environ.get("GEE_KEY_FILE", "service_account_2.json")
+
+
 def initialize_gee():
-    key_path = os.path.join(os.path.dirname(__file__), "credentials", "service_account.json")
+    key_path = os.path.join(os.path.dirname(__file__), "credentials", GEE_KEY_FILE)
     with open(key_path) as f:
         info = json.load(f)
     credentials = ee.ServiceAccountCredentials(email=info["client_email"], key_file=key_path)
-    ee.Initialize(credentials=credentials, project="unicef-ccri")
+    ee.Initialize(credentials=credentials, project=info["project_id"])
 
 
 # ---------------------------------------------------------------------------
