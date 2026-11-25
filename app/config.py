@@ -327,7 +327,9 @@ ADMIN_DATA = {
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm0_chunked_500km_shp",
     },
     "adm1 (Provinces/States)": {
-        "asset":       "projects/unicef-ccri/assets/global_boundary/adm1",
+        # global_boundary/adm1 was deleted from GEE (~2026-11-23); admin1_regions_merged
+        # carries the same ADM1 features/fields (name, ucode, adm0_ucode).
+        "asset":       "projects/unicef-ccri/assets/global_boundary/admin1_regions_merged",
         "name_prop":   "name",
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm1_chunked_500km_shp",
     },
