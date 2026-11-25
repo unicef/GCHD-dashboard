@@ -117,7 +117,7 @@ def check_totals(pop_class, ucode="MWI_V1", exported=True):
     while the asset is perfectly fine. This is the single easiest way to
     convince yourself a correct aggregation is broken.
     """
-    adm1 = ee.FeatureCollection("projects/unicef-ccri/assets/global_boundary/adm1")
+    adm1 = ee.FeatureCollection("projects/unicef-ccri/assets/global_boundary/admin1_regions_merged")
     geom = adm1.filter(ee.Filter.eq("adm0_ucode", ucode)).first().geometry()
 
     src = build_100m_image(pop_class)

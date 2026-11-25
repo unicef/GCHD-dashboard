@@ -342,7 +342,7 @@ ADMIN_DATA = {
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm0_chunked_500km_shp",
     },
     N_("adm1 (Provinces/States)"): {
-        "asset":       "projects/unicef-ccri/assets/global_boundary/adm1",
+        "asset":       "projects/unicef-ccri/assets/global_boundary/admin1_regions_merged",
         "name_prop":   "name",
         "chunk_asset": "projects/unicef-ccri/assets/global_boundary/adm1_chunked_500km_shp",
     },
